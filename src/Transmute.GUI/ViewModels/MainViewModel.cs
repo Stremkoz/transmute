@@ -33,6 +33,7 @@ public class BulkObservableCollection<T> : ObservableCollection<T>
 public partial class MainViewModel : ObservableObject
 {
     private readonly ConfigManager _configManager;
+    private readonly ProfileManager _profileManager;
     private bool _qualityUserCustomized = false;
     private bool _suppressQualityTracking = false;
 
@@ -53,6 +54,10 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private int _progressMax = 1;
     [ObservableProperty] private string _statusText = "Drop images or folders here to get started.";
     [ObservableProperty] private bool _includeSubfolders = true;
+
+    // Active profile — Default means use global config
+    [ObservableProperty] private string _activeProfile = ProfileManager.DefaultProfileName;
+    public ObservableCollection<string> Profiles { get; } = new();
 
     // Advanced panel — session-only, always reset to defaults on launch
     [ObservableProperty] private bool _showAdvanced = false;
@@ -75,9 +80,13 @@ public partial class MainViewModel : ObservableObject
 
     private CancellationTokenSource? _cts;
 
-    public MainViewModel(ConfigManager configManager)
+    public MainViewModel(ConfigManager configManager, ProfileManager profileManager)
     {
         _configManager = configManager;
+        _profileManager = profileManager;
+
+        RefreshProfiles();
+
         var defaults = configManager.Config.Defaults;
         _suppressQualityTracking = true;
         _quality = defaults.WebpQuality;
@@ -92,18 +101,70 @@ public partial class MainViewModel : ObservableObject
         InputFiles.CollectionChanged += (_, _) => ConvertCommand.NotifyCanExecuteChanged();
     }
 
+    public void RefreshProfiles()
+    {
+        var current = ActiveProfile;
+        Profiles.Clear();
+        Profiles.Add(ProfileManager.DefaultProfileName);
+        foreach (var name in _profileManager.List())
+            Profiles.Add(name);
+
+        // Keep active selection if it still exists, otherwise fall back to Default
+        ActiveProfile = Profiles.Contains(current) ? current : ProfileManager.DefaultProfileName;
+    }
+
+    partial void OnActiveProfileChanged(string value)
+    {
+        // Load effective defaults for this profile and apply them to the session
+        var profile = string.Equals(value, ProfileManager.DefaultProfileName, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : _profileManager.Load(value);
+        var defaults = profile?.ApplyOver(_configManager.Config.Defaults) ?? _configManager.Config.Defaults;
+
+        _suppressQualityTracking = true;
+        _qualityUserCustomized = false;
+
+        var qualityForFormat = TargetFormat.ToLowerInvariant() switch
+        {
+            "webp"          => defaults.WebpQuality,
+            "jpg" or "jpeg" => defaults.JpegQuality,
+            "jxl"           => defaults.JxlQuality,
+            "avif"          => defaults.AvifQuality,
+            _               => Quality
+        };
+        Quality = qualityForFormat;
+        _suppressQualityTracking = false;
+
+        if (LosslessVisible)
+            Lossless = defaults.LosslessDefault;
+
+        PreserveMetadata = defaults.PreserveMetadata;
+        OverwriteExisting = defaults.OverwriteExisting;
+        OutputDirectory = defaults.DefaultOutputDirectory;
+    }
+
+    // Returns the effective DefaultsConfig for the current active profile
+    private DefaultsConfig EffectiveDefaults()
+    {
+        var profile = string.Equals(ActiveProfile, ProfileManager.DefaultProfileName, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : _profileManager.Load(ActiveProfile);
+        return profile?.ApplyOver(_configManager.Config.Defaults) ?? _configManager.Config.Defaults;
+    }
+
     partial void OnTargetFormatChanged(string value)
     {
         if (!_qualityUserCustomized)
         {
             _suppressQualityTracking = true;
-            Quality = _configManager.Config.Defaults switch
+            var d = EffectiveDefaults();
+            Quality = value.ToLowerInvariant() switch
             {
-                { } d when value == "webp" => d.WebpQuality,
-                { } d when value is "jpg" or "jpeg" => d.JpegQuality,
-                { } d when value == "jxl" => d.JxlQuality,
-                { } d when value == "avif" => d.AvifQuality,
-                _ => 90
+                "webp"          => d.WebpQuality,
+                "jpg" or "jpeg" => d.JpegQuality,
+                "jxl"           => d.JxlQuality,
+                "avif"          => d.AvifQuality,
+                _               => 90
             };
             _suppressQualityTracking = false;
         }
@@ -111,7 +172,7 @@ public partial class MainViewModel : ObservableObject
 
         LosslessVisible = LosslessCapableFormats.Contains(value);
         if (LosslessVisible)
-            Lossless = _configManager.Config.Defaults.LosslessDefault;
+            Lossless = EffectiveDefaults().LosslessDefault;
 
         QualityEnabled = !LosslessVisible || !Lossless;
     }
@@ -167,7 +228,7 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private void ClearOutputDirectory() =>
-        OutputDirectory = _configManager.Config.Defaults.DefaultOutputDirectory;
+        OutputDirectory = EffectiveDefaults().DefaultOutputDirectory;
 
     [RelayCommand(CanExecute = nameof(CanConvert))]
     private async Task ConvertAsync()
@@ -181,7 +242,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = "Preparing files...";
         var totalSw = System.Diagnostics.Stopwatch.StartNew();
 
-        var defaults = _configManager.Config.Defaults;
+        var defaults = EffectiveDefaults();
         var options = new ConversionOptions
         {
             Quality = Quality,
@@ -309,17 +370,44 @@ public partial class MainViewModel : ObservableObject
     private bool IsFormatSkipped(string path)
     {
         var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-        return ext switch
+
+        // Session GUI skip chips (these are the user's explicit session overrides)
+        var sessionSkipped = ext switch
         {
-            "jpg" or "jpeg" => SkipJpeg,
-            "png"           => SkipPng,
-            "gif"           => SkipGif,
-            "webp"          => SkipWebp,
-            "avif"          => SkipAvif,
-            "jxl"           => SkipJxl,
+            "jpg" or "jpeg"  => SkipJpeg,
+            "png"            => SkipPng,
+            "gif"            => SkipGif,
+            "webp"           => SkipWebp,
+            "avif"           => SkipAvif,
+            "jxl"            => SkipJxl,
             "heic" or "heif" => SkipHeic,
-            _               => false
+            _                => false
         };
+        if (sessionSkipped) return true;
+
+        // Profile filter — only applies when the session has no skip chips active
+        // (session GUI toggles are the user's explicit override, so they take precedence)
+        var profile = string.Equals(ActiveProfile, ProfileManager.DefaultProfileName, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : _profileManager.Load(ActiveProfile);
+
+        if (profile?.HasOnlyFilter == true)
+        {
+            var onlySet = profile.OnlyFormats!
+                .Select(s => s.TrimStart('.').ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return !onlySet.Contains(ext);
+        }
+
+        if (profile?.HasSkipFilter == true)
+        {
+            var skipSet = profile.SkipFormats!
+                .Select(s => s.TrimStart('.').ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return skipSet.Contains(ext);
+        }
+
+        return false;
     }
 
     private static string FormatSizeDelta(long? inputBytes, long? outputBytes)

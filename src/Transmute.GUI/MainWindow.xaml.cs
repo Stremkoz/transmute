@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 using Transmute.GUI.ViewModels;
+using Transmute.GUI.Views;
 
 namespace Transmute.GUI;
 
@@ -124,11 +125,17 @@ public partial class MainWindow : Window
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e)
     {
+        var app = (App)Application.Current;
         try
         {
-            var settingsVm = new SettingsViewModel(((App)Application.Current).ConfigManager);
-            var win = new Views.SettingsWindow(settingsVm) { Owner = this };
-            win.ShowDialog();
+            var settingsVm = new SettingsViewModel(app.ConfigManager, app.ProfileManager, _vm.ActiveProfile);
+            var win = new SettingsWindow(settingsVm) { Owner = this };
+            if (win.ShowDialog() == true)
+            {
+                // Sync the active profile if the user changed it inside Settings
+                if (settingsVm.SelectedProfile != _vm.ActiveProfile)
+                    _vm.ActiveProfile = settingsVm.SelectedProfile;
+            }
         }
         catch (Exception ex)
         {
@@ -138,5 +145,20 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+    }
+
+    private void OpenProfiles_Click(object sender, RoutedEventArgs e)
+    {
+        var app = (App)Application.Current;
+        var pmVm = new ProfileManagerViewModel(app.ProfileManager);
+        pmVm.SelectedProfile = _vm.ActiveProfile;
+
+        var win = new ProfileManagerWindow(pmVm, app.ProfileManager) { Owner = this };
+        win.ShowDialog();
+
+        // Refresh profile list in main VM; switch to whatever was selected on close if it still exists
+        _vm.RefreshProfiles();
+        if (win.SelectedProfileOnClose is { } selected)
+            _vm.ActiveProfile = selected;
     }
 }

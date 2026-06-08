@@ -8,7 +8,7 @@ namespace Transmute.CLI.Commands;
 
 public static class ConvertCommand
 {
-    public static Command Build(ConfigManager configManager)
+    public static Command Build(ConfigManager configManager, ProfileManager profileManager)
     {
         var inputsArg = new Argument<string[]>("inputs", "Input file(s) or folder(s) to convert")
         {
@@ -21,7 +21,7 @@ public static class ConvertCommand
         var outputOpt = new Option<string?>("--output", "Output file path (single input only)");
         outputOpt.AddAlias("-o");
 
-        var outputDirOpt = new Option<DirectoryInfo?>("--output-dir", "Output directory (overrides config default)");
+        var outputDirOpt = new Option<DirectoryInfo?>("--output-dir", "Output directory (overrides config/profile default)");
 
         var qualityOpt = new Option<int?>("--quality", "Quality 0-100 for lossy formats");
         qualityOpt.AddAlias("-q");
@@ -46,18 +46,28 @@ public static class ConvertCommand
         var recursiveOpt = new Option<bool>("--recursive", "Include files from subdirectories");
         recursiveOpt.AddAlias("-r");
 
+        var profileOpt = new Option<string?>("--profile", "Use a named profile for defaults (overridden by other flags)");
+        profileOpt.AddAlias("-p");
+
         var skipOpt = new Option<string[]>("--skip",
-            "Skip input files with these extensions, e.g. --skip jpg --skip png")
+            "Skip input files with these extensions, e.g. --skip jpg,png or --skip jpg --skip png. Replaces any profile skip/only filter.")
         {
             Arity = ArgumentArity.ZeroOrMore,
-            AllowMultipleArgumentsPerToken = false,
+            AllowMultipleArgumentsPerToken = true,
+        };
+
+        var onlyOpt = new Option<string[]>("--only",
+            "Process ONLY these extensions, e.g. --only jpg,png. Replaces any profile skip/only filter.")
+        {
+            Arity = ArgumentArity.ZeroOrMore,
+            AllowMultipleArgumentsPerToken = true,
         };
 
         var cmd = new Command("convert", "Convert image(s) to a target format")
         {
             inputsArg, formatOpt, outputOpt, outputDirOpt, qualityOpt, losslessOpt,
             methodOpt, effortOpt, jobsOpt, overwriteOpt, preserveMetaOpt, backendOpt,
-            recursiveOpt, skipOpt,
+            recursiveOpt, profileOpt, skipOpt, onlyOpt,
         };
 
         cmd.SetHandler(async (ctx) =>
@@ -75,34 +85,87 @@ public static class ConvertCommand
             var preserveMeta = ctx.ParseResult.GetValueForOption(preserveMetaOpt);
             var backend      = ctx.ParseResult.GetValueForOption(backendOpt);
             var recursive    = ctx.ParseResult.GetValueForOption(recursiveOpt);
-            var skipFormats  = ctx.ParseResult.GetValueForOption(skipOpt)
-                                  ?.Select(s => s.TrimStart('.').ToLowerInvariant())
-                                  .ToHashSet(StringComparer.OrdinalIgnoreCase)
-                               ?? [];
-            var ct = ctx.GetCancellationToken();
+            var profileName  = ctx.ParseResult.GetValueForOption(profileOpt);
+            var skipRaw      = ctx.ParseResult.GetValueForOption(skipOpt);
+            var onlyRaw      = ctx.ParseResult.GetValueForOption(onlyOpt);
+            var ct           = ctx.GetCancellationToken();
 
-            var config = configManager.Config;
+            // Normalize skip/only token lists — each token may itself be comma-separated
+            var skipTokens = ParseFormatTokens(skipRaw);
+            var onlyTokens = ParseFormatTokens(onlyRaw);
+
+            // Load profile (null = Default = use global config as-is)
+            var profile = string.IsNullOrEmpty(profileName)
+                ? null
+                : profileManager.Load(profileName);
+
+            if (!string.IsNullOrEmpty(profileName) &&
+                !string.Equals(profileName, ProfileManager.DefaultProfileName, StringComparison.OrdinalIgnoreCase) &&
+                profile is null)
+            {
+                Console.Error.WriteLine($"Error: Profile '{profileName}' not found. Run 'transmute profile list' to see available profiles.");
+                ctx.ExitCode = 1;
+                return;
+            }
+
+            // Effective defaults = global config, with profile overrides layered on top
+            var config   = configManager.Config;
+            var defaults = profile?.ApplyOver(config.Defaults) ?? config.Defaults;
+
             if (jobs == 0) jobs = config.Processing.MaxParallelJobs;
+
+            // Determine effective format filter.
+            // CLI --skip/--only fully replace profile filters (no merging).
+            HashSet<string>? onlyFormats = null;
+            HashSet<string> skipFormats  = [];
+
+            if (onlyTokens.Count > 0)
+            {
+                // CLI --only: replaces everything
+                onlyFormats = onlyTokens;
+                Console.Error.WriteLine($"Format filter: only processing {string.Join(", ", onlyFormats)}.");
+            }
+            else if (skipTokens.Count > 0)
+            {
+                // CLI --skip: replaces everything
+                skipFormats = skipTokens;
+            }
+            else if (profile is not null)
+            {
+                // No CLI filter — use profile's filter
+                if (profile.HasOnlyFilter)
+                {
+                    onlyFormats = profile.OnlyFormats!
+                        .Select(s => s.TrimStart('.').ToLowerInvariant())
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    Console.Error.WriteLine($"Profile filter active: only processing {string.Join(", ", onlyFormats)}.");
+                }
+                else if (profile.HasSkipFilter)
+                {
+                    skipFormats = profile.SkipFormats!
+                        .Select(s => s.TrimStart('.').ToLowerInvariant())
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                }
+            }
 
             var fmt = format.ToLowerInvariant();
             bool effectiveLossless = lossless
                 ? true
-                : (fmt is "jxl" or "webp") && config.Defaults.LosslessDefault;
+                : (fmt is "jxl" or "webp") && defaults.LosslessDefault;
 
             var options = new ConversionOptions
             {
-                Quality          = quality ?? GetDefaultQuality(format, config.Defaults),
+                Quality          = quality ?? GetDefaultQuality(format, defaults),
                 Lossless         = effectiveLossless,
-                WebpMethod       = method ?? config.Defaults.WebpMethod,
-                JxlEffort        = effort ?? config.Defaults.JxlEffort,
+                WebpMethod       = method ?? defaults.WebpMethod,
+                JxlEffort        = effort ?? defaults.JxlEffort,
                 PreserveMetadata = preserveMeta,
-                Overwrite        = overwrite || config.Defaults.OverwriteExisting,
-                // --output-dir takes precedence; fall back to the config persistent default
-                OutputDirectory  = outputDir?.FullName ?? config.Defaults.DefaultOutputDirectory,
+                Overwrite        = overwrite || defaults.OverwriteExisting,
+                OutputDirectory  = outputDir?.FullName ?? defaults.DefaultOutputDirectory,
                 OutputFile       = output,
                 ForcedBackend    = backend,
                 MaxParallelJobs  = jobs,
-                OutputNamingPattern = config.Defaults.OutputNamingPattern,
+                OutputNamingPattern = defaults.OutputNamingPattern,
             };
 
             if (output is not null && inputs.Length > 1)
@@ -112,10 +175,13 @@ public static class ConvertCommand
                 return;
             }
 
+            if (!string.IsNullOrEmpty(profileName) && profile is not null)
+                Console.WriteLine($"Using profile: {profileName}");
+
             var (engine, _, temp, _) = TransmuteFactory.Create(config);
             using (temp)
             {
-                var allInputs = ExpandInputs(inputs, recursive, skipFormats).ToList();
+                var allInputs = ExpandInputs(inputs, recursive, skipFormats, onlyFormats).ToList();
 
                 if (allInputs.Count == 0)
                 {
@@ -141,8 +207,7 @@ public static class ConvertCommand
                         InputPath    = f,
                         OutputPath   = engine.ResolveOutputPath(f, format, options, i + 1, allInputs.Count),
                         OutputFormat = format,
-                        // Same-format files get forced overwrite if the user explicitly passed --overwrite
-                        Options = options,
+                        Options      = options,
                     }).ToList();
 
                 var modeLabel = effectiveLossless ? "lossless" : $"q{options.Quality}";
@@ -190,6 +255,14 @@ public static class ConvertCommand
         return cmd;
     }
 
+    // Parses a token array where each token may be comma-separated (e.g. "jpg,png" or "jpg" "png")
+    private static HashSet<string> ParseFormatTokens(string[]? tokens) =>
+        tokens?
+            .SelectMany(t => t.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(s => s.TrimStart('.').ToLowerInvariant())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+        ?? [];
+
     private static int? GetDefaultQuality(string format, DefaultsConfig defaults) =>
         format.ToLowerInvariant() switch
         {
@@ -216,14 +289,17 @@ public static class ConvertCommand
         ".gif", ".bmp", ".heic", ".heif", ".svg", ".hdr", ".jp2", ".j2k"
     };
 
-    private static IEnumerable<string> ExpandInputs(string[] inputs, bool recursive, HashSet<string> skipFormats)
+    private static IEnumerable<string> ExpandInputs(
+        string[] inputs, bool recursive,
+        HashSet<string> skipFormats,
+        HashSet<string>? onlyFormats)
     {
         foreach (var input in inputs)
         {
             if (File.Exists(input))
             {
                 var ext = Path.GetExtension(input).TrimStart('.').ToLowerInvariant();
-                if (!skipFormats.Contains(ext))
+                if (IsAllowed(ext, skipFormats, onlyFormats))
                     yield return input;
             }
             else if (Directory.Exists(input))
@@ -232,7 +308,7 @@ public static class ConvertCommand
                 foreach (var file in Directory.EnumerateFiles(input, "*", option))
                 {
                     var ext = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
-                    if (ImageExtensions.Contains($".{ext}") && !skipFormats.Contains(ext))
+                    if (ImageExtensions.Contains($".{ext}") && IsAllowed(ext, skipFormats, onlyFormats))
                         yield return file;
                 }
             }
@@ -241,5 +317,12 @@ public static class ConvertCommand
                 Console.Error.WriteLine($"Warning: '{input}' not found, skipping.");
             }
         }
+    }
+
+    private static bool IsAllowed(string ext, HashSet<string> skipFormats, HashSet<string>? onlyFormats)
+    {
+        if (onlyFormats is not null)
+            return onlyFormats.Contains(ext);
+        return !skipFormats.Contains(ext);
     }
 }

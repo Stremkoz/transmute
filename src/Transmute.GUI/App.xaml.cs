@@ -8,12 +8,14 @@ namespace Transmute.GUI;
 public partial class App : Application
 {
     public ConfigManager ConfigManager { get; } = new();
+    public ProfileManager ProfileManager { get; } = new();
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        ProfileManager.EnsureFolder();
         DispatcherUnhandledException += OnUnhandledException;
-        var vm = new MainViewModel(ConfigManager);
+        var vm = new MainViewModel(ConfigManager, ProfileManager);
         var win = new MainWindow(vm);
         win.Show();
     }

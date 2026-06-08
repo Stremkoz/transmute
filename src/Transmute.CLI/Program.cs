@@ -5,12 +5,16 @@ using Transmute.Core.Config;
 var configPath = args.SkipWhile(a => a != "--config").Skip(1).FirstOrDefault();
 var configManager = new ConfigManager(configPath);
 
+var profileManager = new ProfileManager();
+profileManager.EnsureFolder();
+
 var root = new RootCommand("Transmute — smart image format converter")
 {
-    ConvertCommand.Build(configManager),
+    ConvertCommand.Build(configManager, profileManager),
     InfoCommand.Build(configManager),
     BackendsCommand.Build(configManager),
     ConfigCommand.Build(configManager),
+    ProfileCommand.Build(profileManager),
 };
 
 root.AddGlobalOption(new Option<string?>("--config", "Path to config file"));

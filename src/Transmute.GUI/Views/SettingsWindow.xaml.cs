@@ -10,6 +10,7 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         DataContext = vm;
+        vm.Saved += (_, _) => DialogResult = true;
     }
 
     private void BrowseDefaultOutput_Click(object sender, RoutedEventArgs e)

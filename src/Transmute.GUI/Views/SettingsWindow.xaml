@@ -202,6 +202,33 @@
             <TabItem Header="Defaults">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="16">
+
+                    <!-- Profile selector at top of Defaults tab -->
+                    <Border Background="#F0F4FF" BorderBrush="#7C83FD" BorderThickness="1" CornerRadius="6"
+                            Padding="12,8" Margin="0,0,0,14">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Editing profile:" FontSize="12" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Foreground="#1E1E2E" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding Profiles}"
+                                          SelectedItem="{Binding SelectedProfile}"
+                                          MinWidth="160" FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock FontSize="11" Foreground="#555" Margin="0,6,0,0" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Changes below will save to this profile's file. Binaries and Processing always use global settings."/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDefaultProfile}" Value="True">
+                                                <Setter Property="Text" Value="Changes below will save to global defaults. To edit a profile, select it from the dropdown above."/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Default Quality"/>
 
                     <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

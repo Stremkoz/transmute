@@ -279,9 +279,23 @@
                     <TextBlock Text="⚡" FontSize="18" Foreground="#7C83FD" Margin="0,0,6,0"/>
                     <TextBlock Text="Transmute" FontSize="16" FontWeight="Bold" Foreground="White"/>
                 </StackPanel>
-                <Button Grid.Column="1" Content="⚙  Settings" Style="{StaticResource SecondaryButton}"
-                        Click="OpenSettings_Click" Padding="12,6"
-                        Background="#2E2E40" Foreground="#CCC" BorderBrush="#444"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Profile selector -->
+                    <TextBlock Text="Profile:" Foreground="#AAA" FontSize="11.5"
+                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <ComboBox ItemsSource="{Binding Profiles}"
+                              SelectedItem="{Binding ActiveProfile}"
+                              VerticalAlignment="Center" MinWidth="120"
+                              Background="#2E2E40" Foreground="#EEE" BorderBrush="#555"
+                              FontSize="12" Margin="0,0,6,0"/>
+                    <Button Content="🗂 Profiles" Style="{StaticResource SecondaryButton}"
+                            Click="OpenProfiles_Click" Padding="10,6"
+                            Background="#2E2E40" Foreground="#CCC" BorderBrush="#444"
+                            Margin="0,0,6,0"/>
+                    <Button Content="⚙  Settings" Style="{StaticResource SecondaryButton}"
+                            Click="OpenSettings_Click" Padding="12,6"
+                            Background="#2E2E40" Foreground="#CCC" BorderBrush="#444"/>
+                </StackPanel>
             </Grid>
         </Border>
 
