@@ -78,9 +78,11 @@ public class JxlBackend : BackendBase
         var effort = job.Options.JxlEffort ?? 7;
         args.AddRange(["-e", effort.ToString()]);
 
-        // underscore, not hyphen; only matters for lossy (lossless always keeps invisible pixels)
+        // cjxl preserves all metadata by default; there is no CLI flag to strip it.
+        // All MetadataMode values degrade to PreserveAll here (safe — no data loss).
+        // Keep invisible pixels (alpha=0) in lossy mode; lossless always keeps them.
         if (!job.Options.Lossless)
-            args.Add(job.Options.PreserveMetadata ? "--keep_invisible=1" : "--keep_invisible=0");
+            args.Add("--keep_invisible=1");
 
         var (code, _, stderr) = await RunProcessAsync(_cjxlPath!, args, ct);
         return BuildResult(job, code, stderr, sw);

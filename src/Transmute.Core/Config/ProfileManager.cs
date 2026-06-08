@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Transmute.Core.Models;
 
 namespace Transmute.Core.Config;
 
@@ -189,7 +190,7 @@ public class ProfileManager
             ("defaults", "jpegquality")           => Inherited(profile.JpegQuality,           globalDefaults.JpegQuality),
             ("defaults", "jxlquality")            => Inherited(profile.JxlQuality,            globalDefaults.JxlQuality),
             ("defaults", "avifquality")           => Inherited(profile.AvifQuality,           globalDefaults.AvifQuality),
-            ("defaults", "preservemetadata")      => Inherited(profile.PreserveMetadata,      globalDefaults.PreserveMetadata),
+            ("defaults", "metadatamode")           => Inherited(profile.Metadata,             globalDefaults.MetadataMode),
             ("defaults", "overwriteexisting")     => Inherited(profile.OverwriteExisting,     globalDefaults.OverwriteExisting),
             ("defaults", "losslessdefault")       => Inherited(profile.LosslessDefault,       globalDefaults.LosslessDefault),
             ("defaults", "webpmethod")            => Inherited(profile.WebpMethod,            globalDefaults.WebpMethod),
@@ -222,7 +223,7 @@ public class ProfileManager
             case ("defaults", "jpegquality"):            profile.JpegQuality           = NullableInt(value);   break;
             case ("defaults", "jxlquality"):             profile.JxlQuality            = NullableInt(value);   break;
             case ("defaults", "avifquality"):            profile.AvifQuality           = NullableInt(value);   break;
-            case ("defaults", "preservemetadata"):       profile.PreserveMetadata      = NullableBool(value);  break;
+            case ("defaults", "metadatamode"):           profile.Metadata              = NullableMetadataMode(value); break;
             case ("defaults", "overwriteexisting"):      profile.OverwriteExisting     = NullableBool(value);  break;
             case ("defaults", "losslessdefault"):        profile.LosslessDefault       = NullableBool(value);  break;
             case ("defaults", "webpmethod"):             profile.WebpMethod            = NullableInt(value);   break;
@@ -255,6 +256,9 @@ public class ProfileManager
 
     private static bool? NullableBool(string value) =>
         value == "null" ? null : bool.Parse(value);
+
+    private static MetadataMode? NullableMetadataMode(string value) =>
+        value == "null" ? null : Enum.Parse<MetadataMode>(value, ignoreCase: true);
 
     private static List<string> ParseFormats(string value) =>
         value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

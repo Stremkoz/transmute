@@ -70,18 +70,27 @@ public class VipsBackend : BackendBase
         image.WriteToFile(job.OutputPath, options);
     }
 
+    private static Enums.ForeignKeep ToVipsKeep(MetadataMode mode) => mode switch
+    {
+        MetadataMode.StripAll     => Enums.ForeignKeep.None,
+        MetadataMode.ColorProfile => Enums.ForeignKeep.Icc,
+        MetadataMode.Copyright    => Enums.ForeignKeep.Exif | Enums.ForeignKeep.Xmp | Enums.ForeignKeep.Iptc,
+        _                         => Enums.ForeignKeep.All,
+    };
+
     private static VOption? BuildSaveOptions(ConversionJob job, string ext)
     {
-        var q = job.Options.Quality;
+        var q    = job.Options.Quality;
+        var keep = ToVipsKeep(job.Options.Metadata);
         return ext switch
         {
-            "jpg" or "jpeg" => new VOption { { "Q", q ?? 90 }, { "keep", job.Options.PreserveMetadata ? Enums.ForeignKeep.All : Enums.ForeignKeep.None } },
-            "webp" => new VOption { { "Q", q ?? 85 }, { "keep", job.Options.PreserveMetadata ? Enums.ForeignKeep.All : Enums.ForeignKeep.None } },
-            "avif" => new VOption { { "Q", q ?? 80 }, { "keep", job.Options.PreserveMetadata ? Enums.ForeignKeep.All : Enums.ForeignKeep.None } },
-            "heif" or "heic" => new VOption { { "Q", q ?? 80 }, { "keep", job.Options.PreserveMetadata ? Enums.ForeignKeep.All : Enums.ForeignKeep.None } },
-            "png" => new VOption { { "keep", job.Options.PreserveMetadata ? Enums.ForeignKeep.All : Enums.ForeignKeep.None } },
-            "tiff" or "tif" => new VOption { { "keep", job.Options.PreserveMetadata ? Enums.ForeignKeep.All : Enums.ForeignKeep.None } },
-            _ => null
+            "jpg" or "jpeg"  => new VOption { { "Q", q ?? 90 }, { "keep", keep } },
+            "webp"           => new VOption { { "Q", q ?? 85 }, { "keep", keep } },
+            "avif"           => new VOption { { "Q", q ?? 80 }, { "keep", keep } },
+            "heif" or "heic" => new VOption { { "Q", q ?? 80 }, { "keep", keep } },
+            "png"            => new VOption { { "keep", keep } },
+            "tiff" or "tif"  => new VOption { { "keep", keep } },
+            _                => null
         };
     }
 }

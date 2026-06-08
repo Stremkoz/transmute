@@ -4,49 +4,31 @@
         Title="Download Binaries" Height="660" Width="660"
         MinHeight="500" MinWidth="560"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
-        Background="#F0F2F5">
+        Background="{DynamicResource AppBackground}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <Window.Resources>
         <Style x:Key="ToolName" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#1A1A2E"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
         <Style x:Key="UrlText" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Consolas"/>
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Foreground" Value="#0D47A1"/>
+            <Setter Property="Foreground" Value="{DynamicResource FolderTitleBrush}"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <Style x:Key="NoteText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Foreground" Value="#666"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,3,0,0"/>
         </Style>
-        <Style x:Key="OpenBtn" TargetType="Button">
+        <Style x:Key="OpenBtn" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
             <Setter Property="Padding" Value="12,5"/>
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Background" Value="#0078D4"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="VerticalAlignment" Value="Top"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="4"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#106EBE"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
         </Style>
     </Window.Resources>
 
@@ -60,21 +42,21 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
-            <TextBlock Text="Download Binaries" FontSize="15" FontWeight="Bold" Foreground="#1E1E2E"/>
-            <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="#666" TextWrapping="Wrap">
+            <TextBlock Text="Download Binaries" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap">
                 Click Open to go to each tool's official download page. After installing, use
                 Auto-Detect in the Binaries tab, or paste the full path manually.
             </TextBlock>
         </StackPanel>
 
         <!-- Tool list -->
-        <Border Grid.Row="1" Background="White" CornerRadius="8"
-                BorderBrush="#DCDFE6" BorderThickness="1">
+        <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}" CornerRadius="8"
+                BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
 
                     <!-- cwebp / dwebp -->
-                    <Border BorderBrush="#F0F0F0" BorderThickness="0,0,0,1" Padding="16,12">
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -97,7 +79,7 @@
                     </Border>
 
                     <!-- libvips -->
-                    <Border BorderBrush="#F0F0F0" BorderThickness="0,0,0,1" Padding="16,12">
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -123,7 +105,7 @@
                     </Border>
 
                     <!-- cjxl / djxl -->
-                    <Border BorderBrush="#F0F0F0" BorderThickness="0,0,0,1" Padding="16,12">
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -146,7 +128,7 @@
                     </Border>
 
                     <!-- ffmpeg -->
-                    <Border BorderBrush="#F0F0F0" BorderThickness="0,0,0,1" Padding="16,12">
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -196,7 +178,7 @@
         </Border>
 
         <!-- PATH instructions -->
-        <Border Grid.Row="2" Margin="0,10,0,0" Background="#1E1E2E" CornerRadius="8" Padding="16,12">
+        <Border Grid.Row="2" Margin="0,10,0,0" Background="{DynamicResource ToolbarBackground}" CornerRadius="8" Padding="16,12">
             <StackPanel>
                 <TextBlock Text="Adding to PATH (for Auto-Detect)" FontSize="12" FontWeight="SemiBold"
                            Foreground="#7C83FD" Margin="0,0,0,6"/>
@@ -228,7 +210,6 @@
 
         <!-- Close -->
         <Button Grid.Row="3" Content="Close" HorizontalAlignment="Right" Margin="0,10,0,0"
-                Padding="16,7" Click="Close_Click"
-                Background="#FFFFFF" BorderBrush="#CCCCCC" BorderThickness="1"/>
+                Padding="16,7" Click="Close_Click"/>
     </Grid>
 </Window>

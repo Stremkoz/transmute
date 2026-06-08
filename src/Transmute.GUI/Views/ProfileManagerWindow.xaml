@@ -5,7 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Transmute — Profiles" Height="460" Width="520"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{DynamicResource AppBackground}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -22,8 +24,8 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Profile Manager" FontSize="15" FontWeight="SemiBold" Foreground="#1E1E2E"/>
-            <TextBlock FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="0,4,0,0">
+            <TextBlock Text="Profile Manager" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0">
                 Create and manage profiles. To edit a profile's settings, select it here,
                 then open Settings — the Defaults tab will apply to the selected profile.
             </TextBlock>
@@ -33,7 +35,7 @@
         <ListBox Grid.Row="2"
                  ItemsSource="{Binding Profiles}"
                  SelectedItem="{Binding SelectedProfile}"
-                 BorderBrush="#DCDFE6" BorderThickness="1"
+                 BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
                 <DataTemplate>
@@ -49,13 +51,14 @@
         </ListBox>
 
         <!-- OnlyFormats warning banner — shown when selected profile has OnlyFormats set -->
-        <Border Grid.Row="4" Background="#FFF3E0" BorderBrush="#FFA726" BorderThickness="1" CornerRadius="5"
+        <Border Grid.Row="4" Background="{DynamicResource WarningBannerBackground}"
+                BorderBrush="{DynamicResource WarningBannerBorderBrush}" BorderThickness="1" CornerRadius="5"
                 Padding="10,8" Visibility="{Binding SelectedProfileHasOnlyFilter,
                     Converter={StaticResource BoolToVisibleConverter}}"
                 x:Name="OnlyFilterWarning">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="⚠" FontSize="13" Foreground="#E65100" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="OnlyFilterText" FontSize="11" Foreground="#BF360C"
+                <TextBlock Text="⚠" FontSize="13" Foreground="{DynamicResource WarningBannerIconForeground}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="OnlyFilterText" FontSize="11" Foreground="{DynamicResource WarningBannerTextForeground}"
                            TextWrapping="Wrap" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
@@ -63,88 +66,15 @@
         <!-- Action buttons -->
         <WrapPanel Grid.Row="6" Orientation="Horizontal">
             <Button Content="New Profile" Padding="12,6" Margin="0,0,6,0" FontSize="12"
-                    Command="{Binding CreateProfileCommand}"
-                    Background="#0078D4" Foreground="White" BorderThickness="0">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="4"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#106EBE"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Background" Value="#CCCCCC"/>
-                                <Setter Property="Foreground" Value="#888888"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+                    Style="{StaticResource PrimaryButton}"
+                    Command="{Binding CreateProfileCommand}"/>
             <Button Content="Duplicate" Padding="12,6" Margin="0,0,6,0" FontSize="12"
-                    Command="{Binding DuplicateProfileCommand}">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="#F0F0F0" CornerRadius="4" BorderBrush="#CCCCCC"
-                                BorderThickness="1" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E0E0E0"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#F8F8F8"/>
-                                <Setter Property="Foreground" Value="#AAAAAA"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+                    Command="{Binding DuplicateProfileCommand}"/>
             <Button Content="Rename" Padding="12,6" Margin="0,0,6,0" FontSize="12"
-                    Command="{Binding RenameProfileCommand}">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="#F0F0F0" CornerRadius="4" BorderBrush="#CCCCCC"
-                                BorderThickness="1" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E0E0E0"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#F8F8F8"/>
-                                <Setter Property="Foreground" Value="#AAAAAA"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+                    Command="{Binding RenameProfileCommand}"/>
             <Button Content="Delete" Padding="12,6" FontSize="12"
-                    Command="{Binding DeleteProfileCommand}">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="#F0F0F0" CornerRadius="4" BorderBrush="#CCCCCC"
-                                BorderThickness="1" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#FDECEA"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#E57373"/>
-                                <Setter Property="Foreground" Value="#C62828"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#F8F8F8"/>
-                                <Setter Property="Foreground" Value="#AAAAAA"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+                    Style="{StaticResource DeleteButton}"
+                    Command="{Binding DeleteProfileCommand}"/>
         </WrapPanel>
 
         <!-- Footer: path + close -->
@@ -154,37 +84,9 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" Content="📂 Open Profiles Folder" HorizontalAlignment="Left"
-                    Padding="12,8" FontSize="12" Click="OpenFolder_Click">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="#F0F0F0" CornerRadius="4" BorderBrush="#CCCCCC"
-                                BorderThickness="1" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#E0E0E0"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+                    Padding="12,8" FontSize="12" Click="OpenFolder_Click"/>
             <Button Grid.Column="1" Content="Close"
-                    Width="90" Padding="0,8" FontSize="12" IsCancel="True" Click="Close_Click">
-            <Button.Template>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="#F0F0F0" CornerRadius="4" BorderBrush="#CCCCCC"
-                            BorderThickness="1" Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#E0E0E0"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Button.Template>
-            </Button>
+                    Width="90" Padding="0,8" FontSize="12" IsCancel="True" Click="Close_Click"/>
         </Grid>
     </Grid>
 </Window>

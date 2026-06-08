@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Transmute.Core.Models;
 
 namespace Transmute.Core.Config;
 
@@ -11,7 +12,7 @@ public class ProfileConfig
     public int? JpegQuality { get; set; }
     public int? JxlQuality { get; set; }
     public int? AvifQuality { get; set; }
-    public bool? PreserveMetadata { get; set; }
+    public MetadataMode? Metadata { get; set; }
     public bool? OverwriteExisting { get; set; }
     public bool? LosslessDefault { get; set; }
     public int? WebpMethod { get; set; }
@@ -43,7 +44,7 @@ public class ProfileConfig
         JpegQuality            = JpegQuality            ?? global.JpegQuality,
         JxlQuality             = JxlQuality             ?? global.JxlQuality,
         AvifQuality            = AvifQuality            ?? global.AvifQuality,
-        PreserveMetadata       = PreserveMetadata       ?? global.PreserveMetadata,
+        MetadataMode           = Metadata               ?? global.MetadataMode,
         OverwriteExisting      = OverwriteExisting      ?? global.OverwriteExisting,
         LosslessDefault        = LosslessDefault        ?? global.LosslessDefault,
         WebpMethod             = WebpMethod             ?? global.WebpMethod,

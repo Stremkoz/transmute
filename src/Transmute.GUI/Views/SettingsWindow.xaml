@@ -3,9 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="clr-namespace:Transmute.Core.Models;assembly=Transmute.Core"
         mc:Ignorable="d"
         Title="Transmute Settings" Height="600" Width="640"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{DynamicResource AppBackground}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <Window.Resources>
         <!-- Segmented toggle button used in the filter Skip/Only pill -->
@@ -25,12 +28,12 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E3F2FD"/>
-                                <Setter Property="Foreground" Value="#0078D4"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SegmentCheckedBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource SegmentCheckedBrush}"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#F0F4FF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SegmentHoverBackground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -41,20 +44,21 @@
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="#1E1E2E"/>
+            <Setter Property="Foreground" Value="{DynamicResource SectionHeaderBrush}"/>
             <Setter Property="Margin" Value="0,12,0,6"/>
         </Style>
         <Style x:Key="Label" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Width" Value="130"/>
             <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
         </Style>
         <Style x:Key="PathBox" TargetType="TextBox">
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="FontFamily" Value="Consolas"/>
             <Setter Property="FontSize" Value="11"/>
         </Style>
-        <Style x:Key="Btn" TargetType="Button">
+        <Style x:Key="Btn" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Padding" Value="10,5"/>
             <Setter Property="Margin" Value="4,0,0,0"/>
             <Setter Property="FontSize" Value="11"/>
@@ -73,7 +77,7 @@
                 <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <TextBlock Style="{StaticResource SectionHeader}" Text="Backend Binary Paths"/>
-                        <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,10">
+                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,10">
                             Leave blank to auto-detect from system PATH. Enter a full path to override.
                         </TextBlock>
 
@@ -153,19 +157,18 @@
                             <Button Content="Auto-Detect All from PATH" Padding="12,6"
                                     Command="{Binding AutoDetectAllCommand}"/>
                             <Button Content="⬇ Download Binaries" Padding="12,6" Margin="8,0,0,0"
-                                    Command="{Binding DownloadBinariesCommand}"
-                                    Background="#E8F4FD" BorderBrush="#90CAF9" BorderThickness="1"/>
+                                    Command="{Binding DownloadBinariesCommand}"/>
                         </StackPanel>
 
                         <TextBlock Style="{StaticResource SectionHeader}" Text="Config File Location" Margin="0,20,0,4"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="Mode:" FontSize="11" Foreground="#666" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Mode:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock Text="{Binding ConfigMode}" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="#0D47A1" VerticalAlignment="Center"/>
+                                       Foreground="{DynamicResource FolderTitleBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                         <TextBox IsReadOnly="True" Style="{StaticResource PathBox}"
-                                 Text="{Binding ConfigFilePath, Mode=OneWay}" Background="#F0F0F0"/>
-                        <TextBlock FontSize="10" Foreground="#888" TextWrapping="Wrap" Margin="0,4,0,0">
+                                 Text="{Binding ConfigFilePath, Mode=OneWay}" Background="{DynamicResource ReadOnlyInputBackground}"/>
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0">
                             To use portable mode: place a file named "portable" (no extension) beside the exe,
                             or copy config.json there. Transmute will use that file instead of AppData.
                         </TextBlock>
@@ -209,7 +212,7 @@
                             </TextBlock>
                         </StackPanel>
                     </Grid>
-                    <TextBlock FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="150,2,0,0">
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="150,2,0,0">
                         libvips will use every available core if uncapped. 2–4 is a good limit
                         when running multiple parallel jobs.
                     </TextBlock>
@@ -226,8 +229,16 @@
                                  />
                     </Grid>
 
-                    <TextBlock Style="{StaticResource SectionHeader}" Text="Log File" Margin="0,16,0,4"/>
-                    <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,8">
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Notifications" Margin="0,16,0,4"/>
+                    <CheckBox Content="Play sound on completion"
+                              IsChecked="{Binding PlaySoundOnCompletion}" Margin="0,0,0,4"/>
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8">
+                        Uses Windows system sounds — Notification for success, Exclamation if there were
+                        failures or routing fallbacks. Respects your system volume.
+                    </TextBlock>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Log File" Margin="0,8,0,4"/>
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8">
                         After each conversion, write a log file beside the output images.
                         Disabled by default.
                     </TextBlock>
@@ -243,20 +254,20 @@
                                    IsEnabled="{Binding LogEnabled}"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal"
                                     IsEnabled="{Binding LogEnabled}">
-                            <Border BorderBrush="#BBBBBB" BorderThickness="1" CornerRadius="4"
+                            <Border BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1" CornerRadius="4"
                                     VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
                                     <ToggleButton Content=".log  (text)" Style="{StaticResource FilterSegment}"
                                                   IsChecked="{Binding LogFormatIsJson,
                                                       Converter={StaticResource InverseBoolConverter}}"
                                                   Tag="4,0,0,0"/>
-                                    <Rectangle Width="1" Fill="#BBBBBB" VerticalAlignment="Stretch"/>
+                                    <Rectangle Width="1" Fill="{DynamicResource InputBorderBrush}" VerticalAlignment="Stretch"/>
                                     <ToggleButton Content=".json" Style="{StaticResource FilterSegment}"
                                                   IsChecked="{Binding LogFormatIsJson}"
                                                   Tag="0,0,4,0"/>
                                 </StackPanel>
                             </Border>
-                            <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" FontSize="11" Foreground="#666">
+                            <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" FontSize="11" Foreground="{DynamicResource TextMutedBrush}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Text" Value="Human-readable text file"/>
@@ -279,17 +290,21 @@
                 <StackPanel Margin="16">
 
                     <!-- Profile selector at top of Defaults tab -->
-                    <Border Background="#F0F4FF" BorderBrush="#7C83FD" BorderThickness="1" CornerRadius="6"
+                    <Border Background="{DynamicResource ProfileBannerBackground}"
+                            BorderBrush="{DynamicResource ProfileBannerBorderBrush}"
+                            BorderThickness="1" CornerRadius="6"
                             Padding="12,8" Margin="0,0,0,14">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Editing profile:" FontSize="12" FontWeight="SemiBold"
-                                           VerticalAlignment="Center" Foreground="#1E1E2E" Margin="0,0,10,0"/>
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding Profiles}"
                                           SelectedItem="{Binding SelectedProfile}"
                                           MinWidth="160" FontSize="12" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock FontSize="11" Foreground="#555" Margin="0,6,0,0" TextWrapping="Wrap">
+                            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" TextWrapping="Wrap">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Text" Value="Changes below will save to this profile's file. Binaries and Processing always use global settings."/>
@@ -339,7 +354,7 @@
                     </Grid>
 
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Compression Effort" Margin="0,16,0,4"/>
-                    <TextBlock FontSize="11" Foreground="#666" Margin="0,0,0,8" TextWrapping="Wrap">
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" TextWrapping="Wrap">
                         Higher effort = smaller files but slower encoding.
                     </TextBlock>
 
@@ -366,11 +381,31 @@
                     </Grid>
 
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Behavior" Margin="0,16,0,6"/>
-                    <CheckBox Content="Preserve metadata (EXIF, ICC, XMP)" IsChecked="{Binding PreserveMetadata}" Margin="0,4"/>
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Metadata"/>
+                        <ComboBox Grid.Column="1" Width="320" HorizontalAlignment="Left"
+                                  SelectedValue="{Binding MetadataMode}"
+                                  SelectedValuePath="Tag">
+                            <ComboBoxItem Tag="{x:Static models:MetadataMode.PreserveAll}"
+                                          Content="Preserve all — archival, no data loss (default)"/>
+                            <ComboBoxItem Tag="{x:Static models:MetadataMode.StripAll}"
+                                          Content="Strip all — privacy-focused, smallest file"/>
+                            <ComboBoxItem Tag="{x:Static models:MetadataMode.ColorProfile}"
+                                          Content="Colour profile only — privacy without colour shifts"/>
+                            <ComboBoxItem Tag="{x:Static models:MetadataMode.Copyright}"
+                                          Content="Copyright/author only — for photographers sharing work"/>
+                        </ComboBox>
+                    </Grid>
+
                     <CheckBox Content="Overwrite existing files" IsChecked="{Binding OverwriteExisting}" Margin="0,4"/>
 
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Lossless Default" Margin="0,16,0,4"/>
-                    <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,8">
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8">
                         Applies to formats that support it (JXL, WebP). Can be overridden per session in the main window.
                     </TextBlock>
                     <StackPanel Orientation="Horizontal">
@@ -382,7 +417,7 @@
                     </StackPanel>
 
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Output Naming Pattern" Margin="0,16,0,4"/>
-                    <TextBlock FontSize="11" Foreground="#666" Margin="0,0,0,6" TextWrapping="Wrap">
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap">
                         Tokens: {name} = filename without extension,  {ext} = target format,
                         {original_ext} = source extension,  {date} = yyyyMMdd,
                         {counter} = auto-padded sequence number (e.g. 001, 002… for a 100+ file batch)
@@ -391,7 +426,7 @@
                              Text="{Binding OutputNamingPattern, UpdateSourceTrigger=PropertyChanged}"/>
 
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Default Output Folder" Margin="0,16,0,4"/>
-                    <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,6">
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,6">
                         Where converted files are saved by default. Leave empty to save beside the source file.
                         Can be overridden per session in the main window.
                     </TextBlock>
@@ -413,7 +448,7 @@
                     <StackPanel Visibility="{Binding IsDefaultProfile,
                                     Converter={StaticResource InverseBoolToVisibleConverter}}">
                         <TextBlock Style="{StaticResource SectionHeader}" Text="Input Format Filter" Margin="0,16,0,4"/>
-                        <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,8">
+                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8">
                             Restrict which input formats this profile acts on. Leave empty to process everything.
                             Comma-separated extensions, e.g. <Run FontFamily="Consolas">jpg, png</Run>
                         </TextBlock>
@@ -426,27 +461,27 @@
 
                             <!-- Skip / Only segmented pill -->
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border BorderBrush="#BBBBBB" BorderThickness="1" CornerRadius="4"
+                                <Border BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1" CornerRadius="4"
                                         VerticalAlignment="Center" Margin="0,0,8,0">
                                     <StackPanel Orientation="Horizontal">
                                         <ToggleButton Content="Skip" Style="{StaticResource FilterSegment}"
                                                       IsChecked="{Binding ProfileFilterIsOnly,
                                                           Converter={StaticResource InverseBoolConverter}}"
                                                       Tag="4,0,0,0"/>
-                                        <Rectangle Width="1" Fill="#BBBBBB" VerticalAlignment="Stretch"/>
+                                        <Rectangle Width="1" Fill="{DynamicResource InputBorderBrush}" VerticalAlignment="Stretch"/>
                                         <ToggleButton Content="Only" Style="{StaticResource FilterSegment}"
                                                       IsChecked="{Binding ProfileFilterIsOnly}"
                                                       Tag="0,0,4,0"/>
                                     </StackPanel>
                                 </Border>
-                                <TextBlock Text="formats:" VerticalAlignment="Center" FontSize="12" Foreground="#555"/>
+                                <TextBlock Text="formats:" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </StackPanel>
 
                             <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
                                      Text="{Binding ProfileFormatFilter, UpdateSourceTrigger=PropertyChanged}"
                                      VerticalAlignment="Center"/>
                         </Grid>
-                        <TextBlock FontSize="10" Foreground="#888" Margin="150,3,0,0">
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="150,3,0,0">
                             Enter extension names without dots. Empty = no filter (all formats processed).
                         </TextBlock>
                     </StackPanel>
@@ -454,10 +489,46 @@
                 </StackPanel>
                 </ScrollViewer>
             </TabItem>
+            <!-- Appearance Tab -->
+            <TabItem Header="Appearance">
+                <StackPanel Margin="16">
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Theme"/>
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" Margin="0,0,0,10">
+                        Choose how Transmute looks. System follows your Windows light/dark setting
+                        and updates automatically when you change it.
+                    </TextBlock>
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Colour scheme"/>
+                        <ComboBox Grid.Column="1" Width="240" HorizontalAlignment="Left"
+                                  SelectedValue="{Binding Theme}"
+                                  SelectedValuePath="Tag">
+                            <ComboBoxItem Tag="{x:Static models:AppTheme.System}"
+                                          Content="System (follows Windows)"/>
+                            <ComboBoxItem Tag="{x:Static models:AppTheme.Light}"
+                                          Content="Light"/>
+                            <ComboBoxItem Tag="{x:Static models:AppTheme.Dark}"
+                                          Content="Dark"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <TextBlock FontSize="10" Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="150,4,0,0">
+                        The theme previews immediately. Hit Save to persist the choice.
+                    </TextBlock>
+                </StackPanel>
+            </TabItem>
         </TabControl>
 
         <!-- Footer buttons -->
-        <Border Grid.Row="1" Background="#F0F0F0" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="16,10">
+        <Border Grid.Row="1" Background="{DynamicResource SettingsFooterBackground}"
+                BorderBrush="{DynamicResource SettingsFooterBorderBrush}"
+                BorderThickness="0,1,0,0" Padding="16,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -468,8 +539,8 @@
                 <Button Grid.Column="1" Content="Reset to Defaults" Padding="12,6"
                         Command="{Binding ResetDefaultsCommand}"/>
                 <Button Grid.Column="3" Content="Save" Padding="16,6"
-                        Command="{Binding SaveCommand}" Background="#0078D4" Foreground="White"
-                        BorderThickness="0"/>
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding SaveCommand}"/>
             </Grid>
         </Border>
     </Grid>

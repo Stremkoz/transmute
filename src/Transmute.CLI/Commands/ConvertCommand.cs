@@ -41,7 +41,12 @@ public static class ConvertCommand
 
         var overwriteOpt = new Option<bool>("--overwrite", "Overwrite existing output files");
 
-        var preserveMetaOpt = new Option<bool>("--preserve-metadata", () => true, "Keep EXIF and other metadata");
+        var metadataOpt = new Option<MetadataMode?>("--metadata",
+            "Metadata handling: preserve (default), strip, color, copyright")
+        {
+            ArgumentHelpName = "mode",
+        };
+        metadataOpt.AddAlias("--meta");
 
         var backendOpt = new Option<string?>("--backend", "Force a specific backend (webp, jxl, ffmpeg, vips, magick)");
 
@@ -76,12 +81,15 @@ public static class ConvertCommand
 
         var dryRunOpt = new Option<bool>("--dry-run", "Preview which files would be converted and their output paths, without converting");
 
+        var verboseOpt = new Option<bool>("--verbose", "Show detailed per-file routing and settings (backend choice, why it was chosen, applied settings)");
+        verboseOpt.AddAlias("-v");
+
         var cmd = new Command("convert", "Convert image(s) to a target format")
         {
             inputsArg, formatOpt, outputOpt, outputDirOpt, qualityOpt, losslessOpt,
-            methodOpt, effortOpt, jobsOpt, overwriteOpt, preserveMetaOpt, backendOpt,
+            methodOpt, effortOpt, jobsOpt, overwriteOpt, metadataOpt, backendOpt,
             recursiveOpt, profileOpt, skipOpt, onlyOpt, namePatternOpt,
-            logOpt, noLogOpt, logFormatOpt, dryRunOpt,
+            logOpt, noLogOpt, logFormatOpt, dryRunOpt, verboseOpt,
         };
 
         cmd.SetHandler(async (ctx) =>
@@ -96,7 +104,7 @@ public static class ConvertCommand
             var effort       = ctx.ParseResult.GetValueForOption(effortOpt);
             var jobs         = ctx.ParseResult.GetValueForOption(jobsOpt);
             var overwrite    = ctx.ParseResult.GetValueForOption(overwriteOpt);
-            var preserveMeta = ctx.ParseResult.GetValueForOption(preserveMetaOpt);
+            var metaMode     = ctx.ParseResult.GetValueForOption(metadataOpt);
             var backend      = ctx.ParseResult.GetValueForOption(backendOpt);
             var recursive    = ctx.ParseResult.GetValueForOption(recursiveOpt);
             var profileName  = ctx.ParseResult.GetValueForOption(profileOpt);
@@ -107,6 +115,7 @@ public static class ConvertCommand
             var noLogFlag    = ctx.ParseResult.GetValueForOption(noLogOpt);
             var logFormat    = ctx.ParseResult.GetValueForOption(logFormatOpt);
             var dryRun       = ctx.ParseResult.GetValueForOption(dryRunOpt);
+            var verbose      = ctx.ParseResult.GetValueForOption(verboseOpt);
             var ct           = ctx.GetCancellationToken();
 
             // Normalize skip/only token lists — each token may itself be comma-separated
@@ -175,7 +184,7 @@ public static class ConvertCommand
                 Lossless            = effectiveLossless,
                 WebpMethod          = method ?? defaults.WebpMethod,
                 JxlEffort           = effort ?? defaults.JxlEffort,
-                PreserveMetadata    = preserveMeta,
+                Metadata            = metaMode ?? defaults.MetadataMode,
                 Overwrite           = overwrite || defaults.OverwriteExisting,
                 OutputDirectory     = outputDir?.FullName ?? defaults.DefaultOutputDirectory,
                 OutputFile          = output,
@@ -261,7 +270,11 @@ public static class ConvertCommand
                 {
                     if (p.LastResult is not { } r) return;
 
-                    if (r.Success)
+                    if (verbose)
+                    {
+                        Console.WriteLine(FormatVerboseBlock(r, p, options, format));
+                    }
+                    else if (r.Success)
                     {
                         var sizePart = FormatSizeDelta(r.InputBytes, r.OutputBytes);
                         Console.WriteLine($"  [{p.Completed}/{p.Total}] {Path.GetFileName(r.InputPath)} → {Path.GetFileName(r.OutputPath)} [{r.BackendUsed}]{sizePart} {r.Elapsed.TotalSeconds:F2}s");
@@ -315,6 +328,90 @@ public static class ConvertCommand
         });
 
         return cmd;
+    }
+
+    private static string FormatVerboseBlock(
+        ConversionResult r,
+        ConversionProgress p,
+        ConversionOptions opts,
+        string format)
+    {
+        var sb = new System.Text.StringBuilder();
+        var prefix = $"  [{p.Completed}/{p.Total}]";
+        sb.AppendLine($"{prefix} ── {Path.GetFileName(r.InputPath)} ──");
+
+        if (r.Skipped)
+        {
+            sb.Append($"  {"Input:",-10}{r.InputPath}");
+            sb.AppendLine();
+            sb.Append($"  {"Output:",-10}{r.OutputPath}");
+            sb.AppendLine();
+            sb.Append($"  {"Status:",-10}SKIPPED (output already exists)");
+            return sb.ToString();
+        }
+
+        var inputSize  = r.InputBytes.HasValue  ? $"  ({FormatBytes(r.InputBytes.Value)})" : string.Empty;
+        sb.AppendLine($"  {"Input:",-10}{r.InputPath}{inputSize}");
+        sb.AppendLine($"  {"Output:",-10}{r.OutputPath}");
+
+        if (r.Success)
+        {
+            var backendLine = r.BackendUsed ?? "unknown";
+            if (r.FallbackNote is not null)
+                backendLine += "  ⚠ fallback";
+            sb.AppendLine($"  {"Backend:",-10}{backendLine}");
+
+            if (r.RoutingReason is not null)
+                sb.AppendLine($"  {"Reason:",-10}{r.RoutingReason}");
+
+            sb.AppendLine($"  {"Settings:",-10}{FormatSettings(opts, format)}");
+
+            var sizePart = r.InputBytes.HasValue && r.OutputBytes.HasValue
+                ? $"  {FormatBytes(r.InputBytes.Value)} → {FormatBytes(r.OutputBytes.Value)}{FormatSizeDelta(r.InputBytes, r.OutputBytes)}"
+                : string.Empty;
+            sb.Append($"  {"Result:",-10}{r.Elapsed.TotalSeconds:F2}s{sizePart}");
+        }
+        else
+        {
+            sb.Append($"  {"Status:",-10}FAILED — {r.Error}");
+        }
+
+        return sb.ToString();
+    }
+
+    private static string FormatSettings(ConversionOptions opts, string outputFormat)
+    {
+        var parts = new List<string>();
+        var fmt = outputFormat.ToLowerInvariant();
+
+        if (opts.Lossless)
+            parts.Add("lossless");
+        else if (opts.Quality.HasValue)
+            parts.Add($"quality={opts.Quality}");
+
+        if (fmt == "webp" && opts.WebpMethod.HasValue)
+            parts.Add($"method={opts.WebpMethod}");
+        if (fmt == "jxl" && opts.JxlEffort.HasValue)
+            parts.Add($"effort={opts.JxlEffort}");
+
+        parts.Add($"metadata={opts.Metadata switch {
+            Transmute.Core.Models.MetadataMode.PreserveAll  => "preserve-all",
+            Transmute.Core.Models.MetadataMode.StripAll     => "strip-all",
+            Transmute.Core.Models.MetadataMode.ColorProfile => "colour-profile",
+            Transmute.Core.Models.MetadataMode.Copyright    => "copyright",
+            _                                               => opts.Metadata.ToString()
+        }}");
+
+        return string.Join(", ", parts);
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024 * 1024)
+            return $"{bytes / (1024.0 * 1024):F1} MB";
+        if (bytes >= 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes} B";
     }
 
     // Parses a token array where each token may be comma-separated (e.g. "jpg,png" or "jpg" "png")

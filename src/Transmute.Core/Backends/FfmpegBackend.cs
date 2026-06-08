@@ -62,7 +62,9 @@ public class FfmpegBackend : BackendBase
             args.AddRange(["-compression_level", "6"]);
         }
 
-        if (!job.Options.PreserveMetadata)
+        // ffmpeg: StripAll supported; ColorProfile/Copyright degrade to PreserveAll
+        // (no selective ICC-only flag exists for still image outputs)
+        if (job.Options.Metadata == MetadataMode.StripAll)
             args.AddRange(["-map_metadata", "-1"]);
 
         args.Add(job.OutputPath);

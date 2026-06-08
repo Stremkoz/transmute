@@ -72,6 +72,18 @@ public static class LogWriter
 
         w.WriteLine();
         w.WriteLine($"Summary: {succeeded} succeeded, {skipped} skipped, {failed} failed");
+
+        var fallbackGroups = results
+            .Where(r => r.FallbackNote is not null)
+            .GroupBy(r => r.FallbackNote!)
+            .ToList();
+
+        if (fallbackGroups.Count > 0)
+        {
+            w.WriteLine();
+            foreach (var group in fallbackGroups)
+                w.WriteLine($"⚠ {group.Count()} file(s): {group.Key}");
+        }
     }
 
     private static void WriteJson(IReadOnlyList<ConversionResult> results, string path, TimeSpan elapsed)
@@ -90,6 +102,8 @@ public static class LogWriter
                 output         = r.OutputPath,
                 status         = r.Success ? "success" : r.Skipped ? "skipped" : "failed",
                 backend        = r.BackendUsed,
+                routingReason  = r.RoutingReason,
+                fallbackNote   = r.FallbackNote,
                 inputBytes     = r.InputBytes,
                 outputBytes    = r.OutputBytes,
                 elapsedSeconds = r.Success ? (double?)Math.Round(r.Elapsed.TotalSeconds, 3) : null,

@@ -12,6 +12,10 @@ public record ConversionResult
     public long? InputBytes { get; init; }
     public long? OutputBytes { get; init; }
 
+    // Routing diagnostics — null for normal/forced/skipped results
+    public string? RoutingReason { get; init; }
+    public string? FallbackNote { get; init; }
+
     public static ConversionResult Ok(string input, string output, string backend, TimeSpan elapsed) =>
         new() { InputPath = input, OutputPath = output, Success = true, BackendUsed = backend, Elapsed = elapsed };
 

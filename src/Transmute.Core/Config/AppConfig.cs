@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Transmute.Core.Models;
 
 namespace Transmute.Core.Config;
 
@@ -8,6 +9,13 @@ public class AppConfig
     public ProcessingConfig Processing { get; set; } = new();
     public DefaultsConfig Defaults { get; set; } = new();
     public LogConfig Log { get; set; } = new();
+    public UIConfig UI { get; set; } = new();
+}
+
+public class UIConfig
+{
+    public bool PlaySoundOnCompletion { get; set; } = false;
+    public Transmute.Core.Models.AppTheme Theme { get; set; } = Transmute.Core.Models.AppTheme.System;
 }
 
 public class LogConfig
@@ -50,7 +58,7 @@ public class DefaultsConfig
     public int JpegQuality { get; set; } = 90;
     public int JxlQuality { get; set; } = 90;
     public int AvifQuality { get; set; } = 80;
-    public bool PreserveMetadata { get; set; } = true;
+    public MetadataMode MetadataMode { get; set; } = MetadataMode.PreserveAll;
     public bool OverwriteExisting { get; set; } = false;
     public string OutputNamingPattern { get; set; } = "{name}.{ext}";
     public bool LosslessDefault { get; set; } = true;

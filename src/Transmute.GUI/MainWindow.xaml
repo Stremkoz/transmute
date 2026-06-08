@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Transmute.GUI"
         xmlns:vm="clr-namespace:Transmute.GUI.ViewModels"
+        xmlns:models="clr-namespace:Transmute.Core.Models;assembly=Transmute.Core"
         mc:Ignorable="d"
         Title="Transmute — Image Converter" Height="740" Width="900"
         Icon="pack://application:,,,/Assets/Transmute.ico"
@@ -13,18 +14,18 @@
         Drop="Window_Drop"
         DragEnter="Window_DragEnter"
         PreviewKeyDown="Window_PreviewKeyDown"
-        Background="#F0F2F5">
+        Background="{DynamicResource AppBackground}">
 
     <Window.Resources>
 
-        <!-- Button styles -->
+        <!-- ── Primary button ── -->
         <Style x:Key="PrimaryButton" TargetType="Button">
-            <Setter Property="Background" Value="#0078D4"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background"       Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground"       Value="White"/>
+            <Setter Property="Padding"          Value="16,8"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="FontSize"         Value="13"/>
+            <Setter Property="Cursor"           Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -34,11 +35,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#106EBE"/>
+                                <Setter Property="Background" Value="{DynamicResource PrimaryButtonHoverBackground}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Background" Value="#CCCCCC"/>
-                                <Setter Property="Foreground" Value="#888888"/>
+                                <Setter Property="Background" Value="{DynamicResource PrimaryButtonDisabledBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonDisabledForeground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -46,18 +47,25 @@
             </Setter>
         </Style>
 
+        <!-- ── Secondary button ── -->
         <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-            <Setter Property="Background" Value="#FFFFFF"/>
-            <Setter Property="Foreground" Value="#333333"/>
+            <Setter Property="Background"      Value="{DynamicResource SecondaryButtonBackground}"/>
+            <Setter Property="Foreground"      Value="{DynamicResource SecondaryButtonForeground}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource SecondaryButtonBorderBrush}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#E8E8E8"/>
+                    <Setter Property="Background" Value="{DynamicResource SecondaryButtonHoverBackground}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{DynamicResource SecondaryButtonBackground}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                    <Setter Property="Opacity"    Value="0.6"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
+        <!-- ── Danger button ── -->
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
             <Setter Property="Background" Value="#D32F2F"/>
             <Style.Triggers>
@@ -67,12 +75,40 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Lossless/Lossy segmented toggle — visible only for formats that support it -->
+        <!-- ── Split button halves (share one outer border) ── -->
+        <Style x:Key="SplitMainButton" TargetType="Button">
+            <Setter Property="Background"      Value="{DynamicResource SecondaryButtonBackground}"/>
+            <Setter Property="Foreground"      Value="{DynamicResource SecondaryButtonForeground}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource SecondaryButtonHoverBackground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SplitChevronButton" TargetType="Button" BasedOn="{StaticResource SplitMainButton}">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+
+        <!-- ── Lossless / Lossy segmented toggle ── -->
         <Style x:Key="LosslessSegment" TargetType="ToggleButton">
-            <Setter Property="FontSize" Value="11.5"/>
-            <Setter Property="Padding" Value="11,5"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize"         Value="11.5"/>
+            <Setter Property="Padding"          Value="11,5"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="BorderThickness"  Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -85,13 +121,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E3F2FD"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#0078D4"/>
-                                <Setter Property="Foreground" Value="#0078D4"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="Bd" Property="Background"  Value="{DynamicResource SegmentCheckedBackground}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource SegmentCheckedBrush}"/>
+                                <Setter Property="Foreground"  Value="{DynamicResource SegmentCheckedBrush}"/>
+                                <Setter Property="FontWeight"  Value="SemiBold"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#F0F4FF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SegmentHoverBackground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -99,15 +135,16 @@
             </Setter>
         </Style>
 
+        <!-- ── Remove (✕) button ── -->
         <Style x:Key="RemoveButton" TargetType="Button">
-            <Setter Property="Width" Value="22"/>
-            <Setter Property="Height" Value="22"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#999"/>
+            <Setter Property="Width"            Value="22"/>
+            <Setter Property="Height"           Value="22"/>
+            <Setter Property="FontSize"         Value="10"/>
+            <Setter Property="FontWeight"       Value="Bold"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="Foreground"       Value="{DynamicResource TextMutedBrush}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -116,8 +153,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#FFDDDD"/>
-                                <Setter Property="Foreground" Value="#CC0000"/>
+                                <Setter Property="Background" Value="{DynamicResource RemoveButtonHoverBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource RemoveButtonHoverForeground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -125,12 +162,16 @@
             </Setter>
         </Style>
 
-        <!-- Format skip chip — checked = that format is excluded from conversion -->
+        <!-- ── Format skip chip ── -->
         <Style x:Key="FormatChip" TargetType="ToggleButton">
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Padding" Value="9,4"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Margin" Value="0,0,5,0"/>
+            <Setter Property="FontSize"         Value="11"/>
+            <Setter Property="Padding"          Value="9,4"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Margin"           Value="0,0,5,0"/>
+            <Setter Property="Background"       Value="{DynamicResource AppBackground}"/>
+            <Setter Property="BorderBrush"      Value="{DynamicResource SecondaryButtonBorderBrush}"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="Foreground"       Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -143,7 +184,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#FDECEA"/>
+                                <Setter TargetName="Bd" Property="Background"  Value="#FDECEA"/>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#E57373"/>
                                 <Setter Property="Foreground" Value="#C62828"/>
                             </Trigger>
@@ -154,31 +195,28 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Setter Property="Background" Value="#F0F2F5"/>
-            <Setter Property="BorderBrush" Value="#CCCCCC"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="#555"/>
         </Style>
 
-        <!-- ListViewItem style: no selection highlight junk, stretch content, hover effect -->
+        <!-- ── Queue list item container ── -->
         <Style x:Key="QueueItemStyle" TargetType="ListViewItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="0"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"          Value="0"/>
+            <Setter Property="Margin"           Value="0"/>
+            <Setter Property="BorderThickness"  Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListViewItem">
                         <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                BorderThickness="0,0,0,1" BorderBrush="#EBEBEB">
+                                BorderThickness="0,0,0,1"
+                                BorderBrush="{DynamicResource ListItemBorderBrush}">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#F5F8FF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ListItemHoverBackground}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#EAF2FB"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ListItemSelectedBackground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -186,18 +224,28 @@
             </Setter>
         </Style>
 
-        <!-- File entry row template -->
+        <!-- ── File entry row template ── -->
         <DataTemplate x:Key="FileEntryTemplate" DataType="{x:Type vm:FileEntryViewModel}">
-            <Grid Margin="12,6,8,6">
+            <Grid Margin="4,6,8,6">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="40"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="72"/>
-                    <ColumnDefinition Width="28"/>
+                    <ColumnDefinition Width="20"/>  <!-- drag gripper -->
+                    <ColumnDefinition Width="38"/>  <!-- thumbnail -->
+                    <ColumnDefinition Width="*"/>   <!-- name / path -->
+                    <ColumnDefinition Width="72"/>  <!-- size -->
+                    <ColumnDefinition Width="28"/>  <!-- remove -->
                 </Grid.ColumnDefinitions>
-                <!-- Thumbnail with placeholder fallback -->
-                <Border Grid.Column="0" Width="34" Height="34" CornerRadius="3"
-                        Background="#EAECF0" VerticalAlignment="Center" ClipToBounds="True">
+
+                <!-- Drag gripper -->
+                <TextBlock Grid.Column="0" Text="⠿" FontSize="14" FontFamily="Segoe UI Symbol"
+                           Foreground="{DynamicResource GripperBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Cursor="SizeAll" ToolTip="Drag to reorder"
+                           MouseLeftButtonDown="Gripper_MouseLeftButtonDown"/>
+
+                <!-- Thumbnail -->
+                <Border Grid.Column="1" Width="34" Height="34" CornerRadius="3"
+                        Background="{DynamicResource ThumbnailPlaceholderBrush}"
+                        VerticalAlignment="Center" ClipToBounds="True">
                     <Grid>
                         <TextBlock Text="📄" FontSize="13" HorizontalAlignment="Center"
                                    VerticalAlignment="Center" Opacity="0.45"/>
@@ -205,16 +253,25 @@
                                RenderOptions.BitmapScalingMode="HighQuality"/>
                     </Grid>
                 </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0">
+
+                <!-- Name / path -->
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="6,0">
                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12"
-                               Foreground="#1A1A2E" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="{Binding Path}" FontSize="10" Foreground="#999"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Path}" FontSize="10"
+                               Foreground="{DynamicResource TextMutedBrush}"
                                TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <TextBlock Grid.Column="2" Text="{Binding Size}" VerticalAlignment="Center"
-                           HorizontalAlignment="Right" Foreground="#666" FontSize="11"
-                           Margin="0,0,10,0"/>
-                <Button Grid.Column="3" Content="✕" Style="{StaticResource RemoveButton}"
+
+                <!-- Size -->
+                <TextBlock Grid.Column="3" Text="{Binding Size}" VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="11" Margin="0,0,10,0"/>
+
+                <!-- Remove -->
+                <Button Grid.Column="4" Content="✕" Style="{StaticResource RemoveButton}"
                         VerticalAlignment="Center"
                         Command="{Binding DataContext.RemoveEntryCommand,
                             RelativeSource={RelativeSource AncestorType=ListView}}"
@@ -222,27 +279,44 @@
             </Grid>
         </DataTemplate>
 
-        <!-- Folder entry row template (taller, blue-tinted) -->
+        <!-- ── Folder entry row template ── -->
         <DataTemplate x:Key="FolderEntryTemplate" DataType="{x:Type vm:FolderEntryViewModel}">
-            <Border Background="#F0F7FF" BorderBrush="#C5DCF5" BorderThickness="3,0,0,0">
-                <Grid Margin="12,8,8,8">
+            <Border Background="{DynamicResource FolderRowBackground}"
+                    BorderBrush="{DynamicResource FolderRowAccentBrush}"
+                    BorderThickness="3,0,0,0">
+                <Grid Margin="4,8,8,8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="22"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="28"/>
+                        <ColumnDefinition Width="20"/>  <!-- drag gripper -->
+                        <ColumnDefinition Width="22"/>  <!-- folder icon -->
+                        <ColumnDefinition Width="*"/>   <!-- name / path -->
+                        <ColumnDefinition Width="28"/>  <!-- remove -->
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="📁" FontSize="16" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0">
+
+                    <!-- Drag gripper -->
+                    <TextBlock Grid.Column="0" Text="⠿" FontSize="14" FontFamily="Segoe UI Symbol"
+                               Foreground="{DynamicResource GripperBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Cursor="SizeAll" ToolTip="Drag to reorder"
+                               MouseLeftButtonDown="Gripper_MouseLeftButtonDown"/>
+
+                    <TextBlock Grid.Column="1" Text="📁" FontSize="16" VerticalAlignment="Center"/>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="6,0">
                         <TextBlock Text="{Binding FolderName}" FontWeight="Bold" FontSize="12"
-                                   Foreground="#0D47A1" TextTrimming="CharacterEllipsis"/>
+                                   Foreground="{DynamicResource FolderTitleBrush}"
+                                   TextTrimming="CharacterEllipsis"/>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding CountText}" FontSize="11" Foreground="#1565C0"/>
-                            <TextBlock Text="  ·  " FontSize="11" Foreground="#BBB"/>
-                            <TextBlock Text="{Binding Path}" FontSize="10" Foreground="#888"
+                            <TextBlock Text="{Binding CountText}" FontSize="11"
+                                       Foreground="{DynamicResource FolderSubtitleBrush}"/>
+                            <TextBlock Text="  ·  " FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBlock Text="{Binding Path}" FontSize="10"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                     </StackPanel>
-                    <Button Grid.Column="2" Content="✕" Style="{StaticResource RemoveButton}"
+
+                    <Button Grid.Column="3" Content="✕" Style="{StaticResource RemoveButton}"
                             VerticalAlignment="Center"
                             Command="{Binding DataContext.RemoveEntryCommand,
                                 RelativeSource={RelativeSource AncestorType=ListView}}"
@@ -260,15 +334,15 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>            <!-- Toolbar -->
+            <RowDefinition Height="Auto"/>              <!-- Toolbar -->
             <RowDefinition Height="*" MinHeight="200"/> <!-- Queue + controls -->
-            <RowDefinition Height="6"/>              <!-- Drag handle -->
-            <RowDefinition Height="150" MinHeight="80"/> <!-- Log panel -->
-            <RowDefinition Height="Auto"/>            <!-- Status bar -->
+            <RowDefinition Height="6"/>                 <!-- Splitter -->
+            <RowDefinition Height="150" MinHeight="80"/><!-- Log panel -->
+            <RowDefinition Height="Auto"/>              <!-- Status bar -->
         </Grid.RowDefinitions>
 
         <!-- ── Toolbar ── -->
-        <Border Grid.Row="0" Background="#1E1E2E">
+        <Border Grid.Row="0" Background="{DynamicResource ToolbarBackground}">
             <Grid Margin="14,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -279,8 +353,7 @@
                     <TextBlock Text="Transmute" FontSize="16" FontWeight="Bold" Foreground="White"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Profile selector -->
-                    <TextBlock Text="Profile:" Foreground="#AAA" FontSize="11.5"
+                    <TextBlock Text="Profile:" Foreground="{DynamicResource ToolbarMutedBrush}" FontSize="11.5"
                                VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <ComboBox ItemsSource="{Binding Profiles}"
                               SelectedItem="{Binding ActiveProfile}"
@@ -288,304 +361,375 @@
                               FontSize="12" Margin="0,0,6,0"/>
                     <Button Content="🗂 Profiles" Style="{StaticResource SecondaryButton}"
                             Click="OpenProfiles_Click" Padding="10,6"
-                            Background="#2E2E40" Foreground="#CCC" BorderBrush="#444"
+                            Background="{DynamicResource ToolbarButtonBackground}"
+                            Foreground="{DynamicResource ToolbarButtonForeground}"
+                            BorderBrush="{DynamicResource ToolbarButtonBorderBrush}"
                             Margin="0,0,6,0"/>
                     <Button Content="⚙  Settings" Style="{StaticResource SecondaryButton}"
                             Click="OpenSettings_Click" Padding="12,6"
-                            Background="#2E2E40" Foreground="#CCC" BorderBrush="#444"/>
+                            Background="{DynamicResource ToolbarButtonBackground}"
+                            Foreground="{DynamicResource ToolbarButtonForeground}"
+                            BorderBrush="{DynamicResource ToolbarButtonBorderBrush}"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ── Content area: queue + controls stacked inside a nested grid ── -->
+        <!-- ── Content area ── -->
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*" MinHeight="80"/> <!-- Queue -->
-                <RowDefinition Height="Auto"/>              <!-- Controls: format + quality -->
-                <RowDefinition Height="Auto"/>              <!-- Controls: buttons -->
-                <RowDefinition Height="Auto"/>              <!-- Advanced panel -->
+                <RowDefinition Height="*" MinHeight="80"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-        <!-- ── Queue / Drop Zone ── -->
-        <Border Grid.Row="0" Margin="12,10,12,0" Background="White" CornerRadius="8"
-                BorderBrush="#DCDFE6" BorderThickness="1"
-                AllowDrop="True" Drop="DropZone_Drop"
-                DragEnter="DropZone_DragEnter" DragLeave="DropZone_DragLeave"
-                x:Name="DropZoneBorder">
-            <Grid>
-                <!-- Empty state -->
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                            Visibility="{Binding InputFiles.Count,
-                                Converter={StaticResource ZeroToVisibleConverter}}">
-                    <TextBlock Text="📂" FontSize="52" HorizontalAlignment="Center" Opacity="0.35"/>
-                    <TextBlock Text="Drop images or folders here" FontSize="14"
-                               Foreground="#AAA" HorizontalAlignment="Center" Margin="0,8,0,4"/>
-                    <TextBlock Text="or use the Add Files / Add Folder buttons below"
-                               FontSize="11" Foreground="#CCC" HorizontalAlignment="Center"/>
+            <!-- ── Queue / Drop Zone ── -->
+            <Border Grid.Row="0" Margin="12,10,12,0"
+                    Background="{DynamicResource SurfaceBackground}" CornerRadius="8"
+                    BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1"
+                    AllowDrop="True" Drop="DropZone_Drop"
+                    DragEnter="DropZone_DragEnter" DragLeave="DropZone_DragLeave"
+                    x:Name="DropZoneBorder">
+                <Grid>
+                    <!-- Empty state -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding InputFiles.Count,
+                                    Converter={StaticResource ZeroToVisibleConverter}}">
+                        <TextBlock Text="📂" FontSize="52" HorizontalAlignment="Center" Opacity="0.35"/>
+                        <TextBlock Text="Drop images or folders here" FontSize="14"
+                                   Foreground="{DynamicResource DropEmptyPrimaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,8,0,4"/>
+                        <TextBlock Text="or use the Add Files / Add Folder buttons below"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource DropEmptySecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Populated list -->
+                    <ListView x:Name="QueueList"
+                              ItemsSource="{Binding InputFiles}"
+                              ItemTemplateSelector="{StaticResource QueueEntrySelector}"
+                              ItemContainerStyle="{StaticResource QueueItemStyle}"
+                              BorderThickness="0" Background="Transparent"
+                              AllowDrop="True"
+                              PreviewMouseMove="QueueList_PreviewMouseMove"
+                              DragOver="QueueList_DragOver"
+                              Drop="QueueList_Drop"
+                              DragLeave="QueueList_DragLeave"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.IsDeferredScrollingEnabled="True"
+                              Visibility="{Binding InputFiles.Count,
+                                  Converter={StaticResource NonZeroToVisibleConverter}}"/>
+                </Grid>
+            </Border>
+
+            <!-- ── Controls row 1: format + quality + metadata ── -->
+            <Border Grid.Row="1" Margin="12,8,12,0"
+                    Background="{DynamicResource SurfaceBackground}" CornerRadius="8"
+                    BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1"
+                    Padding="14,10">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="Format" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="12" Margin="0,0,8,0"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{x:Static vm:MainViewModel.SupportedFormats}"
+                                  SelectedItem="{Binding TargetFormat}" VerticalAlignment="Center"/>
+
+                        <!-- Lossless/Lossy pill -->
+                        <Border Grid.Column="3" VerticalAlignment="Center"
+                                Visibility="{Binding LosslessVisible, Converter={StaticResource BoolToVisibleConverter}}"
+                                BorderBrush="{DynamicResource SecondaryButtonBorderBrush}"
+                                BorderThickness="1" CornerRadius="5">
+                            <StackPanel Orientation="Horizontal">
+                                <ToggleButton Content="Lossless" Style="{StaticResource LosslessSegment}"
+                                              IsChecked="{Binding Lossless}"
+                                              Tag="5,0,0,0" BorderThickness="0" BorderBrush="Transparent"
+                                              Background="Transparent"
+                                              Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <Rectangle Width="1" Fill="{DynamicResource SecondaryButtonBorderBrush}" VerticalAlignment="Stretch"/>
+                                <ToggleButton Content="Lossy" Style="{StaticResource LosslessSegment}"
+                                              IsChecked="{Binding Lossless, Converter={StaticResource InverseBoolConverter}}"
+                                              Tag="0,0,5,0" BorderThickness="0" BorderBrush="Transparent"
+                                              Background="Transparent"
+                                              Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Grid.Column="5" Text="Quality" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="12" Margin="0,0,8,0"
+                                   IsEnabled="{Binding QualityEnabled}"/>
+                        <Slider Grid.Column="6" Minimum="1" Maximum="100" Value="{Binding Quality}"
+                                VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"
+                                IsEnabled="{Binding QualityEnabled}"/>
+                        <TextBlock Grid.Column="7" VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   FontSize="12" MinWidth="36"
+                                   IsEnabled="{Binding QualityEnabled}">
+                            <Run Text="{Binding Quality, Mode=OneWay}"/><Run Text="%"/>
+                        </TextBlock>
+
+                        <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Metadata" VerticalAlignment="Center" FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,6,0"/>
+                            <ComboBox VerticalAlignment="Center" FontSize="12" MinWidth="160"
+                                      SelectedValue="{Binding MetadataMode}"
+                                      SelectedValuePath="Tag">
+                                <ComboBoxItem Tag="{x:Static models:MetadataMode.PreserveAll}"  Content="Preserve all"/>
+                                <ComboBoxItem Tag="{x:Static models:MetadataMode.StripAll}"     Content="Strip all"/>
+                                <ComboBoxItem Tag="{x:Static models:MetadataMode.ColorProfile}" Content="Colour profile only"/>
+                                <ComboBoxItem Tag="{x:Static models:MetadataMode.Copyright}"    Content="Copyright only"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{DynamicResource RowDividerBrush}" Margin="0,8,0,0"/>
+
+                    <!-- Output directory -->
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="52"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Output" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="12" Margin="0,0,8,0"/>
+                        <Grid Grid.Column="1">
+                            <TextBox Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="6,4" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Text="Same folder as source  (leave empty for default)"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       FontStyle="Italic" FontSize="11"
+                                       IsHitTestVisible="False" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding OutputDirectory,
+                                           Converter={StaticResource NullOrEmptyToVisibleConverter}}"/>
+                        </Grid>
+                        <Button Grid.Column="2" Content="Browse…" Style="{StaticResource SecondaryButton}"
+                                Padding="10,5" Margin="8,0,0,0" FontSize="11"
+                                Click="BrowseOutputDir_Click"/>
+                        <Button Grid.Column="3" Content="↩ Clear" Style="{StaticResource SecondaryButton}"
+                                Padding="10,5" Margin="4,0,0,0" FontSize="11"
+                                Command="{Binding ClearOutputDirectoryCommand}"
+                                ToolTip="Reset to beside source"/>
+                        <Button Grid.Column="4" Content="📂 Open" Style="{StaticResource SecondaryButton}"
+                                Padding="10,5" Margin="4,0,0,0" FontSize="11"
+                                Click="OpenOutputDir_Click"
+                                ToolTip="Open output folder in Explorer"
+                                Visibility="{Binding OutputDirectory,
+                                    Converter={StaticResource NotNullOrEmptyToVisibleConverter}}"/>
+                    </Grid>
                 </StackPanel>
+            </Border>
 
-                <!-- Populated list — virtualized for large queues -->
-                <ListView x:Name="QueueList"
-                          ItemsSource="{Binding InputFiles}"
-                          ItemTemplateSelector="{StaticResource QueueEntrySelector}"
-                          ItemContainerStyle="{StaticResource QueueItemStyle}"
-                          BorderThickness="0" Background="Transparent"
-                          VirtualizingPanel.IsVirtualizing="True"
-                          VirtualizingPanel.VirtualizationMode="Recycling"
-                          ScrollViewer.IsDeferredScrollingEnabled="True"
-                          Visibility="{Binding InputFiles.Count,
-                              Converter={StaticResource NonZeroToVisibleConverter}}"/>
-            </Grid>
-        </Border>
-
-        <!-- ── Controls row 1: format + quality + output ── -->
-        <Border Grid.Row="1" Margin="12,8,12,0" Background="White" CornerRadius="8"
-                BorderBrush="#DCDFE6" BorderThickness="1" Padding="14,10">
-            <StackPanel>
-                <!-- Format, lossless, quality, preserve metadata -->
+            <!-- ── Controls row 2: action buttons ── -->
+            <Border Grid.Row="2" Margin="12,4,12,0" Padding="14,8">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="110"/>
-                        <ColumnDefinition Width="16"/>
-                        <!-- Lossless toggle — collapses when format doesn't support it -->
+                        <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="12"/>
-                        <!-- Quality label + slider -->
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="160"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <!-- Split clear button -->
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Column="0" Text="Format" VerticalAlignment="Center"
-                               Foreground="#555" FontSize="12" Margin="0,0,8,0"/>
-                    <ComboBox Grid.Column="1"
-                              ItemsSource="{x:Static vm:MainViewModel.SupportedFormats}"
-                              SelectedItem="{Binding TargetFormat}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="0" Content="+ Add Files" Style="{StaticResource SecondaryButton}"
+                            Click="AddFiles_Click" Padding="12,7"/>
+                    <Button Grid.Column="2" Content="📁 Add Folder" Style="{StaticResource SecondaryButton}"
+                            Click="AddFolder_Click" Padding="12,7"/>
+                    <CheckBox Grid.Column="4" Content="Include subfolders"
+                              IsChecked="{Binding IncludeSubfolders}"
+                              VerticalAlignment="Center" FontSize="12"
+                              Foreground="{DynamicResource TextSecondaryBrush}"/>
 
-                    <!-- Lossless/Lossy segmented pill — only visible for JXL and WebP -->
-                    <Border Grid.Column="3" VerticalAlignment="Center"
-                            Visibility="{Binding LosslessVisible, Converter={StaticResource BoolToVisibleConverter}}"
-                            BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="5">
+                    <ToggleButton Grid.Column="6" Content="⚙ Advanced"
+                                  IsChecked="{Binding ShowAdvanced}"
+                                  Padding="12,7" FontSize="13" Cursor="Hand"
+                                  Background="Transparent"
+                                  BorderBrush="{DynamicResource SecondaryButtonBorderBrush}"
+                                  BorderThickness="1"
+                                  Foreground="{DynamicResource TextSecondaryBrush}">
+                        <ToggleButton.Style>
+                            <Style TargetType="ToggleButton">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="5" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background"  Value="{DynamicResource SegmentHoverBackground}"/>
+                                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#7C83FD"/>
+                                                    <Setter Property="Foreground" Value="#5B62D9"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SecondaryButtonHoverBackground}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ToggleButton.Style>
+                    </ToggleButton>
+
+                    <!-- ── Split Clear button ── -->
+                    <!-- Left: Clear log (default action). Right: ▾ opens context menu. -->
+                    <Border Grid.Column="8" CornerRadius="5" BorderThickness="1"
+                            BorderBrush="{DynamicResource SecondaryButtonBorderBrush}"
+                            VerticalAlignment="Center" ClipToBounds="True">
                         <StackPanel Orientation="Horizontal">
-                            <ToggleButton Content="Lossless" Style="{StaticResource LosslessSegment}"
-                                          IsChecked="{Binding Lossless}"
-                                          Tag="5,0,0,0" BorderThickness="0" BorderBrush="Transparent"
-                                          Background="Transparent" Foreground="#555"/>
-                            <Rectangle Width="1" Fill="#CCCCCC" VerticalAlignment="Stretch"/>
-                            <ToggleButton Content="Lossy" Style="{StaticResource LosslessSegment}"
-                                          IsChecked="{Binding Lossless, Converter={StaticResource InverseBoolConverter}}"
-                                          Tag="0,0,5,0" BorderThickness="0" BorderBrush="Transparent"
-                                          Background="Transparent" Foreground="#555"/>
+                            <Button Content="Clear" Padding="12,7"
+                                    Style="{StaticResource SplitMainButton}"
+                                    Command="{Binding ClearLogCommand}"
+                                    ToolTip="Clear the conversion log"/>
+                            <Rectangle Width="1" Fill="{DynamicResource SecondaryButtonBorderBrush}"/>
+                            <Button x:Name="ClearChevron" Content="▾" Width="22"
+                                    Style="{StaticResource SplitChevronButton}"
+                                    Click="ClearChevron_Click"
+                                    ToolTip="More clear options">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Clear log"
+                                                  Command="{Binding PlacementTarget.DataContext.ClearLogCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                        <MenuItem Header="Clear queue"
+                                                  Command="{Binding PlacementTarget.DataContext.ClearFilesCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Clear completed from log"
+                                                  Command="{Binding PlacementTarget.DataContext.ClearCompletedCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Clear all"
+                                                  Command="{Binding PlacementTarget.DataContext.ClearAllCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
                         </StackPanel>
                     </Border>
 
-                    <TextBlock Grid.Column="5" Text="Quality" VerticalAlignment="Center"
-                               Foreground="#555" FontSize="12" Margin="0,0,8,0"
-                               IsEnabled="{Binding QualityEnabled}"/>
-                    <Slider Grid.Column="6" Minimum="1" Maximum="100" Value="{Binding Quality}"
-                            VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"
-                            IsEnabled="{Binding QualityEnabled}"/>
-                    <TextBlock Grid.Column="7" VerticalAlignment="Center" Margin="6,0,0,0"
-                               Foreground="#333" FontSize="12" MinWidth="36"
-                               IsEnabled="{Binding QualityEnabled}">
-                        <Run Text="{Binding Quality, Mode=OneWay}"/><Run Text="%"/>
-                    </TextBlock>
-
-                    <CheckBox Grid.Column="9" Content="Preserve Metadata" VerticalAlignment="Center"
-                              IsChecked="{Binding PreserveMetadata}" FontSize="12"/>
+                    <Button Grid.Column="10" Content="⚡  Convert" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding ConvertCommand}" Padding="20,7" FontWeight="SemiBold"/>
                 </Grid>
+            </Border>
 
-                <!-- Divider -->
-                <Rectangle Height="1" Fill="#EBEBEB" Margin="0,8,0,0"/>
-
-                <!-- Output directory -->
-                <Grid Margin="0,8,0,0">
+            <!-- ── Advanced session options ── -->
+            <Border Grid.Row="3" Margin="12,0,12,0"
+                    Background="{DynamicResource AdvancedPanelBackground}"
+                    BorderBrush="{DynamicResource AdvancedPanelBorderBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="14,10"
+                    Visibility="{Binding ShowAdvanced, Converter={StaticResource BoolToVisibleConverter}}">
+                <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="52"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="24"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Output" VerticalAlignment="Center"
-                               Foreground="#555" FontSize="12" Margin="0,0,8,0"/>
-                    <Grid Grid.Column="1">
-                        <TextBox Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}"
-                                 Padding="6,4" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"/>
-                        <TextBlock Text="Same folder as source  (leave empty for default)"
-                                   Foreground="#BBBBBB" FontStyle="Italic" FontSize="11"
-                                   IsHitTestVisible="False" Margin="8,0,0,0" VerticalAlignment="Center"
-                                   Visibility="{Binding OutputDirectory,
-                                       Converter={StaticResource NullOrEmptyToVisibleConverter}}"/>
-                    </Grid>
-                    <Button Grid.Column="2" Content="Browse…" Style="{StaticResource SecondaryButton}"
-                            Padding="10,5" Margin="8,0,0,0" FontSize="11"
-                            Click="BrowseOutputDir_Click"/>
-                    <Button Grid.Column="3" Content="↩ Clear" Style="{StaticResource SecondaryButton}"
-                            Padding="10,5" Margin="4,0,0,0" FontSize="11"
-                            Command="{Binding ClearOutputDirectoryCommand}"
-                            ToolTip="Reset to beside source"/>
-                    <Button Grid.Column="4" Content="📂 Open" Style="{StaticResource SecondaryButton}"
-                            Padding="10,5" Margin="4,0,0,0" FontSize="11"
-                            Click="OpenOutputDir_Click"
-                            ToolTip="Open output folder in Explorer"
-                            Visibility="{Binding OutputDirectory,
-                                Converter={StaticResource NotNullOrEmptyToVisibleConverter}}"/>
+
+                    <CheckBox Grid.Column="0" Content="Overwrite existing files (this session)"
+                              IsChecked="{Binding SessionOverwrite}"
+                              VerticalAlignment="Center" FontSize="12"
+                              Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                    <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource AdvancedPanelBorderBrush}"
+                               VerticalAlignment="Stretch" Margin="11,0"/>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <Border BorderBrush="{DynamicResource AdvancedPanelBorderBrush}" BorderThickness="1"
+                                CornerRadius="4" VerticalAlignment="Center" Margin="0,0,6,0">
+                            <StackPanel Orientation="Horizontal">
+                                <ToggleButton Content="Skip" Style="{StaticResource LosslessSegment}"
+                                              IsChecked="{Binding SessionOnlyMode, Converter={StaticResource InverseBoolConverter}}"
+                                              Tag="4,0,0,0" BorderThickness="0" BorderBrush="Transparent"
+                                              Background="Transparent" FontSize="10.5" Padding="7,3"/>
+                                <Rectangle Width="1" Fill="{DynamicResource AdvancedPanelBorderBrush}" VerticalAlignment="Stretch"/>
+                                <ToggleButton Content="Only" Style="{StaticResource LosslessSegment}"
+                                              IsChecked="{Binding SessionOnlyMode}"
+                                              Tag="0,0,4,0" BorderThickness="0" BorderBrush="Transparent"
+                                              Background="Transparent" FontSize="10.5" Padding="7,3"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="input formats:" VerticalAlignment="Center"
+                                   FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <WrapPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ToggleButton Content="JPG"  Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJpeg}"/>
+                        <ToggleButton Content="PNG"  Style="{StaticResource FormatChip}" IsChecked="{Binding SkipPng}"/>
+                        <ToggleButton Content="GIF"  Style="{StaticResource FormatChip}" IsChecked="{Binding SkipGif}"/>
+                        <ToggleButton Content="WebP" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipWebp}"/>
+                        <ToggleButton Content="AVIF" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipAvif}"/>
+                        <ToggleButton Content="JXL"  Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJxl}"/>
+                        <ToggleButton Content="HEIC" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipHeic}"/>
+                        <TextBlock Text="{Binding SkipModeHint}" VerticalAlignment="Center"
+                                   FontSize="10" Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="4,0,0,0" FontStyle="Italic"/>
+                    </WrapPanel>
                 </Grid>
-            </StackPanel>
-        </Border>
-
-        <!-- ── Controls row 2: action buttons ── -->
-        <Border Grid.Row="2" Margin="12,4,12,0" Padding="14,8">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="8"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="8"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="8"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <Button Grid.Column="0" Content="+ Add Files" Style="{StaticResource SecondaryButton}"
-                        Click="AddFiles_Click" Padding="12,7"/>
-                <Button Grid.Column="2" Content="📁 Add Folder" Style="{StaticResource SecondaryButton}"
-                        Click="AddFolder_Click" Padding="12,7"/>
-                <CheckBox Grid.Column="4" Content="Include subfolders"
-                          IsChecked="{Binding IncludeSubfolders}"
-                          VerticalAlignment="Center" FontSize="12" Foreground="#555"/>
-
-                <ToggleButton Grid.Column="6" Content="⚙ Advanced"
-                              IsChecked="{Binding ShowAdvanced}"
-                              Padding="12,7" FontSize="13" Cursor="Hand"
-                              Background="Transparent" BorderBrush="#CCCCCC" BorderThickness="1"
-                              Foreground="#555">
-                    <ToggleButton.Style>
-                        <Style TargetType="ToggleButton">
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ToggleButton">
-                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                                BorderBrush="{TemplateBinding BorderBrush}"
-                                                BorderThickness="{TemplateBinding BorderThickness}"
-                                                CornerRadius="5" Padding="{TemplateBinding Padding}">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsChecked" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF"/>
-                                                <Setter TargetName="Bd" Property="BorderBrush" Value="#7C83FD"/>
-                                                <Setter Property="Foreground" Value="#5B62D9"/>
-                                            </Trigger>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="#F5F5F5"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ToggleButton.Style>
-                </ToggleButton>
-                <Button Grid.Column="8" Content="Clear" Style="{StaticResource SecondaryButton}"
-                        Command="{Binding ClearFilesCommand}" Padding="12,7"/>
-                <Button Grid.Column="10" Content="⚡  Convert" Style="{StaticResource PrimaryButton}"
-                        Command="{Binding ConvertCommand}" Padding="20,7" FontWeight="SemiBold"/>
-            </Grid>
-        </Border>
-
-        <!-- ── Advanced session options panel ── -->
-        <Border Grid.Row="3" Margin="12,0,12,0"
-                Background="#F8F8FF" BorderBrush="#C5C8FF" BorderThickness="1" CornerRadius="8"
-                Padding="14,10"
-                Visibility="{Binding ShowAdvanced, Converter={StaticResource BoolToVisibleConverter}}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="24"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Overwrite toggle -->
-                <CheckBox Grid.Column="0" Content="Overwrite existing files (this session)"
-                          IsChecked="{Binding SessionOverwrite}"
-                          VerticalAlignment="Center" FontSize="12" Foreground="#333"/>
-
-                <!-- Divider -->
-                <Rectangle Grid.Column="1" Width="1" Fill="#C5C8FF" VerticalAlignment="Stretch" Margin="11,0"/>
-
-                <!-- Skip/Only mode toggle + label -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
-                    <Border BorderBrush="#C5C8FF" BorderThickness="1" CornerRadius="4"
-                            VerticalAlignment="Center" Margin="0,0,6,0">
-                        <StackPanel Orientation="Horizontal">
-                            <ToggleButton Content="Skip" Style="{StaticResource LosslessSegment}"
-                                          IsChecked="{Binding SessionOnlyMode, Converter={StaticResource InverseBoolConverter}}"
-                                          Tag="4,0,0,0" BorderThickness="0" BorderBrush="Transparent"
-                                          Background="Transparent" FontSize="10.5" Padding="7,3"/>
-                            <Rectangle Width="1" Fill="#C5C8FF" VerticalAlignment="Stretch"/>
-                            <ToggleButton Content="Only" Style="{StaticResource LosslessSegment}"
-                                          IsChecked="{Binding SessionOnlyMode}"
-                                          Tag="0,0,4,0" BorderThickness="0" BorderBrush="Transparent"
-                                          Background="Transparent" FontSize="10.5" Padding="7,3"/>
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Text="input formats:" VerticalAlignment="Center"
-                               FontSize="12" Foreground="#555"/>
-                </StackPanel>
-
-                <!-- Format chips — semantics depend on Skip/Only mode -->
-                <WrapPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ToggleButton Content="JPG" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJpeg}"/>
-                    <ToggleButton Content="PNG" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipPng}"/>
-                    <ToggleButton Content="GIF" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipGif}"/>
-                    <ToggleButton Content="WebP" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipWebp}"/>
-                    <ToggleButton Content="AVIF" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipAvif}"/>
-                    <ToggleButton Content="JXL" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJxl}"/>
-                    <ToggleButton Content="HEIC" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipHeic}"/>
-                    <TextBlock Text="{Binding SkipModeHint}" VerticalAlignment="Center"
-                               FontSize="10" Foreground="#AAA" Margin="4,0,0,0" FontStyle="Italic"/>
-                </WrapPanel>
-            </Grid>
-        </Border>
+            </Border>
 
         </Grid>
-        <!-- end content area -->
 
-        <!-- ── Drag handle / splitter between content and log ── -->
+        <!-- ── Grid splitter ── -->
         <GridSplitter Grid.Row="2"
                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                       ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
-                      Background="#DCDFE6" Cursor="SizeNS">
-            <!-- Grip dots -->
+                      Background="{DynamicResource SplitterBackground}" Cursor="SizeNS">
             <GridSplitter.Template>
                 <ControlTemplate TargetType="GridSplitter">
-                    <Border Background="#E4E6EA" BorderBrush="#CCCCCC" BorderThickness="0,1,0,1">
+                    <Border Background="{DynamicResource SplitterBackground}"
+                            BorderBrush="{DynamicResource SplitterBorderBrush}"
+                            BorderThickness="0,1,0,1">
                         <TextBlock Text="· · ·" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Foreground="#AAAAAA" FontSize="10"/>
+                                   Foreground="{DynamicResource SplitterTextBrush}" FontSize="10"/>
                     </Border>
                 </ControlTemplate>
             </GridSplitter.Template>
         </GridSplitter>
 
         <!-- ── Log panel ── -->
-        <Border Grid.Row="3" Margin="12,0,12,0" Background="#16161E" CornerRadius="8">
+        <Border Grid.Row="3" Margin="12,0,12,0"
+                Background="{DynamicResource LogBackground}" CornerRadius="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10"
                           x:Name="LogScrollViewer">
                 <ItemsControl ItemsSource="{Binding LogLines}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding}" Foreground="#C8C8D4"
+                            <TextBlock Text="{Binding}"
+                                       Foreground="{DynamicResource LogTextBrush}"
                                        FontFamily="Cascadia Code, Consolas, Courier New"
                                        FontSize="11.5" Margin="0,1.5"/>
                         </DataTemplate>
@@ -595,8 +739,8 @@
         </Border>
 
         <!-- ── Status bar ── -->
-        <Border Grid.Row="4" Background="#F0F2F5" Padding="14,7"
-                BorderBrush="#DCDFE6" BorderThickness="0,1,0,0">
+        <Border Grid.Row="4" Background="{DynamicResource StatusBarBackground}" Padding="14,7"
+                BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -604,11 +748,11 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                           FontSize="12" Foreground="#555"/>
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <ProgressBar Grid.Column="1" Value="{Binding ProgressValue}"
                              Maximum="{Binding ProgressMax}"
                              Height="6" Margin="0,0,10,0" VerticalAlignment="Center"
-                             Background="#E0E0E0" Foreground="#0078D4"/>
+                             Background="{DynamicResource RowDividerBrush}" Foreground="{DynamicResource AccentBrush}"/>
                 <Button Grid.Column="2" Content="Cancel" Style="{StaticResource DangerButton}"
                         Command="{Binding CancelCommand}" Padding="12,5" FontSize="11"
                         Visibility="{Binding IsConverting,

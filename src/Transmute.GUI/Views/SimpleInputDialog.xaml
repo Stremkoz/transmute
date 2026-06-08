@@ -4,7 +4,9 @@
         Title="Transmute" Height="175" Width="400"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBackground}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -21,38 +23,10 @@
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="OK" Width="72" Padding="0,6" FontSize="12"
-                    IsDefault="True" Click="OK_Click"
-                    Background="#0078D4" Foreground="White" BorderThickness="0">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="4"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#106EBE"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+                    Style="{StaticResource PrimaryButton}"
+                    IsDefault="True" Click="OK_Click"/>
             <Button Content="Cancel" Width="72" Padding="0,6" FontSize="12"
-                    IsCancel="True" Margin="8,0,0,0" Click="Cancel_Click">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="#F0F0F0" CornerRadius="4" BorderBrush="#CCC"
-                                BorderThickness="1" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#E0E0E0"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+                    IsCancel="True" Margin="8,0,0,0" Click="Cancel_Click"/>
         </StackPanel>
     </Grid>
 </Window>

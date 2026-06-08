@@ -47,7 +47,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _lossless = true;
     [ObservableProperty] private bool _losslessVisible = true;
     [ObservableProperty] private bool _qualityEnabled = false;
-    [ObservableProperty] private bool _preserveMetadata = true;
+    [ObservableProperty] private MetadataMode _metadataMode = MetadataMode.PreserveAll;
     [ObservableProperty] private bool _overwriteExisting = false;
     [ObservableProperty] private string? _outputDirectory;
     [ObservableProperty] private bool _isConverting = false;
@@ -102,7 +102,7 @@ public partial class MainViewModel : ObservableObject
         _suppressQualityTracking = true;
         _quality = defaults.WebpQuality;
         _suppressQualityTracking = false;
-        _preserveMetadata = defaults.PreserveMetadata;
+        _metadataMode = defaults.MetadataMode;
         _overwriteExisting = defaults.OverwriteExisting;
         _outputDirectory = defaults.DefaultOutputDirectory;
         // webp is the default format — initialize lossless state for it
@@ -149,7 +149,7 @@ public partial class MainViewModel : ObservableObject
         if (LosslessVisible)
             Lossless = defaults.LosslessDefault;
 
-        PreserveMetadata = defaults.PreserveMetadata;
+        MetadataMode = defaults.MetadataMode;
         OverwriteExisting = defaults.OverwriteExisting;
         OutputDirectory = defaults.DefaultOutputDirectory;
     }
@@ -233,8 +233,38 @@ public partial class MainViewModel : ObservableObject
     private void ClearFiles()
     {
         InputFiles.Clear();
+        StatusText = "Drop images or folders here to get started.";
+    }
+
+    [RelayCommand]
+    private void ClearLog() => LogLines.Clear();
+
+    [RelayCommand]
+    private void ClearCompleted()
+    {
+        var toRemove = LogLines
+            .Where(l => l.StartsWith("✓") || l.StartsWith("⊘") || l.StartsWith("─"))
+            .ToList();
+        foreach (var line in toRemove) LogLines.Remove(line);
+    }
+
+    [RelayCommand]
+    private void ClearAll()
+    {
+        InputFiles.Clear();
         LogLines.Clear();
         StatusText = "Drop images or folders here to get started.";
+    }
+
+    public void MoveEntry(int fromIndex, int toIndex)
+    {
+        if (fromIndex < 0 || fromIndex >= InputFiles.Count) return;
+        if (toIndex  < 0) toIndex = 0;
+        if (toIndex  > InputFiles.Count) toIndex = InputFiles.Count;
+        // ObservableCollection.Move's newIndex is post-removal; adjust when moving forward
+        var adjusted = toIndex > fromIndex ? toIndex - 1 : toIndex;
+        if (adjusted != fromIndex)
+            InputFiles.Move(fromIndex, adjusted);
     }
 
     [RelayCommand]
@@ -260,7 +290,7 @@ public partial class MainViewModel : ObservableObject
             Lossless = LosslessVisible && Lossless,
             WebpMethod = defaults.WebpMethod,
             JxlEffort = defaults.JxlEffort,
-            PreserveMetadata = PreserveMetadata,
+            Metadata = MetadataMode,
             Overwrite = OverwriteExisting || SessionOverwrite,
             OutputDirectory = OutputDirectory,
             OutputNamingPattern = defaults.OutputNamingPattern,
@@ -268,6 +298,7 @@ public partial class MainViewModel : ObservableObject
 
         var config = _configManager.Config;
         var (engine, _, temp, _) = TransmuteFactory.Create(config);
+        IReadOnlyList<Transmute.Core.Models.ConversionResult>? completedResults = null;
 
         using (temp)
         {
@@ -350,6 +381,7 @@ public partial class MainViewModel : ObservableObject
             try
             {
                 var results = await engine.ConvertAllAsync(jobs, progress, _cts.Token);
+                completedResults = results;
                 totalSw.Stop();
 
                 var succeeded = results.Where(r => r.Success).ToList();
@@ -385,6 +417,17 @@ public partial class MainViewModel : ObservableObject
         ProgressValue = ProgressMax;
         IsConverting = false;
         ConvertCommand.NotifyCanExecuteChanged();
+
+        // Completion sound — only for non-cancelled jobs, only when enabled
+        if (completedResults is not null && config.UI.PlaySoundOnCompletion)
+        {
+            var hasProblems = completedResults.Any(r =>
+                (!r.Success && !r.Skipped) || r.FallbackNote is not null);
+            if (hasProblems)
+                System.Media.SystemSounds.Exclamation.Play();
+            else
+                System.Media.SystemSounds.Asterisk.Play();
+        }
     }
 
     private bool CanConvert() => !IsConverting && InputFiles.Count > 0;

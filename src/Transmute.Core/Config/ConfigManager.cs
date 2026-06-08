@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Transmute.Core.Models;
 
 namespace Transmute.Core.Config;
 
@@ -176,7 +177,11 @@ public class ConfigManager
             case "jpegquality": _config.Defaults.JpegQuality = int.Parse(value); break;
             case "jxlquality": _config.Defaults.JxlQuality = int.Parse(value); break;
             case "avifquality": _config.Defaults.AvifQuality = int.Parse(value); break;
-            case "preservemetadata": _config.Defaults.PreserveMetadata = bool.Parse(value); break;
+            case "metadatamode":
+                if (!Enum.TryParse<MetadataMode>(value, ignoreCase: true, out var mdMode))
+                    throw new ArgumentException($"Unknown metadata mode '{value}'. Valid values: {string.Join(", ", Enum.GetNames<MetadataMode>())}");
+                _config.Defaults.MetadataMode = mdMode;
+                break;
             case "overwriteexisting": _config.Defaults.OverwriteExisting = bool.Parse(value); break;
             case "losslessdefault": _config.Defaults.LosslessDefault = bool.Parse(value); break;
             case "webpmethod": _config.Defaults.WebpMethod = int.Parse(value); break;
@@ -193,7 +198,7 @@ public class ConfigManager
         "jpegquality" => _config.Defaults.JpegQuality.ToString(),
         "jxlquality" => _config.Defaults.JxlQuality.ToString(),
         "avifquality" => _config.Defaults.AvifQuality.ToString(),
-        "preservemetadata" => _config.Defaults.PreserveMetadata.ToString(),
+        "metadatamode" => _config.Defaults.MetadataMode.ToString(),
         "overwriteexisting" => _config.Defaults.OverwriteExisting.ToString(),
         "losslessdefault" => _config.Defaults.LosslessDefault.ToString(),
         "webpmethod" => _config.Defaults.WebpMethod.ToString(),

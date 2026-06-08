@@ -11,6 +11,7 @@ profileManager.EnsureFolder();
 var root = new RootCommand("Transmute — smart image format converter")
 {
     ConvertCommand.Build(configManager, profileManager),
+    WatchCommand.Build(configManager, profileManager),
     InfoCommand.Build(configManager),
     BackendsCommand.Build(configManager),
     ConfigCommand.Build(configManager, profileManager),

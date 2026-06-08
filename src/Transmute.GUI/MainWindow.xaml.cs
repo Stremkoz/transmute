@@ -1,7 +1,11 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using Microsoft.Win32;
 using Transmute.GUI.ViewModels;
@@ -15,6 +19,11 @@ public partial class MainWindow : Window
     private static readonly Brush DefaultDropBorder =
         new SolidColorBrush(Color.FromRgb(0xDC, 0xDF, 0xE6));
 
+    // ── Drag-to-reorder state ────────────────────────────────────────────────
+    private int    _dragSourceIndex = -1;
+    private Point  _dragStart;
+    private DropIndicatorAdorner? _dropAdorner;
+
     public MainWindow(MainViewModel vm)
     {
         InitializeComponent();
@@ -23,7 +32,199 @@ public partial class MainWindow : Window
         vm.LogLines.CollectionChanged += (_, _) =>
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
                 () => LogScrollViewer.ScrollToBottom());
+
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsConverting) && !vm.IsConverting && !IsActive)
+                FlashTaskbar();
+        };
     }
+
+    // ── Taskbar flash ────────────────────────────────────────────────────────
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FLASHWINFO
+    {
+        public uint cbSize;
+        public IntPtr hwnd;
+        public uint dwFlags;
+        public uint uCount;
+        public uint dwTimeout;
+    }
+
+    private const uint FLASHW_TRAY = 2;
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FlashWindowEx(ref FLASHWINFO pwfi);
+
+    private void FlashTaskbar()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        var fwi = new FLASHWINFO
+        {
+            cbSize    = (uint)Marshal.SizeOf<FLASHWINFO>(),
+            hwnd      = hwnd,
+            dwFlags   = FLASHW_TRAY,
+            uCount    = 4,
+            dwTimeout = 0,
+        };
+        FlashWindowEx(ref fwi);
+    }
+
+    // ── Split Clear button chevron ────────────────────────────────────────────
+
+    private void ClearChevron_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.ContextMenu is ContextMenu cm)
+        {
+            cm.PlacementTarget = btn;
+            cm.Placement = PlacementMode.Bottom;
+            cm.IsOpen = true;
+        }
+    }
+
+    // ── Drag-to-reorder ───────────────────────────────────────────────────────
+
+    private void Gripper_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_vm.IsConverting) return;
+        if (sender is FrameworkElement fe && fe.DataContext is { } ctx)
+        {
+            var idx = _vm.InputFiles.IndexOf(ctx);
+            if (idx >= 0)
+            {
+                _dragSourceIndex = idx;
+                _dragStart = e.GetPosition(QueueList);
+            }
+        }
+        e.Handled = true; // prevent list item selection on gripper click
+    }
+
+    private void QueueList_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_dragSourceIndex < 0 || e.LeftButton != MouseButtonState.Pressed) return;
+
+        var pos = e.GetPosition(QueueList);
+        if (Math.Abs(pos.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(pos.Y - _dragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+
+        var item = _vm.InputFiles[_dragSourceIndex];
+        DragDrop.DoDragDrop(QueueList, item, DragDropEffects.Move);
+
+        // DoDragDrop is synchronous — clean up after it returns
+        _dragSourceIndex = -1;
+        RemoveDropIndicator();
+    }
+
+    private void QueueList_DragOver(object sender, DragEventArgs e)
+    {
+        if (_dragSourceIndex < 0)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        e.Effects = DragDropEffects.Move;
+        e.Handled = true;
+
+        var (toIndex, y) = GetDropInfo(e);
+        // Suppress indicator at positions that would be no-ops
+        var adjusted = toIndex > _dragSourceIndex ? toIndex - 1 : toIndex;
+        if (adjusted == _dragSourceIndex)
+            RemoveDropIndicator();
+        else
+            ShowDropIndicator(y);
+    }
+
+    private void QueueList_DragLeave(object sender, DragEventArgs e)
+    {
+        RemoveDropIndicator();
+    }
+
+    private void QueueList_Drop(object sender, DragEventArgs e)
+    {
+        RemoveDropIndicator();
+        if (_dragSourceIndex < 0) return;
+
+        var (toIndex, _) = GetDropInfo(e);
+        _vm.MoveEntry(_dragSourceIndex, toIndex);
+        _dragSourceIndex = -1;
+        e.Handled = true;
+    }
+
+    private (int index, double y) GetDropInfo(DragEventArgs e)
+    {
+        var pos   = e.GetPosition(QueueList);
+        var count = QueueList.Items.Count;
+
+        for (int i = 0; i < count; i++)
+        {
+            if (QueueList.ItemContainerGenerator.ContainerFromIndex(i) is not ListViewItem container) continue;
+            var bounds = container.TransformToAncestor(QueueList)
+                .TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
+            if (pos.Y < bounds.Y + bounds.Height / 2)
+                return (i, bounds.Y);
+        }
+
+        // Past the last item
+        if (count > 0 && QueueList.ItemContainerGenerator.ContainerFromIndex(count - 1) is ListViewItem last)
+        {
+            var b = last.TransformToAncestor(QueueList)
+                .TransformBounds(new Rect(0, 0, last.ActualWidth, last.ActualHeight));
+            return (count, b.Bottom);
+        }
+        return (0, 0);
+    }
+
+    private void ShowDropIndicator(double y)
+    {
+        var layer = AdornerLayer.GetAdornerLayer(QueueList);
+        if (layer == null) return;
+        if (_dropAdorner == null)
+        {
+            _dropAdorner = new DropIndicatorAdorner(QueueList);
+            layer.Add(_dropAdorner);
+        }
+        _dropAdorner.SetY(y);
+    }
+
+    private void RemoveDropIndicator()
+    {
+        if (_dropAdorner == null) return;
+        var layer = AdornerLayer.GetAdornerLayer(QueueList);
+        layer?.Remove(_dropAdorner);
+        _dropAdorner = null;
+    }
+
+    private sealed class DropIndicatorAdorner : Adorner
+    {
+        private double _y;
+        private static readonly Pen Pen = new(Brushes.DodgerBlue, 2)
+        {
+            StartLineCap = PenLineCap.Round,
+            EndLineCap   = PenLineCap.Round,
+        };
+
+        public DropIndicatorAdorner(UIElement element) : base(element)
+        {
+            IsHitTestVisible = false;
+            Pen.Freeze();
+        }
+
+        public void SetY(double y) { _y = y; InvalidateVisual(); }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            const double margin = 10;
+            dc.DrawLine(Pen, new Point(margin, _y), new Point(ActualWidth - margin, _y));
+            dc.DrawEllipse(Brushes.DodgerBlue, null, new Point(margin, _y), 4, 4);
+        }
+    }
+
+    // ── Existing drag-and-drop (files/folders from outside) ──────────────────
 
     private void Window_DragEnter(object sender, DragEventArgs e)
     {
@@ -68,15 +269,14 @@ public partial class MainWindow : Window
 
     private void HandleDroppedPaths(string[] paths)
     {
-        var files = paths.Where(File.Exists).ToArray();
+        var files   = paths.Where(File.Exists).ToArray();
         var folders = paths.Where(Directory.Exists).ToArray();
-
-        if (files.Length > 0)
-            _vm.AddFiles(files);
-
+        if (files.Length > 0) _vm.AddFiles(files);
         foreach (var folder in folders)
             _vm.AddFolder(folder, _vm.IncludeSubfolders);
     }
+
+    // ── Toolbar buttons ───────────────────────────────────────────────────────
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
     {
@@ -87,7 +287,6 @@ public partial class MainWindow : Window
             Filter = "Image files|*.jpg;*.jpeg;*.png;*.webp;*.avif;*.jxl;*.tiff;*.tif;" +
                      "*.gif;*.bmp;*.heic;*.heif;*.hdr;*.jp2|All files|*.*"
         };
-
         if (dlg.ShowDialog() == true)
             _vm.AddFiles(dlg.FileNames);
     }
@@ -99,7 +298,6 @@ public partial class MainWindow : Window
             Title = "Select folder to convert",
             Multiselect = true,
         };
-
         if (dlg.ShowDialog() == true)
         {
             foreach (var folder in dlg.FolderNames)
@@ -128,7 +326,7 @@ public partial class MainWindow : Window
         var dir = _vm.OutputDirectory;
         if (string.IsNullOrEmpty(dir)) return;
         try { System.Diagnostics.Process.Start("explorer.exe", dir); }
-        catch { /* folder may not exist yet — silently ignore */ }
+        catch { /* folder may not exist yet */ }
     }
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e)
@@ -140,7 +338,6 @@ public partial class MainWindow : Window
             var win = new SettingsWindow(settingsVm) { Owner = this };
             if (win.ShowDialog() == true)
             {
-                // Sync the active profile if the user changed it inside Settings
                 if (settingsVm.SelectedProfile != _vm.ActiveProfile)
                     _vm.ActiveProfile = settingsVm.SelectedProfile;
             }
@@ -164,7 +361,6 @@ public partial class MainWindow : Window
         var win = new ProfileManagerWindow(pmVm, app.ProfileManager) { Owner = this };
         win.ShowDialog();
 
-        // Refresh profile list in main VM; switch to whatever was selected on close if it still exists
         _vm.RefreshProfiles();
         if (win.SelectedProfileOnClose is { } selected)
             _vm.ActiveProfile = selected;

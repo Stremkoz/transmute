@@ -11,6 +11,10 @@ public class ConversionPlan
     public IBackend? SecondaryBackend { get; init; }
     public ConversionJob? SecondaryJob { get; init; }
     public bool IsTwoStep => SecondaryBackend is not null;
+
+    // Routing diagnostics propagated to ConversionResult
+    public string RoutingReason { get; init; } = string.Empty;
+    public string? FallbackNote { get; init; }
 }
 
 public class FormatRouter
@@ -46,27 +50,34 @@ public class FormatRouter
         var inputExt = Normalize(Path.GetExtension(job.InputPath));
         var outputExt = Normalize(Path.GetExtension(job.OutputPath));
 
-        // Determine primary affinities
-        var inputAffinity = FormatRegistry.GetAffinity(inputExt);
-        var outputAffinity = FormatRegistry.GetAffinity(outputExt);
-
         // JXL has highest priority when either side is JXL
         if (inputExt == "jxl" || outputExt == "jxl")
         {
             if (_jxl.CanConvert(inputExt, outputExt) && _jxl.IsAvailable)
-                return SingleStep(job, _jxl);
+            {
+                var reason = outputExt == "jxl"
+                    ? $"cjxl — preferred JPEG XL encoder (.{inputExt} accepted directly)"
+                    : $"djxl — preferred JPEG XL decoder (.{outputExt} output supported directly)";
+                return SingleStep(job, _jxl, reason);
+            }
 
-            // JXL as intermediate step
             if (outputExt == "jxl" && _jxl.IsAvailable)
             {
-                // Encode to JXL: convert input to PNG first, then cjxl
-                return TwoStep(job, inputExt, "png", _vips, _jxl);
+                // Need intermediate: input → PNG first, then cjxl
+                var (step1, _, step1Reason) = PickBackendWithNote(inputExt, "png");
+                return TwoStep(job, inputExt, "png", step1, _jxl,
+                    $"two-step: {step1Reason} → cjxl encode (via .png intermediate)");
             }
+
             if (inputExt == "jxl" && _jxl.IsAvailable)
             {
-                // Decode from JXL to PNG, then convert PNG to output
-                return TwoStep(job, "jxl", "png", _jxl, PickBackend("png", outputExt));
+                // djxl → PNG temp, then re-encode
+                var (step2, step2Note, step2Reason) = PickBackendWithNote("png", outputExt);
+                return TwoStep(job, "jxl", "png", _jxl, step2,
+                    $"two-step: djxl decode → {step2Reason} (via .png intermediate)",
+                    step2Note);
             }
+            // jxl backend unavailable — falls through to general routing
         }
 
         // WebP priority
@@ -75,21 +86,29 @@ public class FormatRouter
             if (outputExt == "webp" && _webp.IsAvailable)
             {
                 if (_webp.CanEncodeDirectly(inputExt))
-                    return SingleStep(job, _webp);
+                    return SingleStep(job, _webp,
+                        $"cwebp — preferred WebP encoder (.{inputExt} accepted directly)");
 
                 // Need intermediate: decode input to PNG, then cwebp
-                return TwoStep(job, inputExt, "png", PickBackend(inputExt, "png"), _webp);
+                var (step1, step1Note, step1Reason) = PickBackendWithNote(inputExt, "png");
+                return TwoStep(job, inputExt, "png", step1, _webp,
+                    $"two-step: {step1Reason} → cwebp encode (via .png intermediate)",
+                    step1Note);
             }
 
             if (inputExt == "webp" && _webp.IsAvailable)
             {
-                // dwebp decodes to PNG natively; if output is PNG we're done
                 if (outputExt == "png")
-                    return SingleStep(job, _webp);
+                    return SingleStep(job, _webp,
+                        "dwebp — preferred WebP decoder (native .png output)");
 
-                // dwebp → PNG temp, then convert PNG → output
-                return TwoStep(job, "webp", "png", _webp, PickBackend("png", outputExt));
+                // dwebp → PNG temp, then re-encode
+                var (step2, step2Note, step2Reason) = PickBackendWithNote("png", outputExt);
+                return TwoStep(job, "webp", "png", _webp, step2,
+                    $"two-step: dwebp decode → {step2Reason} (via .png intermediate)",
+                    step2Note);
             }
+            // webp backend unavailable — falls through
         }
 
         // Ffmpeg priority for animated/video
@@ -97,69 +116,108 @@ public class FormatRouter
             FormatRegistry.IsAnimated(inputExt) || FormatRegistry.IsAnimated(outputExt))
         {
             if (_ffmpeg.IsAvailable)
-                return SingleStep(job, _ffmpeg);
+                return SingleStep(job, _ffmpeg,
+                    $"ffmpeg — preferred for animated/video formats (.{inputExt} → .{outputExt})");
+            // ffmpeg unavailable — falls through
         }
 
-        // General vips routing
-        var bestBackend = PickBackend(inputExt, outputExt);
+        // General routing via affinity
+        var (bestBackend, bestNote, bestReason) = PickBackendWithNote(inputExt, outputExt);
 
         if (bestBackend.CanConvert(inputExt, outputExt) && bestBackend.IsAvailable)
-            return SingleStep(job, bestBackend);
+            return SingleStep(job, bestBackend, bestReason, bestNote);
 
         // Two-step through PNG for anything that didn't match
-        var firstBackend = PickBackend(inputExt, "png");
-        var secondBackend = PickBackend("png", outputExt);
-        return TwoStep(job, inputExt, "png", firstBackend, secondBackend);
+        var (fb1, fn1, fr1) = PickBackendWithNote(inputExt, "png");
+        var (fb2, fn2, fr2) = PickBackendWithNote("png", outputExt);
+        return TwoStep(job, inputExt, "png", fb1, fb2,
+            $"two-step: {fr1} → {fr2} (via .png intermediate)",
+            fn1 ?? fn2);
     }
 
-    private IBackend PickBackend(string inputExt, string outputExt)
+    // Returns (backend, fallbackNote, routingReason).
+    // fallbackNote is non-null when the preferred backend was unavailable.
+    private (IBackend backend, string? fallbackNote, string reason) PickBackendWithNote(
+        string inputExt, string outputExt)
     {
-        var inputAffinity = FormatRegistry.GetAffinity(inputExt);
         var outputAffinity = FormatRegistry.GetAffinity(outputExt);
-
-        // Prefer output affinity for encoding decisions
+        var inputAffinity  = FormatRegistry.GetAffinity(inputExt);
         var affinity = outputAffinity != BackendAffinity.Magick ? outputAffinity : inputAffinity;
 
-        return affinity switch
+        IBackend? preferred = affinity switch
         {
-            BackendAffinity.Jxl when _jxl.IsAvailable => _jxl,
-            BackendAffinity.WebP when _webp.IsAvailable => _webp,
+            BackendAffinity.Jxl    when _jxl.IsAvailable    => _jxl,
+            BackendAffinity.WebP   when _webp.IsAvailable   => _webp,
             BackendAffinity.Ffmpeg when _ffmpeg.IsAvailable => _ffmpeg,
-            BackendAffinity.Vips when _vips.IsAvailable => _vips,
-            _ => _magick.IsAvailable ? _magick : _vips // last resort
+            BackendAffinity.Vips   when _vips.IsAvailable   => _vips,
+            BackendAffinity.Magick when _magick.IsAvailable => _magick,
+            _ => null,
         };
+
+        if (preferred is not null)
+            return (preferred, null, $"{preferred.Name} — preferred for .{inputExt} → .{outputExt}");
+
+        // Preferred backend unavailable — fall back
+        IBackend fallback = _magick.IsAvailable ? _magick : _vips;
+        var preferredName = affinity switch
+        {
+            BackendAffinity.Jxl    => "cjxl",
+            BackendAffinity.WebP   => "cwebp",
+            BackendAffinity.Ffmpeg => "ffmpeg",
+            BackendAffinity.Vips   => "libvips",
+            _                      => "ImageMagick",
+        };
+        var note   = $"{fallback.Name} used ({preferredName} unavailable for .{inputExt} → .{outputExt})";
+        var reason = $"{preferredName} unavailable for .{inputExt} → .{outputExt} — {fallback.Name} used as fallback";
+        return (fallback, note, reason);
     }
 
-    private ConversionPlan SingleStep(ConversionJob job, IBackend backend) =>
-        new() { PrimaryBackend = backend, PrimaryJob = job };
+    // Legacy wrapper used by PickBackend calls that don't need the note
+    private IBackend PickBackend(string inputExt, string outputExt) =>
+        PickBackendWithNote(inputExt, outputExt).backend;
 
-    private ConversionPlan TwoStep(ConversionJob originalJob, string fromExt, string intermediateExt,
-        IBackend step1Backend, IBackend step2Backend)
+    private ConversionPlan SingleStep(ConversionJob job, IBackend backend,
+        string reason, string? fallbackNote = null) =>
+        new()
+        {
+            PrimaryBackend = backend,
+            PrimaryJob     = job,
+            RoutingReason  = reason,
+            FallbackNote   = fallbackNote,
+        };
+
+    private ConversionPlan TwoStep(
+        ConversionJob originalJob,
+        string fromExt, string intermediateExt,
+        IBackend step1Backend, IBackend step2Backend,
+        string reason, string? fallbackNote = null)
     {
         var tempPath = _temp.GetTempPath(intermediateExt);
 
         var step1Job = new ConversionJob
         {
-            InputPath = originalJob.InputPath,
-            OutputPath = tempPath,
+            InputPath    = originalJob.InputPath,
+            OutputPath   = tempPath,
             OutputFormat = intermediateExt,
-            Options = originalJob.Options with { Overwrite = true },
+            Options      = originalJob.Options with { Overwrite = true },
         };
 
         var step2Job = new ConversionJob
         {
-            InputPath = tempPath,
-            OutputPath = originalJob.OutputPath,
+            InputPath    = tempPath,
+            OutputPath   = originalJob.OutputPath,
             OutputFormat = originalJob.OutputFormat,
-            Options = originalJob.Options,
+            Options      = originalJob.Options,
         };
 
         return new ConversionPlan
         {
-            PrimaryBackend = step1Backend,
-            PrimaryJob = step1Job,
+            PrimaryBackend   = step1Backend,
+            PrimaryJob       = step1Job,
             SecondaryBackend = step2Backend,
-            SecondaryJob = step2Job,
+            SecondaryJob     = step2Job,
+            RoutingReason    = reason,
+            FallbackNote     = fallbackNote,
         };
     }
 
@@ -167,15 +225,16 @@ public class FormatRouter
     {
         IBackend backend = job.Options.ForcedBackend!.ToLowerInvariant() switch
         {
-            "webp" => _webp,
-            "jxl" => _jxl,
-            "ffmpeg" => _ffmpeg,
-            "vips" or "libvips" => _vips,
+            "webp"                  => _webp,
+            "jxl"                   => _jxl,
+            "ffmpeg"                => _ffmpeg,
+            "vips" or "libvips"     => _vips,
             "magick" or "imagemagick" => _magick,
             _ => throw new ArgumentException($"Unknown backend: {job.Options.ForcedBackend}")
         };
 
-        return SingleStep(job, backend);
+        return SingleStep(job, backend,
+            $"{backend.Name} — forced via --backend {job.Options.ForcedBackend}");
     }
 
     private static string Normalize(string ext) => ext.TrimStart('.').ToLowerInvariant();

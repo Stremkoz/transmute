@@ -1,0 +1,100 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Structural backgrounds -->
+    <SolidColorBrush x:Key="AppBackground"          Color="#F0F2F5"/>
+    <SolidColorBrush x:Key="SurfaceBackground"      Color="White"/>
+    <SolidColorBrush x:Key="ToolbarBackground"      Color="#1E1E2E"/>
+    <SolidColorBrush x:Key="LogBackground"          Color="#16161E"/>
+    <SolidColorBrush x:Key="StatusBarBackground"    Color="#F0F2F5"/>
+
+    <!-- Borders and dividers -->
+    <SolidColorBrush x:Key="PanelBorderBrush"       Color="#DCDFE6"/>
+    <SolidColorBrush x:Key="RowDividerBrush"        Color="#EBEBEB"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimaryBrush"       Color="#1A1A2E"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush"     Color="#555555"/>
+    <SolidColorBrush x:Key="TextMutedBrush"         Color="#999999"/>
+    <SolidColorBrush x:Key="LogTextBrush"           Color="#C8C8D4"/>
+
+    <!-- Accent -->
+    <SolidColorBrush x:Key="AccentBrush"            Color="#0078D4"/>
+
+    <!-- Inputs -->
+    <SolidColorBrush x:Key="InputBackground"        Color="White"/>
+    <SolidColorBrush x:Key="InputBorderBrush"       Color="#CCCCCC"/>
+
+    <!-- Folder rows -->
+    <SolidColorBrush x:Key="FolderRowBackground"    Color="#F0F7FF"/>
+    <SolidColorBrush x:Key="FolderRowAccentBrush"   Color="#C5DCF5"/>
+    <SolidColorBrush x:Key="FolderTitleBrush"       Color="#0D47A1"/>
+    <SolidColorBrush x:Key="FolderSubtitleBrush"    Color="#1565C0"/>
+
+    <!-- Advanced panel -->
+    <SolidColorBrush x:Key="AdvancedPanelBackground"    Color="#F8F8FF"/>
+    <SolidColorBrush x:Key="AdvancedPanelBorderBrush"   Color="#C5C8FF"/>
+
+    <!-- Secondary buttons -->
+    <SolidColorBrush x:Key="SecondaryButtonBackground"       Color="White"/>
+    <SolidColorBrush x:Key="SecondaryButtonForeground"       Color="#333333"/>
+    <SolidColorBrush x:Key="SecondaryButtonBorderBrush"      Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="SecondaryButtonHoverBackground"  Color="#E8E8E8"/>
+
+    <!-- Queue list items -->
+    <SolidColorBrush x:Key="ListItemHoverBackground"    Color="#F5F8FF"/>
+    <SolidColorBrush x:Key="ListItemSelectedBackground" Color="#EAF2FB"/>
+    <SolidColorBrush x:Key="ListItemBorderBrush"        Color="#EBEBEB"/>
+
+    <!-- Segmented toggle buttons -->
+    <SolidColorBrush x:Key="SegmentCheckedBackground"   Color="#E3F2FD"/>
+    <SolidColorBrush x:Key="SegmentCheckedBrush"        Color="#0078D4"/>
+    <SolidColorBrush x:Key="SegmentHoverBackground"     Color="#F0F4FF"/>
+
+    <!-- Settings-specific -->
+    <SolidColorBrush x:Key="SectionHeaderBrush"         Color="#1E1E2E"/>
+    <SolidColorBrush x:Key="ProfileBannerBackground"    Color="#F0F4FF"/>
+    <SolidColorBrush x:Key="ProfileBannerBorderBrush"   Color="#7C83FD"/>
+    <SolidColorBrush x:Key="SettingsFooterBackground"   Color="#F0F0F0"/>
+    <SolidColorBrush x:Key="SettingsFooterBorderBrush"  Color="#DDDDDD"/>
+
+    <!-- Toolbar buttons -->
+    <SolidColorBrush x:Key="ToolbarButtonBackground"    Color="#2E2E40"/>
+    <SolidColorBrush x:Key="ToolbarButtonForeground"    Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="ToolbarButtonBorderBrush"   Color="#444444"/>
+    <SolidColorBrush x:Key="ToolbarMutedBrush"          Color="#AAAAAA"/>
+
+    <!-- Grid splitter -->
+    <SolidColorBrush x:Key="SplitterBackground"         Color="#E4E6EA"/>
+    <SolidColorBrush x:Key="SplitterBorderBrush"        Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="SplitterTextBrush"          Color="#AAAAAA"/>
+
+    <!-- Drag gripper -->
+    <SolidColorBrush x:Key="GripperBrush"               Color="#C8C8C8"/>
+
+    <!-- Drop zone empty state -->
+    <SolidColorBrush x:Key="DropEmptyPrimaryBrush"      Color="#AAAAAA"/>
+    <SolidColorBrush x:Key="DropEmptySecondaryBrush"    Color="#CCCCCC"/>
+
+    <!-- Thumbnail placeholder -->
+    <SolidColorBrush x:Key="ThumbnailPlaceholderBrush"  Color="#EAECF0"/>
+
+    <!-- Warning banner (orange) -->
+    <SolidColorBrush x:Key="WarningBannerBackground"     Color="#FFF3E0"/>
+    <SolidColorBrush x:Key="WarningBannerBorderBrush"    Color="#FFA726"/>
+    <SolidColorBrush x:Key="WarningBannerIconForeground" Color="#E65100"/>
+    <SolidColorBrush x:Key="WarningBannerTextForeground" Color="#BF360C"/>
+
+    <!-- Remove / delete button hover -->
+    <SolidColorBrush x:Key="RemoveButtonHoverBackground" Color="#FFDDDD"/>
+    <SolidColorBrush x:Key="RemoveButtonHoverForeground" Color="#CC0000"/>
+
+    <!-- Primary (accent) button states -->
+    <SolidColorBrush x:Key="PrimaryButtonHoverBackground"    Color="#106EBE"/>
+    <SolidColorBrush x:Key="PrimaryButtonDisabledBackground" Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="PrimaryButtonDisabledForeground" Color="#888888"/>
+
+    <!-- Read-only input field -->
+    <SolidColorBrush x:Key="ReadOnlyInputBackground"     Color="#F0F0F0"/>
+
+</ResourceDictionary>

@@ -37,8 +37,23 @@ public class MagickBackend : BackendBase
         if (job.Options.Quality.HasValue)
             args.AddRange(["-quality", job.Options.Quality.Value.ToString()]);
 
-        if (!job.Options.PreserveMetadata)
-            args.AddRange(["-strip"]);
+        // magick metadata control:
+        //   StripAll     → -strip (removes all profiles and comments)
+        //   ColorProfile → +profile "8bim,iptc,xmp,exif" (remove non-ICC; keep ICC)
+        //   Copyright    → +profile "icc" (remove ICC; keep EXIF/XMP/IPTC copyright fields)
+        //   PreserveAll  → default (no flags)
+        switch (job.Options.Metadata)
+        {
+            case MetadataMode.StripAll:
+                args.Add("-strip");
+                break;
+            case MetadataMode.ColorProfile:
+                args.AddRange(["+profile", "8bim,iptc,xmp,exif"]);
+                break;
+            case MetadataMode.Copyright:
+                args.AddRange(["+profile", "icc"]);
+                break;
+        }
 
         args.Add(job.OutputPath);
 

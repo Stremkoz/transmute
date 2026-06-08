@@ -60,10 +60,15 @@ public class WebPBackend : BackendBase
         var method = job.Options.WebpMethod ?? 6;
         args.AddRange(["-m", method.ToString(), job.InputPath, "-o", job.OutputPath]);
 
-        if (!job.Options.PreserveMetadata)
-            args.AddRange(["-metadata", "none"]);
-        else
-            args.AddRange(["-metadata", "all"]);
+        // cwebp: -metadata all|none|icc|exif,xmp
+        var metaFlag = job.Options.Metadata switch
+        {
+            MetadataMode.StripAll     => "none",
+            MetadataMode.ColorProfile => "icc",
+            MetadataMode.Copyright    => "exif,xmp",
+            _                         => "all",
+        };
+        args.AddRange(["-metadata", metaFlag]);
 
         var (code, _, stderr) = await RunProcessAsync(_cwebpPath!, args, ct);
         return BuildResult(job, code, stderr, sw);
@@ -76,10 +81,8 @@ public class WebPBackend : BackendBase
         // For other targets use the intermediate path (set by router)
         var actualOutput = outputExt == "png" ? job.OutputPath : (job.IntermediatePath ?? job.OutputPath);
 
+        // dwebp is decode-only; it has no metadata control flags — all metadata passes through as-is
         var args = new List<string> { job.InputPath, "-o", actualOutput };
-
-        if (!job.Options.PreserveMetadata)
-            args.Add("-nomt");
 
         var (code, _, stderr) = await RunProcessAsync(_dwebpPath!, args, ct);
         return BuildResult(job, code, stderr, sw);

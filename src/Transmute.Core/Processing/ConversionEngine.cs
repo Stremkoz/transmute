@@ -103,7 +103,13 @@ public class ConversionEngine
 
             var step1 = await plan.PrimaryBackend.ConvertAsync(plan.PrimaryJob, ct);
             if (!step1.Success || !plan.IsTwoStep)
-                return step1 with { InputPath = job.InputPath, OutputPath = job.OutputPath };
+                return step1 with
+                {
+                    InputPath     = job.InputPath,
+                    OutputPath    = job.OutputPath,
+                    RoutingReason = plan.RoutingReason,
+                    FallbackNote  = plan.FallbackNote,
+                };
 
             if (!plan.SecondaryBackend!.IsAvailable)
                 return ConversionResult.Fail(job.InputPath, job.OutputPath,
@@ -111,14 +117,16 @@ public class ConversionEngine
 
             var step2 = await plan.SecondaryBackend.ConvertAsync(plan.SecondaryJob!, ct);
 
-            // Annotate final result with both backends used
+            // Annotate final result with both backends used and routing diagnostics
             var backendLabel = $"{plan.PrimaryBackend.Name} → {plan.SecondaryBackend.Name}";
             return step2 with
             {
-                InputPath = job.InputPath,
-                OutputPath = job.OutputPath,
-                BackendUsed = backendLabel,
-                Elapsed = step1.Elapsed + step2.Elapsed,
+                InputPath     = job.InputPath,
+                OutputPath    = job.OutputPath,
+                BackendUsed   = backendLabel,
+                Elapsed       = step1.Elapsed + step2.Elapsed,
+                RoutingReason = plan.RoutingReason,
+                FallbackNote  = plan.FallbackNote,
             };
         }
         catch (OperationCanceledException)

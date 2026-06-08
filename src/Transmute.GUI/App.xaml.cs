@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using Transmute.Core.Config;
 using Transmute.GUI.ViewModels;
 
@@ -15,6 +16,17 @@ public partial class App : Application
         base.OnStartup(e);
         ProfileManager.EnsureFolder();
         DispatcherUnhandledException += OnUnhandledException;
+
+        // Apply saved theme before any window is shown
+        ThemeManager.Apply(ConfigManager.Config.UI.Theme, Resources);
+
+        // Watch for Windows system theme changes
+        SystemEvents.UserPreferenceChanged += (_, args) =>
+        {
+            if (args.Category == UserPreferenceCategory.General)
+                Dispatcher.Invoke(() => ThemeManager.ReapplyIfSystem(Resources));
+        };
+
         var vm = new MainViewModel(ConfigManager, ProfileManager);
         var win = new MainWindow(vm);
         win.Show();
@@ -27,6 +39,6 @@ public partial class App : Application
             "Transmute — Error",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
-        e.Handled = true; // keep the app alive so we can read the message
+        e.Handled = true;
     }
 }

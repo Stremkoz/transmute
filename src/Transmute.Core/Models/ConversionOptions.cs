@@ -6,7 +6,7 @@ public record ConversionOptions
     public bool Lossless { get; set; } = false;
     public int? WebpMethod { get; set; }   // null = use config default
     public int? JxlEffort { get; set; }    // null = use config default
-    public bool PreserveMetadata { get; set; } = true;
+    public MetadataMode Metadata { get; set; } = MetadataMode.PreserveAll;
     public bool Overwrite { get; set; } = false;
     public string? OutputDirectory { get; set; }
     public string? OutputFile { get; set; }

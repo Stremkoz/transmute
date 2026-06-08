@@ -7,6 +7,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Transmute.Core.Config;
 using Transmute.Core.Discovery;
+using Transmute.Core.Models;
+using Transmute.GUI;
 
 namespace Transmute.GUI.ViewModels;
 
@@ -33,7 +35,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _jpegQuality;
     [ObservableProperty] private int _jxlQuality;
     [ObservableProperty] private int _avifQuality;
-    [ObservableProperty] private bool _preserveMetadata;
+    [ObservableProperty] private MetadataMode _metadataMode;
     [ObservableProperty] private bool _overwriteExisting;
     [ObservableProperty] private bool _losslessDefault;
     [ObservableProperty] private int _webpMethod;
@@ -44,6 +46,17 @@ public partial class SettingsViewModel : ObservableObject
     // Log file — global settings
     [ObservableProperty] private bool _logEnabled = false;
     [ObservableProperty] private bool _logFormatIsJson = false;  // false=text, true=json
+
+    // UI behaviour — global settings
+    [ObservableProperty] private bool _playSoundOnCompletion = false;
+    [ObservableProperty] private AppTheme _theme = AppTheme.System;
+
+    private bool _loading = false;
+
+    partial void OnThemeChanged(AppTheme value)
+    {
+        if (!_loading) ThemeManager.Apply(value, Application.Current.Resources);
+    }
 
     // Format filter — per named profile only; Default profile has no filter
     [ObservableProperty] private string _profileFormatFilter = string.Empty;  // comma-separated
@@ -109,7 +122,7 @@ public partial class SettingsViewModel : ObservableObject
         JpegQuality        = d.JpegQuality;
         JxlQuality         = d.JxlQuality;
         AvifQuality        = d.AvifQuality;
-        PreserveMetadata   = d.PreserveMetadata;
+        MetadataMode       = d.MetadataMode;
         OverwriteExisting  = d.OverwriteExisting;
         LosslessDefault    = d.LosslessDefault;
         WebpMethod         = d.WebpMethod;
@@ -149,8 +162,12 @@ public partial class SettingsViewModel : ObservableObject
         VipsConcurrency = c.Processing.VipsConcurrency;
         TempDirectory   = c.Processing.TempDirectory ?? string.Empty;
 
-        LogEnabled      = c.Log.Enabled;
-        LogFormatIsJson = string.Equals(c.Log.Format, "json", StringComparison.OrdinalIgnoreCase);
+        LogEnabled           = c.Log.Enabled;
+        LogFormatIsJson      = string.Equals(c.Log.Format, "json", StringComparison.OrdinalIgnoreCase);
+        PlaySoundOnCompletion = c.UI.PlaySoundOnCompletion;
+        _loading = true;
+        Theme = c.UI.Theme;
+        _loading = false;
     }
 
     [RelayCommand]
@@ -171,6 +188,8 @@ public partial class SettingsViewModel : ObservableObject
 
         c.Log.Enabled = LogEnabled;
         c.Log.Format  = LogFormatIsJson ? "json" : "text";
+        c.UI.PlaySoundOnCompletion = PlaySoundOnCompletion;
+        c.UI.Theme = Theme;
 
         if (IsDefaultProfile)
         {
@@ -179,7 +198,7 @@ public partial class SettingsViewModel : ObservableObject
             c.Defaults.JpegQuality          = JpegQuality;
             c.Defaults.JxlQuality           = JxlQuality;
             c.Defaults.AvifQuality          = AvifQuality;
-            c.Defaults.PreserveMetadata     = PreserveMetadata;
+            c.Defaults.MetadataMode         = MetadataMode;
             c.Defaults.OverwriteExisting    = OverwriteExisting;
             c.Defaults.LosslessDefault      = LosslessDefault;
             c.Defaults.WebpMethod           = WebpMethod;
@@ -198,12 +217,12 @@ public partial class SettingsViewModel : ObservableObject
             // We save the full effective value into the profile, but only the fields
             // that differ from global defaults get stored (the rest remain null = inherit)
             var global = _configManager.Config.Defaults;
-            existing.WebpQuality          = WebpQuality          != global.WebpQuality          ? WebpQuality          : null;
-            existing.JpegQuality          = JpegQuality          != global.JpegQuality          ? JpegQuality          : null;
-            existing.JxlQuality           = JxlQuality           != global.JxlQuality           ? JxlQuality           : null;
-            existing.AvifQuality          = AvifQuality          != global.AvifQuality          ? AvifQuality          : null;
-            existing.PreserveMetadata     = PreserveMetadata     != global.PreserveMetadata     ? PreserveMetadata     : null;
-            existing.OverwriteExisting    = OverwriteExisting    != global.OverwriteExisting    ? OverwriteExisting    : null;
+            existing.WebpQuality          = WebpQuality    != global.WebpQuality    ? WebpQuality    : null;
+            existing.JpegQuality          = JpegQuality    != global.JpegQuality    ? JpegQuality    : null;
+            existing.JxlQuality           = JxlQuality     != global.JxlQuality     ? JxlQuality     : null;
+            existing.AvifQuality          = AvifQuality    != global.AvifQuality    ? AvifQuality    : null;
+            existing.Metadata             = MetadataMode   != global.MetadataMode   ? MetadataMode   : null;
+            existing.OverwriteExisting    = OverwriteExisting != global.OverwriteExisting ? OverwriteExisting : null;
             existing.LosslessDefault      = LosslessDefault      != global.LosslessDefault      ? LosslessDefault      : null;
             existing.WebpMethod           = WebpMethod           != global.WebpMethod           ? WebpMethod           : null;
             existing.JxlEffort            = JxlEffort            != global.JxlEffort            ? JxlEffort            : null;
