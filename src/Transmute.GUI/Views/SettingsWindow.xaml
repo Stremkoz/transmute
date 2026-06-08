@@ -1,0 +1,236 @@
+<Window x:Class="Transmute.GUI.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Transmute Settings" Height="600" Width="640"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+
+    <Window.Resources>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#1E1E2E"/>
+            <Setter Property="Margin" Value="0,12,0,6"/>
+        </Style>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="130"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style x:Key="PathBox" TargetType="TextBox">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0" Margin="0">
+            <!-- Binaries Tab -->
+            <TabItem Header="Binaries">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="Backend Binary Paths"/>
+                        <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,10">
+                            Leave blank to auto-detect from system PATH. Enter a full path to override.
+                        </TextBlock>
+
+                        <!-- cwebp -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="cwebp"/>
+                            <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                     Text="{Binding CwebpPath, UpdateSourceTrigger=PropertyChanged}"
+                                     />
+                        </Grid>
+
+                        <!-- dwebp -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="dwebp"/>
+                            <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                     Text="{Binding DwebpPath, UpdateSourceTrigger=PropertyChanged}"
+                                     />
+                        </Grid>
+
+                        <!-- cjxl -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="cjxl"/>
+                            <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                     Text="{Binding CjxlPath, UpdateSourceTrigger=PropertyChanged}"
+                                     />
+                        </Grid>
+
+                        <!-- djxl -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="djxl"/>
+                            <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                     Text="{Binding DjxlPath, UpdateSourceTrigger=PropertyChanged}"
+                                     />
+                        </Grid>
+
+                        <!-- ffmpeg -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="ffmpeg"/>
+                            <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                     Text="{Binding FfmpegPath, UpdateSourceTrigger=PropertyChanged}"
+                                     />
+                        </Grid>
+
+                        <!-- magick -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="magick"/>
+                            <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                     Text="{Binding MagickPath, UpdateSourceTrigger=PropertyChanged}"
+                                     />
+                        </Grid>
+
+                        <Button Content="Auto-Detect All from PATH" Margin="0,12,0,0" Padding="12,6"
+                                Command="{Binding AutoDetectAllCommand}" HorizontalAlignment="Left"/>
+
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="Config File Location" Margin="0,20,0,4"/>
+                        <TextBox IsReadOnly="True" Style="{StaticResource PathBox}"
+                                 Text="{Binding ConfigFilePath}" Background="#F0F0F0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Processing Tab -->
+            <TabItem Header="Processing">
+                <StackPanel Margin="16">
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Parallel Processing"/>
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Max parallel jobs"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="0" Maximum="32" Value="{Binding MaxParallelJobs}"
+                                    Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0,0,0">
+                                <Run Text="{Binding MaxParallelJobs, Mode=OneWay}"/>
+                                <Run Text=" (0 = auto)"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Temp Directory" Margin="0,16,0,6"/>
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Temp directory"/>
+                        <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                 Text="{Binding TempDirectory, UpdateSourceTrigger=PropertyChanged}"
+                                 />
+                    </Grid>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Defaults Tab -->
+            <TabItem Header="Defaults">
+                <StackPanel Margin="16">
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Default Quality"/>
+
+                    <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="WebP quality"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="1" Maximum="100" Value="{Binding WebpQuality}" Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0"><Run Text="{Binding WebpQuality, Mode=OneWay}"/><Run Text="%"/></TextBlock>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="JPEG quality"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="1" Maximum="100" Value="{Binding JpegQuality}" Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0"><Run Text="{Binding JpegQuality, Mode=OneWay}"/><Run Text="%"/></TextBlock>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="JXL quality"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="1" Maximum="100" Value="{Binding JxlQuality}" Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0"><Run Text="{Binding JxlQuality, Mode=OneWay}"/><Run Text="%"/></TextBlock>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="AVIF quality"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="1" Maximum="100" Value="{Binding AvifQuality}" Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0"><Run Text="{Binding AvifQuality, Mode=OneWay}"/><Run Text="%"/></TextBlock>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Behavior" Margin="0,16,0,6"/>
+                    <CheckBox Content="Preserve metadata (EXIF, ICC, XMP)" IsChecked="{Binding PreserveMetadata}" Margin="0,4"/>
+                    <CheckBox Content="Overwrite existing files" IsChecked="{Binding OverwriteExisting}" Margin="0,4"/>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Output Naming Pattern" Margin="0,16,0,4"/>
+                    <TextBlock FontSize="11" Foreground="#666" Margin="0,0,0,6">
+                        Tokens: {name} = filename without extension, {ext} = target format,
+                        {original_ext} = source extension, {date} = yyyyMMdd
+                    </TextBlock>
+                    <TextBox Style="{StaticResource PathBox}"
+                             Text="{Binding OutputNamingPattern, UpdateSourceTrigger=PropertyChanged}"/>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- Footer buttons -->
+        <Border Grid.Row="1" Background="#F0F0F0" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="16,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="1" Content="Reset to Defaults" Padding="12,6"
+                        Command="{Binding ResetDefaultsCommand}"/>
+                <Button Grid.Column="3" Content="Save" Padding="16,6"
+                        Command="{Binding SaveCommand}" Background="#0078D4" Foreground="White"
+                        BorderThickness="0"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,76 @@
+using System.Diagnostics;
+using Transmute.Core.Models;
+
+namespace Transmute.Core.Backends;
+
+public class JxlBackend : BackendBase
+{
+    private readonly string? _cjxlPath;
+    private readonly string? _djxlPath;
+
+    public static readonly HashSet<string> ReadFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "jxl", "png", "jpg", "jpeg", "apng", "gif", "exr", "ppm", "pfm", "pgm", "pgx", "npy"
+    };
+
+    public static readonly HashSet<string> WriteFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "jxl", "png", "jpg", "jpeg", "ppm", "pfm"
+    };
+
+    public override string Name => "JPEG XL (cjxl/djxl)";
+    public override bool IsAvailable => _cjxlPath is not null && _djxlPath is not null;
+    public override IReadOnlySet<string> SupportedInputFormats => ReadFormats;
+    public override IReadOnlySet<string> SupportedOutputFormats => WriteFormats;
+
+    public JxlBackend(string? cjxlPath, string? djxlPath)
+    {
+        _cjxlPath = cjxlPath;
+        _djxlPath = djxlPath;
+    }
+
+    public override bool CanConvert(string inputExt, string outputExt)
+    {
+        var input = Normalize(inputExt);
+        var output = Normalize(outputExt);
+        // Primary purpose: encode to JXL or decode from JXL
+        return (output == "jxl" && SupportedInputFormats.Contains(input)) ||
+               (input == "jxl" && SupportedOutputFormats.Contains(output));
+    }
+
+    public override async Task<ConversionResult> ConvertAsync(ConversionJob job, CancellationToken ct = default)
+    {
+        var outputExt = Normalize(Path.GetExtension(job.OutputPath));
+        var sw = Stopwatch.StartNew();
+
+        if (outputExt == "jxl")
+            return await EncodeAsync(job, sw, ct);
+        else
+            return await DecodeAsync(job, sw, ct);
+    }
+
+    private async Task<ConversionResult> EncodeAsync(ConversionJob job, Stopwatch sw, CancellationToken ct)
+    {
+        var quality = job.Options.Quality ?? 90;
+        // cjxl uses --quality 0-100 (lossy) or --lossless for lossless
+        var args = new List<string>
+        {
+            job.InputPath,
+            job.OutputPath,
+            "--quality", quality.ToString()
+        };
+
+        if (job.Options.PreserveMetadata)
+            args.AddRange(["--keep-invisible", "1"]);
+
+        var (code, _, stderr) = await RunProcessAsync(_cjxlPath!, args, ct);
+        return BuildResult(job, code, stderr, sw);
+    }
+
+    private async Task<ConversionResult> DecodeAsync(ConversionJob job, Stopwatch sw, CancellationToken ct)
+    {
+        var args = new List<string> { job.InputPath, job.OutputPath };
+        var (code, _, stderr) = await RunProcessAsync(_djxlPath!, args, ct);
+        return BuildResult(job, code, stderr, sw);
+    }
+}

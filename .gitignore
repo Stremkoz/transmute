@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.cache
+
+## NuGet
+packages/
+*.nupkg
+project.lock.json
+
+## Build outputs
+publish/
+artifacts/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## IDE
+.idea/
+.vscode/
+*.swp

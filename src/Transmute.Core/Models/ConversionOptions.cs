@@ -1,0 +1,13 @@
+namespace Transmute.Core.Models;
+
+public record ConversionOptions
+{
+    public int? Quality { get; set; }
+    public bool PreserveMetadata { get; set; } = true;
+    public bool Overwrite { get; set; } = false;
+    public string? OutputDirectory { get; set; }
+    public string? OutputFile { get; set; }
+    public string OutputNamingPattern { get; set; } = "{name}.{ext}";
+    public string? ForcedBackend { get; set; }
+    public int MaxParallelJobs { get; set; } = 0; // 0 = logical CPU count
+}
