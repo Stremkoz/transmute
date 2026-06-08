@@ -135,14 +135,14 @@ public static class ConvertCommand
                 // No CLI filter — use profile's filter
                 if (profile.HasOnlyFilter)
                 {
-                    onlyFormats = profile.OnlyFormats!
+                    onlyFormats = profile.OnlyFormats
                         .Select(s => s.TrimStart('.').ToLowerInvariant())
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
                     Console.Error.WriteLine($"Profile filter active: only processing {string.Join(", ", onlyFormats)}.");
                 }
                 else if (profile.HasSkipFilter)
                 {
-                    skipFormats = profile.SkipFormats!
+                    skipFormats = profile.SkipFormats
                         .Select(s => s.TrimStart('.').ToLowerInvariant())
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
                 }

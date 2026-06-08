@@ -123,6 +123,14 @@ public partial class MainWindow : Window
             _vm.OutputDirectory = dlg.FolderName;
     }
 
+    private void OpenOutputDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dir = _vm.OutputDirectory;
+        if (string.IsNullOrEmpty(dir)) return;
+        try { System.Diagnostics.Process.Start("explorer.exe", dir); }
+        catch { /* folder may not exist yet — silently ignore */ }
+    }
+
     private void OpenSettings_Click(object sender, RoutedEventArgs e)
     {
         var app = (App)Application.Current;

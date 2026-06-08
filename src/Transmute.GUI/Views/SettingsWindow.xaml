@@ -300,8 +300,8 @@
                     </TextBlock>
                     <StackPanel Orientation="Horizontal">
                         <RadioButton Content="Lossless" IsChecked="{Binding LosslessDefault}"
-                                     GroupName="LosslessDefault" Margin="0,0,16,0" VerticalAlignment="Center"/>
-                        <RadioButton Content="Lossy (quality-based)" GroupName="LosslessDefault"
+                                     Margin="0,0,16,0" VerticalAlignment="Center"/>
+                        <RadioButton Content="Lossy (quality-based)"
                                      IsChecked="{Binding LosslessDefault, Converter={StaticResource InverseBoolConverter}}"
                                      VerticalAlignment="Center"/>
                     </StackPanel>

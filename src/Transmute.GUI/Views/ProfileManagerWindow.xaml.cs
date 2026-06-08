@@ -40,7 +40,7 @@ public partial class ProfileManagerWindow : Window
         var profile = _profileManager.Load(name);
         if (profile?.HasOnlyFilter == true)
         {
-            var formats = string.Join(", ", profile.OnlyFormats!);
+            var formats = string.Join(", ", profile.OnlyFormats);
             OnlyFilterText.Text = $"This profile will ignore all formats not listed: {formats}";
             OnlyFilterWarning.Visibility = Visibility.Visible;
         }
@@ -48,6 +48,13 @@ public partial class ProfileManagerWindow : Window
         {
             OnlyFilterWarning.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private void OpenFolder_Click(object sender, RoutedEventArgs e)
+    {
+        _profileManager.EnsureFolder();
+        try { System.Diagnostics.Process.Start("explorer.exe", _profileManager.FolderPath); }
+        catch { /* silently ignore */ }
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

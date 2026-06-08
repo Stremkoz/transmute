@@ -48,6 +48,10 @@ public partial class ProfileManagerViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsDefaultSelected));
         OnPropertyChanged(nameof(SelectedProfileHasOnlyFilter));
+        // Fire AFTER value is set so CanActOnNamed reads the correct SelectedProfile
+        DuplicateProfileCommand.NotifyCanExecuteChanged();
+        RenameProfileCommand.NotifyCanExecuteChanged();
+        DeleteProfileCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -121,7 +125,7 @@ public partial class ProfileManagerViewModel : ObservableObject
         // Check if the profile has OnlyFormats set — warn if so
         var profile = _profileManager.Load(name);
         var extra = profile?.HasOnlyFilter == true
-            ? $"\n\nNote: This profile has an OnlyFormats filter set ({string.Join(", ", profile.OnlyFormats!)})."
+            ? $"\n\nNote: This profile has an OnlyFormats filter set ({string.Join(", ", profile.OnlyFormats)})."
             : string.Empty;
 
         var result = MessageBox.Show(
@@ -149,13 +153,6 @@ public partial class ProfileManagerViewModel : ObservableObject
     private bool CanActOnSelected() => SelectedProfile is not null;
     private bool CanActOnNamed() =>
         SelectedProfile is not null && !IsDefaultSelected;
-
-    partial void OnSelectedProfileChanging(string? value)
-    {
-        DuplicateProfileCommand.NotifyCanExecuteChanged();
-        RenameProfileCommand.NotifyCanExecuteChanged();
-        DeleteProfileCommand.NotifyCanExecuteChanged();
-    }
 
     private static string? PromptName(string title, string label, string defaultValue)
     {

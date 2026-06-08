@@ -8,5 +8,6 @@
         <local:BoolToVisibleConverter x:Key="BoolToVisibleConverter"/>
         <local:InverseBoolConverter x:Key="InverseBoolConverter"/>
         <local:NullOrEmptyToVisibleConverter x:Key="NullOrEmptyToVisibleConverter"/>
+        <local:NotNullOrEmptyToVisibleConverter x:Key="NotNullOrEmptyToVisibleConverter"/>
     </Application.Resources>
 </Application>

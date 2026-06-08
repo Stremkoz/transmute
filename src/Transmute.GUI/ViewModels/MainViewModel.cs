@@ -393,7 +393,7 @@ public partial class MainViewModel : ObservableObject
 
         if (profile?.HasOnlyFilter == true)
         {
-            var onlySet = profile.OnlyFormats!
+            var onlySet = profile.OnlyFormats
                 .Select(s => s.TrimStart('.').ToLowerInvariant())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             return !onlySet.Contains(ext);
@@ -401,7 +401,7 @@ public partial class MainViewModel : ObservableObject
 
         if (profile?.HasSkipFilter == true)
         {
-            var skipSet = profile.SkipFormats!
+            var skipSet = profile.SkipFormats
                 .Select(s => s.TrimStart('.').ToLowerInvariant())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             return skipSet.Contains(ext);

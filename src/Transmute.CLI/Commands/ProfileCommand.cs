@@ -179,7 +179,7 @@ public static class ProfileCommand
             Console.WriteLine(JsonSerializer.Serialize(profile, options));
 
             if (profile.HasOnlyFilter)
-                Console.Error.WriteLine($"\nNote: This profile has OnlyFormats set — only {string.Join(", ", profile.OnlyFormats!)} will be processed.");
+                Console.Error.WriteLine($"\nNote: This profile has OnlyFormats set — only {string.Join(", ", profile.OnlyFormats)} will be processed.");
         });
         return cmd;
     }

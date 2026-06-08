@@ -1,7 +1,7 @@
 <Window x:Class="Transmute.GUI.Views.SimpleInputDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Transmute" Height="150" Width="380"
+        Title="Transmute" Height="175" Width="400"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False">

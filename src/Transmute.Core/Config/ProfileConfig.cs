@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Transmute.Core.Config;
 
 public class ProfileConfig
@@ -17,15 +19,19 @@ public class ProfileConfig
     public string? DefaultOutputDirectory { get; set; }
     public string? OutputNamingPattern { get; set; }
 
-    // Empty by default — only populated when user explicitly configures format filtering
-    public List<string>? SkipFormats { get; set; }
+    // Always serialized as [] so power users editing the JSON directly can see and fill them in.
+    // Empty = no filter active.
+    public List<string> SkipFormats { get; set; } = [];
 
     // When non-empty, ONLY these formats are processed. Overrides SkipFormats for the profile.
     // GUI warns when this is set; CLI announces it at conversion time.
-    public List<string>? OnlyFormats { get; set; }
+    public List<string> OnlyFormats { get; set; } = [];
 
-    public bool HasOnlyFilter => OnlyFormats is { Count: > 0 };
-    public bool HasSkipFilter => SkipFormats is { Count: > 0 };
+    [JsonIgnore]
+    public bool HasOnlyFilter => OnlyFormats.Count > 0;
+
+    [JsonIgnore]
+    public bool HasSkipFilter => SkipFormats.Count > 0;
 
     /// <summary>
     /// Returns an effective DefaultsConfig by layering this profile's non-null fields over
@@ -33,16 +39,16 @@ public class ProfileConfig
     /// </summary>
     public DefaultsConfig ApplyOver(DefaultsConfig global) => new()
     {
-        WebpQuality           = WebpQuality           ?? global.WebpQuality,
-        JpegQuality           = JpegQuality           ?? global.JpegQuality,
-        JxlQuality            = JxlQuality            ?? global.JxlQuality,
-        AvifQuality           = AvifQuality           ?? global.AvifQuality,
-        PreserveMetadata      = PreserveMetadata      ?? global.PreserveMetadata,
-        OverwriteExisting     = OverwriteExisting     ?? global.OverwriteExisting,
-        LosslessDefault       = LosslessDefault       ?? global.LosslessDefault,
-        WebpMethod            = WebpMethod            ?? global.WebpMethod,
-        JxlEffort             = JxlEffort             ?? global.JxlEffort,
+        WebpQuality            = WebpQuality            ?? global.WebpQuality,
+        JpegQuality            = JpegQuality            ?? global.JpegQuality,
+        JxlQuality             = JxlQuality             ?? global.JxlQuality,
+        AvifQuality            = AvifQuality            ?? global.AvifQuality,
+        PreserveMetadata       = PreserveMetadata       ?? global.PreserveMetadata,
+        OverwriteExisting      = OverwriteExisting      ?? global.OverwriteExisting,
+        LosslessDefault        = LosslessDefault        ?? global.LosslessDefault,
+        WebpMethod             = WebpMethod             ?? global.WebpMethod,
+        JxlEffort              = JxlEffort              ?? global.JxlEffort,
         DefaultOutputDirectory = DefaultOutputDirectory ?? global.DefaultOutputDirectory,
-        OutputNamingPattern   = OutputNamingPattern   ?? global.OutputNamingPattern,
+        OutputNamingPattern    = OutputNamingPattern    ?? global.OutputNamingPattern,
     };
 }
