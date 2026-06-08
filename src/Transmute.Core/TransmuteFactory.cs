@@ -13,6 +13,11 @@ public class TransmuteFactory
     {
         var discovery = new BinaryDiscovery(config.Binaries);
 
+        // Cap libvips's internal thread pool before any vips operations start.
+        // VIPS_CONCURRENCY is read by the native library when it creates its thread pool.
+        if (config.Processing.VipsConcurrency > 0)
+            Environment.SetEnvironmentVariable("VIPS_CONCURRENCY", config.Processing.VipsConcurrency.ToString());
+
         var jxl = new JxlBackend(discovery.Resolve("cjxl"), discovery.Resolve("djxl"));
         var webp = new WebPBackend(discovery.Resolve("cwebp"), discovery.Resolve("dwebp"));
         var ffmpeg = new FfmpegBackend(discovery.Resolve("ffmpeg"));

@@ -53,7 +53,7 @@ public static class ConfigCommand
             {
                 configManager.Set(key, value);
                 Console.WriteLine($"Set {key} = {value}");
-                Console.WriteLine($"Config saved to: {ConfigManager.DefaultConfigPath}");
+                Console.WriteLine($"Config saved to: {ConfigManager.ResolveConfigPath()}");
             }
             catch (Exception ex)
             {
@@ -83,7 +83,7 @@ public static class ConfigCommand
 
         cmd.SetHandler(() =>
         {
-            Console.WriteLine(ConfigManager.DefaultConfigPath);
+            Console.WriteLine(ConfigManager.ResolveConfigPath());
         });
 
         return cmd;

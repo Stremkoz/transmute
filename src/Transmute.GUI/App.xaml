@@ -6,5 +6,7 @@
         <local:ZeroToVisibleConverter x:Key="ZeroToVisibleConverter"/>
         <local:NonZeroToVisibleConverter x:Key="NonZeroToVisibleConverter"/>
         <local:BoolToVisibleConverter x:Key="BoolToVisibleConverter"/>
+        <local:InverseBoolConverter x:Key="InverseBoolConverter"/>
+        <local:NullOrEmptyToVisibleConverter x:Key="NullOrEmptyToVisibleConverter"/>
     </Application.Resources>
 </Application>

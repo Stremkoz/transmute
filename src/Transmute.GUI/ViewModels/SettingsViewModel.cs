@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -22,6 +23,7 @@ public partial class SettingsViewModel : ObservableObject
 
     // Processing
     [ObservableProperty] private int _maxParallelJobs;
+    [ObservableProperty] private int _vipsConcurrency;
     [ObservableProperty] private string _tempDirectory = string.Empty;
 
     // Defaults
@@ -31,9 +33,14 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _avifQuality;
     [ObservableProperty] private bool _preserveMetadata;
     [ObservableProperty] private bool _overwriteExisting;
+    [ObservableProperty] private bool _losslessDefault;
+    [ObservableProperty] private int _webpMethod;
+    [ObservableProperty] private int _jxlEffort;
     [ObservableProperty] private string _outputNamingPattern = string.Empty;
+    [ObservableProperty] private string? _defaultOutputDirectory;
 
-    public string ConfigFilePath => ConfigManager.DefaultConfigPath;
+    public string ConfigFilePath => _configManager.ConfigPath;
+    public string ConfigMode => _configManager.IsPortable ? "Portable (beside exe)" : "Installed (AppData\\Roaming)";
 
     public SettingsViewModel(ConfigManager configManager)
     {
@@ -52,6 +59,7 @@ public partial class SettingsViewModel : ObservableObject
         MagickPath = c.Binaries.Magick ?? string.Empty;
 
         MaxParallelJobs = c.Processing.MaxParallelJobs;
+        VipsConcurrency = c.Processing.VipsConcurrency;
         TempDirectory = c.Processing.TempDirectory ?? string.Empty;
 
         WebpQuality = c.Defaults.WebpQuality;
@@ -60,7 +68,11 @@ public partial class SettingsViewModel : ObservableObject
         AvifQuality = c.Defaults.AvifQuality;
         PreserveMetadata = c.Defaults.PreserveMetadata;
         OverwriteExisting = c.Defaults.OverwriteExisting;
+        LosslessDefault = c.Defaults.LosslessDefault;
+        WebpMethod = c.Defaults.WebpMethod;
+        JxlEffort = c.Defaults.JxlEffort;
         OutputNamingPattern = c.Defaults.OutputNamingPattern;
+        DefaultOutputDirectory = c.Defaults.DefaultOutputDirectory ?? string.Empty;
     }
 
     [RelayCommand]
@@ -75,6 +87,7 @@ public partial class SettingsViewModel : ObservableObject
         c.Binaries.Magick = NullIfEmpty(MagickPath);
 
         c.Processing.MaxParallelJobs = MaxParallelJobs;
+        c.Processing.VipsConcurrency = VipsConcurrency;
         c.Processing.TempDirectory = NullIfEmpty(TempDirectory);
 
         c.Defaults.WebpQuality = WebpQuality;
@@ -83,7 +96,11 @@ public partial class SettingsViewModel : ObservableObject
         c.Defaults.AvifQuality = AvifQuality;
         c.Defaults.PreserveMetadata = PreserveMetadata;
         c.Defaults.OverwriteExisting = OverwriteExisting;
+        c.Defaults.LosslessDefault = LosslessDefault;
+        c.Defaults.WebpMethod = WebpMethod;
+        c.Defaults.JxlEffort = JxlEffort;
         c.Defaults.OutputNamingPattern = OutputNamingPattern;
+        c.Defaults.DefaultOutputDirectory = NullIfEmpty(DefaultOutputDirectory ?? string.Empty);
 
         _configManager.Save();
         MessageBox.Show("Settings saved.", "Transmute", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -127,12 +144,7 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void DownloadBinaries()
     {
-        MessageBox.Show(
-            "Download links for each binary will be available here in a future update.\n\n" +
-            "For now, install them manually and run Auto-Detect, or paste their paths above.",
-            "Download Binaries — Coming Soon",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        new Views.BinaryDownloadsWindow { Owner = Application.Current.MainWindow }.ShowDialog();
     }
 
     [RelayCommand]

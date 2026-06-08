@@ -17,13 +17,35 @@ public class ConfigManager
 
     public AppConfig Config => _config;
 
-    public static string DefaultConfigPath => Path.Combine(
+    /// <summary>The actual path in use (portable or AppData depending on resolution).</summary>
+    public string ConfigPath => _configPath;
+
+    /// <summary>Always the AppData path, regardless of mode. Used as the fallback.</summary>
+    public static string AppDataConfigPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Transmute", "config.json");
 
+    /// <summary>
+    /// Portable mode: config.json exists beside the exe, or a file named "portable" does.
+    /// Installed mode: AppData\Roaming\Transmute\config.json.
+    /// </summary>
+    public static string ResolveConfigPath()
+    {
+        var exeDir = AppContext.BaseDirectory;
+        var portableConfig = Path.Combine(exeDir, "config.json");
+        var portableMarker = Path.Combine(exeDir, "portable");
+
+        if (File.Exists(portableConfig) || File.Exists(portableMarker))
+            return portableConfig;
+
+        return AppDataConfigPath;
+    }
+
+    public bool IsPortable => !_configPath.Equals(AppDataConfigPath, StringComparison.OrdinalIgnoreCase);
+
     public ConfigManager(string? configPath = null)
     {
-        _configPath = configPath ?? DefaultConfigPath;
+        _configPath = configPath ?? ResolveConfigPath();
         _config = Load();
     }
 

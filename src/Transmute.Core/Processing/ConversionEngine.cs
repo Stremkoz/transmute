@@ -24,6 +24,7 @@ public class ConversionEngine
         var results = new ConversionResult[jobList.Count];
         var completed = 0;
         var failed = 0;
+        var skipped = 0;
 
         var channel = Channel.CreateUnbounded<(int Index, ConversionJob Job)>();
 
@@ -48,6 +49,7 @@ public class ConversionEngine
                         Total = jobList.Count,
                         Completed = completed,
                         Failed = failed,
+                        Skipped = skipped,
                         CurrentFile = Path.GetFileName(job.InputPath),
                     });
 
@@ -55,13 +57,15 @@ public class ConversionEngine
                     results[index] = result;
 
                     Interlocked.Increment(ref completed);
-                    if (!result.Success) Interlocked.Increment(ref failed);
+                    if (result.Skipped) Interlocked.Increment(ref skipped);
+                    else if (!result.Success) Interlocked.Increment(ref failed);
 
                     progress?.Report(new ConversionProgress
                     {
                         Total = jobList.Count,
                         Completed = completed,
                         Failed = failed,
+                        Skipped = skipped,
                         CurrentFile = Path.GetFileName(job.InputPath),
                         LastResult = result,
                     });
@@ -85,7 +89,7 @@ public class ConversionEngine
                 return ConversionResult.Fail(job.InputPath, job.OutputPath, "Input file not found");
 
             if (!job.Options.Overwrite && File.Exists(job.OutputPath))
-                return ConversionResult.Fail(job.InputPath, job.OutputPath, "Output file already exists (use --overwrite)");
+                return ConversionResult.Skip(job.InputPath, job.OutputPath);
 
             var outputDir = Path.GetDirectoryName(job.OutputPath);
             if (outputDir is not null)
@@ -127,15 +131,20 @@ public class ConversionEngine
         }
     }
 
-    public string ResolveOutputPath(string inputPath, string outputFormat, ConversionOptions options)
+    public string ResolveOutputPath(string inputPath, string outputFormat, ConversionOptions options,
+        int counter = 1, int total = 1)
     {
         var nameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
         var ext = outputFormat.TrimStart('.');
+
+        // Auto-pad counter to match the width of the total, e.g. total=120 → "001".."120"
+        var digits = Math.Max(1, total.ToString().Length);
         var filename = options.OutputNamingPattern
             .Replace("{name}", nameWithoutExt)
             .Replace("{ext}", ext)
             .Replace("{original_ext}", Path.GetExtension(inputPath).TrimStart('.'))
-            .Replace("{date}", DateTime.Now.ToString("yyyyMMdd"));
+            .Replace("{date}", DateTime.Now.ToString("yyyyMMdd"))
+            .Replace("{counter}", counter.ToString($"D{digits}"));
 
         if (options.OutputFile is not null)
             return options.OutputFile;

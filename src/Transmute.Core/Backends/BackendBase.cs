@@ -54,9 +54,24 @@ public abstract class BackendBase : IBackend
         return (process.ExitCode, stdout.ToString(), stderr.ToString());
     }
 
-    protected ConversionResult BuildResult(ConversionJob job, int exitCode, string stderr, Stopwatch sw) =>
-        exitCode == 0
-            ? ConversionResult.Ok(job.InputPath, job.OutputPath, Name, sw.Elapsed)
-            : ConversionResult.Fail(job.InputPath, job.OutputPath,
+    protected ConversionResult BuildResult(ConversionJob job, int exitCode, string stderr, Stopwatch sw)
+    {
+        if (exitCode != 0)
+            return ConversionResult.Fail(job.InputPath, job.OutputPath,
                 stderr.Trim().Length > 0 ? stderr.Trim() : $"{Name} exited with code {exitCode}", Name);
+
+        var inputBytes = TryGetFileSize(job.InputPath);
+        var outputBytes = TryGetFileSize(job.OutputPath);
+        return ConversionResult.Ok(job.InputPath, job.OutputPath, Name, sw.Elapsed) with
+        {
+            InputBytes = inputBytes,
+            OutputBytes = outputBytes,
+        };
+    }
+
+    private static long? TryGetFileSize(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch { return null; }
+    }
 }

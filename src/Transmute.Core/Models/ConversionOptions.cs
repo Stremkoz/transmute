@@ -3,6 +3,9 @@ namespace Transmute.Core.Models;
 public record ConversionOptions
 {
     public int? Quality { get; set; }
+    public bool Lossless { get; set; } = false;
+    public int? WebpMethod { get; set; }   // null = use config default
+    public int? JxlEffort { get; set; }    // null = use config default
     public bool PreserveMetadata { get; set; } = true;
     public bool Overwrite { get; set; } = false;
     public string? OutputDirectory { get; set; }

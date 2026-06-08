@@ -6,11 +6,12 @@
         xmlns:local="clr-namespace:Transmute.GUI"
         xmlns:vm="clr-namespace:Transmute.GUI.ViewModels"
         mc:Ignorable="d"
-        Title="Transmute — Image Converter" Height="700" Width="900"
-        MinWidth="720" MinHeight="520"
+        Title="Transmute — Image Converter" Height="740" Width="900"
+        MinWidth="720" MinHeight="560"
         AllowDrop="True"
         Drop="Window_Drop"
         DragEnter="Window_DragEnter"
+        PreviewKeyDown="Window_PreviewKeyDown"
         Background="#F0F2F5">
 
     <Window.Resources>
@@ -65,6 +66,38 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Lossless/Lossy segmented toggle — visible only for formats that support it -->
+        <Style x:Key="LosslessSegment" TargetType="ToggleButton">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Padding" Value="11,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding Tag}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#E3F2FD"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#0078D4"/>
+                                <Setter Property="Foreground" Value="#0078D4"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#F0F4FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="RemoveButton" TargetType="Button">
             <Setter Property="Width" Value="22"/>
             <Setter Property="Height" Value="22"/>
@@ -89,6 +122,41 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Format skip chip — checked = that format is excluded from conversion -->
+        <Style x:Key="FormatChip" TargetType="ToggleButton">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="9,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" CornerRadius="12"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FDECEA"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#E57373"/>
+                                <Setter Property="Foreground" Value="#C62828"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Background" Value="#F0F2F5"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="#555"/>
         </Style>
 
         <!-- ListViewItem style: no selection highlight junk, stretch content, hover effect -->
@@ -121,12 +189,21 @@
         <DataTemplate x:Key="FileEntryTemplate" DataType="{x:Type vm:FileEntryViewModel}">
             <Grid Margin="12,6,8,6">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="22"/>
+                    <ColumnDefinition Width="40"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="72"/>
                     <ColumnDefinition Width="28"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="📄" FontSize="14" VerticalAlignment="Center"/>
+                <!-- Thumbnail with placeholder fallback -->
+                <Border Grid.Column="0" Width="34" Height="34" CornerRadius="3"
+                        Background="#EAECF0" VerticalAlignment="Center" ClipToBounds="True">
+                    <Grid>
+                        <TextBlock Text="📄" FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Opacity="0.45"/>
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Grid>
+                </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0">
                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12"
                                Foreground="#1A1A2E" TextTrimming="CharacterEllipsis"/>
@@ -186,6 +263,7 @@
             <RowDefinition Height="*"/>      <!-- Queue list -->
             <RowDefinition Height="Auto"/>   <!-- Controls: format + quality -->
             <RowDefinition Height="Auto"/>   <!-- Controls: buttons -->
+            <RowDefinition Height="Auto"/>   <!-- Advanced panel (collapsed when hidden) -->
             <RowDefinition Height="150"/>    <!-- Log panel -->
             <RowDefinition Height="Auto"/>   <!-- Status bar -->
         </Grid.RowDefinitions>
@@ -226,7 +304,8 @@
                 </StackPanel>
 
                 <!-- Populated list — virtualized for large queues -->
-                <ListView ItemsSource="{Binding InputFiles}"
+                <ListView x:Name="QueueList"
+                          ItemsSource="{Binding InputFiles}"
                           ItemTemplateSelector="{StaticResource QueueEntrySelector}"
                           ItemContainerStyle="{StaticResource QueueItemStyle}"
                           BorderThickness="0" Background="Transparent"
@@ -238,39 +317,97 @@
             </Grid>
         </Border>
 
-        <!-- ── Controls row 1: format + quality ── -->
+        <!-- ── Controls row 1: format + quality + output ── -->
         <Border Grid.Row="2" Margin="12,8,12,0" Background="White" CornerRadius="8"
                 BorderBrush="#DCDFE6" BorderThickness="1" Padding="14,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="110"/>
-                    <ColumnDefinition Width="24"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="160"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+            <StackPanel>
+                <!-- Format, lossless, quality, preserve metadata -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="16"/>
+                        <!-- Lossless toggle — collapses when format doesn't support it -->
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="12"/>
+                        <!-- Quality label + slider -->
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="160"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0" Text="Format" VerticalAlignment="Center"
-                           Foreground="#555" FontSize="12" Margin="0,0,8,0"/>
-                <ComboBox Grid.Column="1"
-                          ItemsSource="{x:Static vm:MainViewModel.SupportedFormats}"
-                          SelectedItem="{Binding TargetFormat}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="0" Text="Format" VerticalAlignment="Center"
+                               Foreground="#555" FontSize="12" Margin="0,0,8,0"/>
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{x:Static vm:MainViewModel.SupportedFormats}"
+                              SelectedItem="{Binding TargetFormat}" VerticalAlignment="Center"/>
 
-                <TextBlock Grid.Column="3" Text="Quality" VerticalAlignment="Center"
-                           Foreground="#555" FontSize="12" Margin="0,0,8,0"/>
-                <Slider Grid.Column="4" Minimum="1" Maximum="100" Value="{Binding Quality}"
-                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
-                <TextBlock Grid.Column="5" VerticalAlignment="Center" Margin="6,0,0,0"
-                           Foreground="#333" FontSize="12" MinWidth="36">
-                    <Run Text="{Binding Quality, Mode=OneWay}"/><Run Text="%"/>
-                </TextBlock>
+                    <!-- Lossless/Lossy segmented pill — only visible for JXL and WebP -->
+                    <Border Grid.Column="3" VerticalAlignment="Center"
+                            Visibility="{Binding LosslessVisible, Converter={StaticResource BoolToVisibleConverter}}"
+                            BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="5">
+                        <StackPanel Orientation="Horizontal">
+                            <ToggleButton Content="Lossless" Style="{StaticResource LosslessSegment}"
+                                          IsChecked="{Binding Lossless}"
+                                          Tag="5,0,0,0" BorderThickness="0" BorderBrush="Transparent"
+                                          Background="Transparent" Foreground="#555"/>
+                            <Rectangle Width="1" Fill="#CCCCCC" VerticalAlignment="Stretch"/>
+                            <ToggleButton Content="Lossy" Style="{StaticResource LosslessSegment}"
+                                          IsChecked="{Binding Lossless, Converter={StaticResource InverseBoolConverter}}"
+                                          Tag="0,0,5,0" BorderThickness="0" BorderBrush="Transparent"
+                                          Background="Transparent" Foreground="#555"/>
+                        </StackPanel>
+                    </Border>
 
-                <CheckBox Grid.Column="7" Content="Preserve Metadata" VerticalAlignment="Center"
-                          IsChecked="{Binding PreserveMetadata}" FontSize="12"/>
-            </Grid>
+                    <TextBlock Grid.Column="5" Text="Quality" VerticalAlignment="Center"
+                               Foreground="#555" FontSize="12" Margin="0,0,8,0"
+                               IsEnabled="{Binding QualityEnabled}"/>
+                    <Slider Grid.Column="6" Minimum="1" Maximum="100" Value="{Binding Quality}"
+                            VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"
+                            IsEnabled="{Binding QualityEnabled}"/>
+                    <TextBlock Grid.Column="7" VerticalAlignment="Center" Margin="6,0,0,0"
+                               Foreground="#333" FontSize="12" MinWidth="36"
+                               IsEnabled="{Binding QualityEnabled}">
+                        <Run Text="{Binding Quality, Mode=OneWay}"/><Run Text="%"/>
+                    </TextBlock>
+
+                    <CheckBox Grid.Column="9" Content="Preserve Metadata" VerticalAlignment="Center"
+                              IsChecked="{Binding PreserveMetadata}" FontSize="12"/>
+                </Grid>
+
+                <!-- Divider -->
+                <Rectangle Height="1" Fill="#EBEBEB" Margin="0,8,0,0"/>
+
+                <!-- Output directory -->
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="52"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Output" VerticalAlignment="Center"
+                               Foreground="#555" FontSize="12" Margin="0,0,8,0"/>
+                    <Grid Grid.Column="1">
+                        <TextBox Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}"
+                                 Padding="6,4" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Text="Same folder as source  (leave empty for default)"
+                                   Foreground="#BBBBBB" FontStyle="Italic" FontSize="11"
+                                   IsHitTestVisible="False" Margin="8,0,0,0" VerticalAlignment="Center"
+                                   Visibility="{Binding OutputDirectory,
+                                       Converter={StaticResource NullOrEmptyToVisibleConverter}}"/>
+                    </Grid>
+                    <Button Grid.Column="2" Content="Browse…" Style="{StaticResource SecondaryButton}"
+                            Padding="10,5" Margin="8,0,0,0" FontSize="11"
+                            Click="BrowseOutputDir_Click"/>
+                    <Button Grid.Column="3" Content="↩ Clear" Style="{StaticResource SecondaryButton}"
+                            Padding="10,5" Margin="4,0,0,0" FontSize="11"
+                            Command="{Binding ClearOutputDirectoryCommand}"
+                            ToolTip="Reset to beside source"/>
+                </Grid>
+            </StackPanel>
         </Border>
 
         <!-- ── Controls row 2: action buttons ── -->
@@ -286,6 +423,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="0" Content="+ Add Files" Style="{StaticResource SecondaryButton}"
@@ -296,15 +435,88 @@
                           IsChecked="{Binding IncludeSubfolders}"
                           VerticalAlignment="Center" FontSize="12" Foreground="#555"/>
 
-                <Button Grid.Column="6" Content="Clear" Style="{StaticResource SecondaryButton}"
+                <ToggleButton Grid.Column="6" Content="⚙ Advanced"
+                              IsChecked="{Binding ShowAdvanced}"
+                              Padding="12,7" FontSize="13" Cursor="Hand"
+                              Background="Transparent" BorderBrush="#CCCCCC" BorderThickness="1"
+                              Foreground="#555">
+                    <ToggleButton.Style>
+                        <Style TargetType="ToggleButton">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="5" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="#7C83FD"/>
+                                                <Setter Property="Foreground" Value="#5B62D9"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#F5F5F5"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ToggleButton.Style>
+                </ToggleButton>
+                <Button Grid.Column="8" Content="Clear" Style="{StaticResource SecondaryButton}"
                         Command="{Binding ClearFilesCommand}" Padding="12,7"/>
-                <Button Grid.Column="8" Content="⚡  Convert" Style="{StaticResource PrimaryButton}"
+                <Button Grid.Column="10" Content="⚡  Convert" Style="{StaticResource PrimaryButton}"
                         Command="{Binding ConvertCommand}" Padding="20,7" FontWeight="SemiBold"/>
             </Grid>
         </Border>
 
+        <!-- ── Advanced session options panel ── -->
+        <Border Grid.Row="4" Margin="12,0,12,0"
+                Background="#F8F8FF" BorderBrush="#C5C8FF" BorderThickness="1" CornerRadius="8"
+                Padding="14,10"
+                Visibility="{Binding ShowAdvanced, Converter={StaticResource BoolToVisibleConverter}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="24"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Overwrite toggle -->
+                <CheckBox Grid.Column="0" Content="Overwrite existing files (this session)"
+                          IsChecked="{Binding SessionOverwrite}"
+                          VerticalAlignment="Center" FontSize="12" Foreground="#333"/>
+
+                <!-- Divider -->
+                <Rectangle Grid.Column="1" Width="1" Fill="#C5C8FF" VerticalAlignment="Stretch" Margin="11,0"/>
+
+                <!-- Skip format label -->
+                <TextBlock Grid.Column="2" Text="Skip input formats:"
+                           VerticalAlignment="Center" FontSize="12" Foreground="#555" Margin="0,0,10,0"/>
+
+                <!-- Format chips — checked = that format is excluded -->
+                <WrapPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ToggleButton Content="JPG" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJpeg}"/>
+                    <ToggleButton Content="PNG" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipPng}"/>
+                    <ToggleButton Content="GIF" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipGif}"/>
+                    <ToggleButton Content="WebP" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipWebp}"/>
+                    <ToggleButton Content="AVIF" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipAvif}"/>
+                    <ToggleButton Content="JXL" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJxl}"/>
+                    <ToggleButton Content="HEIC" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipHeic}"/>
+                    <TextBlock Text="(highlighted = skipped)" VerticalAlignment="Center"
+                               FontSize="10" Foreground="#AAA" Margin="4,0,0,0" FontStyle="Italic"/>
+                </WrapPanel>
+            </Grid>
+        </Border>
+
         <!-- ── Log panel ── -->
-        <Border Grid.Row="4" Margin="12,4,12,0" Background="#16161E" CornerRadius="8">
+        <Border Grid.Row="5" Margin="12,4,12,0" Background="#16161E" CornerRadius="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10"
                           x:Name="LogScrollViewer">
                 <ItemsControl ItemsSource="{Binding LogLines}">
@@ -320,7 +532,7 @@
         </Border>
 
         <!-- ── Status bar ── -->
-        <Border Grid.Row="5" Background="#F0F2F5" Padding="14,7"
+        <Border Grid.Row="6" Background="#F0F2F5" Padding="14,7"
                 BorderBrush="#DCDFE6" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>

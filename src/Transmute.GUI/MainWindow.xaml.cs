@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 using Transmute.GUI.ViewModels;
@@ -18,6 +19,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         _vm = vm;
         DataContext = vm;
+        vm.LogLines.CollectionChanged += (_, _) =>
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                () => LogScrollViewer.ScrollToBottom());
     }
 
     private void Window_DragEnter(object sender, DragEventArgs e)
@@ -100,6 +104,22 @@ public partial class MainWindow : Window
             foreach (var folder in dlg.FolderNames)
                 _vm.AddFolder(folder, _vm.IncludeSubfolders);
         }
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && QueueList.SelectedItem is { } item)
+        {
+            _vm.RemoveEntryCommand.Execute(item);
+            e.Handled = true;
+        }
+    }
+
+    private void BrowseOutputDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFolderDialog { Title = "Select output folder for this session" };
+        if (dlg.ShowDialog() == true)
+            _vm.OutputDirectory = dlg.FolderName;
     }
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e)

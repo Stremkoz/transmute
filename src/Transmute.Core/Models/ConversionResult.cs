@@ -5,6 +5,7 @@ public record ConversionResult
     public required string InputPath { get; init; }
     public required string OutputPath { get; init; }
     public bool Success { get; init; }
+    public bool Skipped { get; init; }
     public string? Error { get; init; }
     public string? BackendUsed { get; init; }
     public TimeSpan Elapsed { get; init; }
@@ -16,4 +17,7 @@ public record ConversionResult
 
     public static ConversionResult Fail(string input, string output, string error, string? backend = null) =>
         new() { InputPath = input, OutputPath = output, Success = false, Error = error, BackendUsed = backend };
+
+    public static ConversionResult Skip(string input, string output) =>
+        new() { InputPath = input, OutputPath = output, Success = false, Skipped = true };
 }

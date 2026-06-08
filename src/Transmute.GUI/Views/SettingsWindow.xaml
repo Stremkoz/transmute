@@ -128,8 +128,17 @@
                         </StackPanel>
 
                         <TextBlock Style="{StaticResource SectionHeader}" Text="Config File Location" Margin="0,20,0,4"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Mode:" FontSize="11" Foreground="#666" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="{Binding ConfigMode}" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="#0D47A1" VerticalAlignment="Center"/>
+                        </StackPanel>
                         <TextBox IsReadOnly="True" Style="{StaticResource PathBox}"
                                  Text="{Binding ConfigFilePath, Mode=OneWay}" Background="#F0F0F0"/>
+                        <TextBlock FontSize="10" Foreground="#888" TextWrapping="Wrap" Margin="0,4,0,0">
+                            To use portable mode: place a file named "portable" (no extension) beside the exe,
+                            or copy config.json there. Transmute will use that file instead of AppData.
+                        </TextBlock>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -155,6 +164,26 @@
                         </StackPanel>
                     </Grid>
 
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="libvips threads"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="0" Maximum="32" Value="{Binding VipsConcurrency}"
+                                    Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0">
+                                <Run Text="{Binding VipsConcurrency, Mode=OneWay}"/>
+                                <Run Text=" (0 = uncapped)"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="150,2,0,0">
+                        libvips will use every available core if uncapped. 2–4 is a good limit
+                        when running multiple parallel jobs.
+                    </TextBlock>
+
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Temp Directory" Margin="0,16,0,6"/>
                     <Grid Margin="0,4">
                         <Grid.ColumnDefinitions>
@@ -171,6 +200,7 @@
 
             <!-- Defaults Tab -->
             <TabItem Header="Defaults">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="16">
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Default Quality"/>
 
@@ -206,18 +236,78 @@
                         </StackPanel>
                     </Grid>
 
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Compression Effort" Margin="0,16,0,4"/>
+                    <TextBlock FontSize="11" Foreground="#666" Margin="0,0,0,8" TextWrapping="Wrap">
+                        Higher effort = smaller files but slower encoding.
+                    </TextBlock>
+
+                    <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="WebP method"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="0" Maximum="6" Value="{Binding WebpMethod}" Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0">
+                                <Run Text="{Binding WebpMethod, Mode=OneWay}"/>
+                                <Run Text=" / 6"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="JXL effort"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Slider Minimum="1" Maximum="9" Value="{Binding JxlEffort}" Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True"/>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0">
+                                <Run Text="{Binding JxlEffort, Mode=OneWay}"/>
+                                <Run Text=" / 9"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Behavior" Margin="0,16,0,6"/>
                     <CheckBox Content="Preserve metadata (EXIF, ICC, XMP)" IsChecked="{Binding PreserveMetadata}" Margin="0,4"/>
                     <CheckBox Content="Overwrite existing files" IsChecked="{Binding OverwriteExisting}" Margin="0,4"/>
 
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Lossless Default" Margin="0,16,0,4"/>
+                    <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,8">
+                        Applies to formats that support it (JXL, WebP). Can be overridden per session in the main window.
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Content="Lossless" IsChecked="{Binding LosslessDefault}"
+                                     GroupName="LosslessDefault" Margin="0,0,16,0" VerticalAlignment="Center"/>
+                        <RadioButton Content="Lossy (quality-based)" GroupName="LosslessDefault"
+                                     IsChecked="{Binding LosslessDefault, Converter={StaticResource InverseBoolConverter}}"
+                                     VerticalAlignment="Center"/>
+                    </StackPanel>
+
                     <TextBlock Style="{StaticResource SectionHeader}" Text="Output Naming Pattern" Margin="0,16,0,4"/>
-                    <TextBlock FontSize="11" Foreground="#666" Margin="0,0,0,6">
-                        Tokens: {name} = filename without extension, {ext} = target format,
-                        {original_ext} = source extension, {date} = yyyyMMdd
+                    <TextBlock FontSize="11" Foreground="#666" Margin="0,0,0,6" TextWrapping="Wrap">
+                        Tokens: {name} = filename without extension,  {ext} = target format,
+                        {original_ext} = source extension,  {date} = yyyyMMdd,
+                        {counter} = auto-padded sequence number (e.g. 001, 002… for a 100+ file batch)
                     </TextBlock>
                     <TextBox Style="{StaticResource PathBox}"
                              Text="{Binding OutputNamingPattern, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Default Output Folder" Margin="0,16,0,4"/>
+                    <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,6">
+                        Where converted files are saved by default. Leave empty to save beside the source file.
+                        Can be overridden per session in the main window.
+                    </TextBlock>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Style="{StaticResource PathBox}"
+                                 Text="{Binding DefaultOutputDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Grid.Column="1" Content="Browse…" Style="{StaticResource Btn}"
+                                Click="BrowseDefaultOutput_Click"/>
+                        <Button Grid.Column="2" Content="Clear" Style="{StaticResource Btn}"
+                                Click="ClearDefaultOutput_Click"/>
+                    </Grid>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
 

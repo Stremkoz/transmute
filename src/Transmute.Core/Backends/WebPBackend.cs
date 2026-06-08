@@ -45,13 +45,20 @@ public class WebPBackend : BackendBase
 
     private async Task<ConversionResult> EncodeAsync(ConversionJob job, Stopwatch sw, CancellationToken ct)
     {
-        var quality = job.Options.Quality ?? 85;
-        var args = new List<string>
+        var args = new List<string>();
+
+        if (job.Options.Lossless)
         {
-            "-q", quality.ToString(),
-            job.InputPath,
-            "-o", job.OutputPath
-        };
+            args.Add("-lossless");
+        }
+        else
+        {
+            var quality = job.Options.Quality ?? 85;
+            args.AddRange(["-q", quality.ToString()]);
+        }
+
+        var method = job.Options.WebpMethod ?? 6;
+        args.AddRange(["-m", method.ToString(), job.InputPath, "-o", job.OutputPath]);
 
         if (!job.Options.PreserveMetadata)
             args.AddRange(["-metadata", "none"]);

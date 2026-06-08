@@ -34,6 +34,7 @@ public class ProcessingConfig
 {
     public int MaxParallelJobs { get; set; } = 0; // 0 = logical CPU count
     public string? TempDirectory { get; set; }
+    public int VipsConcurrency { get; set; } = 0; // 0 = let libvips decide (uses all cores by default)
 }
 
 public class DefaultsConfig
@@ -45,4 +46,8 @@ public class DefaultsConfig
     public bool PreserveMetadata { get; set; } = true;
     public bool OverwriteExisting { get; set; } = false;
     public string OutputNamingPattern { get; set; } = "{name}.{ext}";
+    public bool LosslessDefault { get; set; } = true;
+    public int WebpMethod { get; set; } = 6;   // cwebp -m 0-6, 6 = slowest/best
+    public int JxlEffort { get; set; } = 7;    // cjxl -e 1-9, 7 = default
+    public string? DefaultOutputDirectory { get; set; }
 }

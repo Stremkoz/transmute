@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Diagnostics;
 using Transmute.Core;
 using Transmute.Core.Config;
 using Transmute.Core.Models;
@@ -25,6 +26,14 @@ public static class ConvertCommand
         var qualityOpt = new Option<int?>("--quality", "Quality 0-100 for lossy formats");
         qualityOpt.AddAlias("-q");
 
+        var losslessOpt = new Option<bool>("--lossless", "Lossless encoding (JXL and WebP only)");
+        losslessOpt.AddAlias("-l");
+
+        var methodOpt = new Option<int?>("--method", "WebP compression method 0-6 (default from config, usually 6)");
+
+        var effortOpt = new Option<int?>("--effort", "JXL effort level 1-9 (default from config, usually 7)");
+        effortOpt.AddAlias("-e");
+
         var jobsOpt = new Option<int>("--jobs", () => 0, "Number of parallel jobs (0 = CPU count)");
         jobsOpt.AddAlias("-j");
 
@@ -39,32 +48,45 @@ public static class ConvertCommand
 
         var cmd = new Command("convert", "Convert image(s) to a target format")
         {
-            inputsArg, formatOpt, outputOpt, outputDirOpt, qualityOpt,
-            jobsOpt, overwriteOpt, preserveMetaOpt, backendOpt, recursiveOpt,
+            inputsArg, formatOpt, outputOpt, outputDirOpt, qualityOpt, losslessOpt,
+            methodOpt, effortOpt, jobsOpt, overwriteOpt, preserveMetaOpt, backendOpt, recursiveOpt,
         };
 
         cmd.SetHandler(async (ctx) =>
         {
-            var inputs = ctx.ParseResult.GetValueForArgument(inputsArg);
-            var format = ctx.ParseResult.GetValueForOption(formatOpt)!;
-            var output = ctx.ParseResult.GetValueForOption(outputOpt);
+            var inputs   = ctx.ParseResult.GetValueForArgument(inputsArg);
+            var format   = ctx.ParseResult.GetValueForOption(formatOpt)!;
+            var output   = ctx.ParseResult.GetValueForOption(outputOpt);
             var outputDir = ctx.ParseResult.GetValueForOption(outputDirOpt);
-            var quality = ctx.ParseResult.GetValueForOption(qualityOpt);
-            var jobs = ctx.ParseResult.GetValueForOption(jobsOpt);
+            var quality  = ctx.ParseResult.GetValueForOption(qualityOpt);
+            var lossless = ctx.ParseResult.GetValueForOption(losslessOpt);
+            var method   = ctx.ParseResult.GetValueForOption(methodOpt);
+            var effort   = ctx.ParseResult.GetValueForOption(effortOpt);
+            var jobs     = ctx.ParseResult.GetValueForOption(jobsOpt);
             var overwrite = ctx.ParseResult.GetValueForOption(overwriteOpt);
             var preserveMeta = ctx.ParseResult.GetValueForOption(preserveMetaOpt);
-            var backend = ctx.ParseResult.GetValueForOption(backendOpt);
+            var backend  = ctx.ParseResult.GetValueForOption(backendOpt);
             var recursive = ctx.ParseResult.GetValueForOption(recursiveOpt);
             var ct = ctx.GetCancellationToken();
 
             var config = configManager.Config;
             if (jobs == 0) jobs = config.Processing.MaxParallelJobs;
 
+            // --lossless flag overrides the config default; without it, use the config default
+            // for formats that support lossless (jxl, webp), or false for everything else.
+            var fmt = format.ToLowerInvariant();
+            bool effectiveLossless = lossless
+                ? true
+                : (fmt is "jxl" or "webp") && config.Defaults.LosslessDefault;
+
             var options = new ConversionOptions
             {
-                Quality = quality ?? GetDefaultQuality(format, config.Defaults),
+                Quality    = quality ?? GetDefaultQuality(format, config.Defaults),
+                Lossless   = effectiveLossless,
+                WebpMethod = method ?? config.Defaults.WebpMethod,
+                JxlEffort  = effort ?? config.Defaults.JxlEffort,
                 PreserveMetadata = preserveMeta,
-                Overwrite = overwrite || config.Defaults.OverwriteExisting,
+                Overwrite  = overwrite || config.Defaults.OverwriteExisting,
                 OutputDirectory = outputDir?.FullName,
                 OutputFile = output,
                 ForcedBackend = backend,
@@ -82,14 +104,14 @@ public static class ConvertCommand
             var (engine, _, temp, _) = TransmuteFactory.Create(config);
             using (temp)
             {
-                var allInputs = ExpandInputs(inputs, recursive);
-                var conversionJobs = allInputs.Select(f =>
-                    new ConversionJob
+                var allInputs = ExpandInputs(inputs, recursive).ToList();
+                var conversionJobs = allInputs
+                    .Select((f, i) => new ConversionJob
                     {
-                        InputPath = f,
-                        OutputPath = engine.ResolveOutputPath(f, format, options),
+                        InputPath    = f,
+                        OutputPath   = engine.ResolveOutputPath(f, format, options, i + 1, allInputs.Count),
                         OutputFormat = format,
-                        Options = options,
+                        Options      = options,
                     }).ToList();
 
                 if (conversionJobs.Count == 0)
@@ -98,25 +120,36 @@ public static class ConvertCommand
                     return;
                 }
 
-                Console.WriteLine($"Converting {conversionJobs.Count} file(s) to {format.ToUpperInvariant()}...");
+                var modeLabel = effectiveLossless ? "lossless" : $"q{options.Quality}";
+                Console.WriteLine($"Converting {conversionJobs.Count} file(s) to {format.ToUpperInvariant()} ({modeLabel})...");
+
+                var totalSw = Stopwatch.StartNew();
 
                 var progress = new Progress<ConversionProgress>(p =>
                 {
-                    if (p.LastResult is not null)
+                    if (p.LastResult is not { } r) return;
+                    if (r.Success)
                     {
-                        var r = p.LastResult;
-                        if (r.Success)
-                            Console.WriteLine($"  [{p.Completed}/{p.Total}] {Path.GetFileName(r.InputPath)} → {Path.GetFileName(r.OutputPath)} ({r.BackendUsed}, {r.Elapsed.TotalSeconds:F2}s)");
-                        else
-                            Console.Error.WriteLine($"  [{p.Completed}/{p.Total}] FAILED {Path.GetFileName(r.InputPath)}: {r.Error}");
+                        var sizePart = FormatSizeDelta(r.InputBytes, r.OutputBytes);
+                        Console.WriteLine($"  [{p.Completed}/{p.Total}] {Path.GetFileName(r.InputPath)} → {Path.GetFileName(r.OutputPath)} [{r.BackendUsed}]{sizePart} {r.Elapsed.TotalSeconds:F2}s");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"  [{p.Completed}/{p.Total}] FAILED {Path.GetFileName(r.InputPath)}: {r.Error}");
                     }
                 });
 
                 var results = await engine.ConvertAllAsync(conversionJobs, progress, ct);
+                totalSw.Stop();
 
-                var succeeded = results.Count(r => r.Success);
+                var succeeded  = results.Where(r => r.Success).ToList();
                 var failedCount = results.Count(r => !r.Success);
-                Console.WriteLine($"\nDone: {succeeded} succeeded, {failedCount} failed.");
+
+                var totalIn  = succeeded.Sum(r => r.InputBytes ?? 0);
+                var totalOut = succeeded.Sum(r => r.OutputBytes ?? 0);
+                var totalSize = totalIn > 0 ? $"  {FormatSizeDelta(totalIn, totalOut).Trim()}" : string.Empty;
+
+                Console.WriteLine($"\nDone: {succeeded.Count} succeeded, {failedCount} failed — {totalSw.Elapsed.TotalSeconds:F1}s{totalSize}");
 
                 if (failedCount > 0)
                     ctx.ExitCode = 1;
@@ -129,12 +162,22 @@ public static class ConvertCommand
     private static int? GetDefaultQuality(string format, DefaultsConfig defaults) =>
         format.ToLowerInvariant() switch
         {
-            "webp" => defaults.WebpQuality,
+            "webp"       => defaults.WebpQuality,
             "jpg" or "jpeg" => defaults.JpegQuality,
-            "jxl" => defaults.JxlQuality,
-            "avif" => defaults.AvifQuality,
-            _ => null
+            "jxl"        => defaults.JxlQuality,
+            "avif"       => defaults.AvifQuality,
+            _            => null
         };
+
+    private static string FormatSizeDelta(long? inputBytes, long? outputBytes)
+    {
+        if (inputBytes is null || outputBytes is null || inputBytes == 0) return string.Empty;
+        var inMb  = inputBytes.Value  / (1024.0 * 1024);
+        var outMb = outputBytes.Value / (1024.0 * 1024);
+        var pct   = (outputBytes.Value - inputBytes.Value) * 100.0 / inputBytes.Value;
+        var sign  = pct < 0 ? "" : "+";
+        return $"  {inMb:F1}MB→{outMb:F1}MB ({sign}{pct:F0}%)";
+    }
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {

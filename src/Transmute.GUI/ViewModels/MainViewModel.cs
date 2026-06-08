@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Transmute.Core;
@@ -35,8 +36,15 @@ public partial class MainViewModel : ObservableObject
     private bool _qualityUserCustomized = false;
     private bool _suppressQualityTracking = false;
 
+    // Formats where lossless encoding is a meaningful option
+    private static readonly HashSet<string> LosslessCapableFormats =
+        new(StringComparer.OrdinalIgnoreCase) { "jxl", "webp" };
+
     [ObservableProperty] private string _targetFormat = "webp";
     [ObservableProperty] private int _quality = 85;
+    [ObservableProperty] private bool _lossless = true;
+    [ObservableProperty] private bool _losslessVisible = true;
+    [ObservableProperty] private bool _qualityEnabled = false;
     [ObservableProperty] private bool _preserveMetadata = true;
     [ObservableProperty] private bool _overwriteExisting = false;
     [ObservableProperty] private string? _outputDirectory;
@@ -45,6 +53,17 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private int _progressMax = 1;
     [ObservableProperty] private string _statusText = "Drop images or folders here to get started.";
     [ObservableProperty] private bool _includeSubfolders = true;
+
+    // Advanced panel — session-only, always reset to defaults on launch
+    [ObservableProperty] private bool _showAdvanced = false;
+    [ObservableProperty] private bool _sessionOverwrite = false;
+    [ObservableProperty] private bool _skipJpeg = false;
+    [ObservableProperty] private bool _skipPng = false;
+    [ObservableProperty] private bool _skipGif = false;
+    [ObservableProperty] private bool _skipWebp = false;
+    [ObservableProperty] private bool _skipAvif = false;
+    [ObservableProperty] private bool _skipJxl = false;
+    [ObservableProperty] private bool _skipHeic = false;
 
     public BulkObservableCollection<object> InputFiles { get; } = new();
     public ObservableCollection<string> LogLines { get; } = new();
@@ -65,6 +84,11 @@ public partial class MainViewModel : ObservableObject
         _suppressQualityTracking = false;
         _preserveMetadata = defaults.PreserveMetadata;
         _overwriteExisting = defaults.OverwriteExisting;
+        _outputDirectory = defaults.DefaultOutputDirectory;
+        // webp is the default format — initialize lossless state for it
+        _lossless = defaults.LosslessDefault;
+        _losslessVisible = LosslessCapableFormats.Contains(_targetFormat);
+        _qualityEnabled = !_losslessVisible || !_lossless;
         InputFiles.CollectionChanged += (_, _) => ConvertCommand.NotifyCanExecuteChanged();
     }
 
@@ -84,6 +108,17 @@ public partial class MainViewModel : ObservableObject
             _suppressQualityTracking = false;
         }
         _qualityUserCustomized = false;
+
+        LosslessVisible = LosslessCapableFormats.Contains(value);
+        if (LosslessVisible)
+            Lossless = _configManager.Config.Defaults.LosslessDefault;
+
+        QualityEnabled = !LosslessVisible || !Lossless;
+    }
+
+    partial void OnLosslessChanged(bool value)
+    {
+        QualityEnabled = !LosslessVisible || !value;
     }
 
     partial void OnQualityChanged(int value)
@@ -130,6 +165,10 @@ public partial class MainViewModel : ObservableObject
         StatusText = "Drop images or folders here to get started.";
     }
 
+    [RelayCommand]
+    private void ClearOutputDirectory() =>
+        OutputDirectory = _configManager.Config.Defaults.DefaultOutputDirectory;
+
     [RelayCommand(CanExecute = nameof(CanConvert))]
     private async Task ConvertAsync()
     {
@@ -140,14 +179,19 @@ public partial class MainViewModel : ObservableObject
         ProgressValue = 0;
         LogLines.Clear();
         StatusText = "Preparing files...";
+        var totalSw = System.Diagnostics.Stopwatch.StartNew();
 
+        var defaults = _configManager.Config.Defaults;
         var options = new ConversionOptions
         {
             Quality = Quality,
+            Lossless = LosslessVisible && Lossless,
+            WebpMethod = defaults.WebpMethod,
+            JxlEffort = defaults.JxlEffort,
             PreserveMetadata = PreserveMetadata,
-            Overwrite = OverwriteExisting,
+            Overwrite = OverwriteExisting || SessionOverwrite,
             OutputDirectory = OutputDirectory,
-            OutputNamingPattern = _configManager.Config.Defaults.OutputNamingPattern,
+            OutputNamingPattern = defaults.OutputNamingPattern,
         };
 
         var config = _configManager.Config;
@@ -155,8 +199,8 @@ public partial class MainViewModel : ObservableObject
 
         using (temp)
         {
-            // Expand all queue entries (files + folders) into a flat job list
-            var jobs = new List<ConversionJob>();
+            // Expand all queue entries into a flat filtered path list, then build jobs with counter
+            var allPaths = new List<string>();
             foreach (var entry in InputFiles)
             {
                 IEnumerable<string> filePaths = entry switch
@@ -165,16 +209,39 @@ public partial class MainViewModel : ObservableObject
                     FolderEntryViewModel folderVm => folderVm.GetImagePaths(),
                     _ => []
                 };
-
                 foreach (var path in filePaths)
-                    jobs.Add(new ConversionJob
-                    {
-                        InputPath = path,
-                        OutputPath = engine.ResolveOutputPath(path, TargetFormat, options),
-                        OutputFormat = TargetFormat,
-                        Options = options,
-                    });
+                    if (!IsFormatSkipped(path)) allPaths.Add(path);
             }
+
+            // Warn if any queued files are already in the target format
+            var sameFormatPaths = allPaths
+                .Where(p => Path.GetExtension(p).TrimStart('.').Equals(TargetFormat, StringComparison.OrdinalIgnoreCase))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (sameFormatPaths.Count > 0)
+            {
+                var msg = sameFormatPaths.Count == 1
+                    ? $"1 file in the queue is already {TargetFormat.ToUpperInvariant()}. Overwrite it?"
+                    : $"{sameFormatPaths.Count} files in the queue are already {TargetFormat.ToUpperInvariant()}. Overwrite them?";
+
+                var answer = MessageBox.Show(msg, "Transmute — Same Format",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+
+                if (answer == MessageBoxResult.No)
+                {
+                    allPaths = allPaths.Where(p => !sameFormatPaths.Contains(p)).ToList();
+                    sameFormatPaths.Clear();
+                }
+            }
+
+            var jobs = allPaths
+                .Select((path, i) => new ConversionJob
+                {
+                    InputPath = path,
+                    OutputPath = engine.ResolveOutputPath(path, TargetFormat, options, i + 1, allPaths.Count),
+                    OutputFormat = TargetFormat,
+                    Options = sameFormatPaths.Contains(path) ? options with { Overwrite = true } : options,
+                }).ToList();
 
             ProgressMax = Math.Max(1, jobs.Count);
             StatusText = $"Converting {jobs.Count:N0} file(s)...";
@@ -186,24 +253,42 @@ public partial class MainViewModel : ObservableObject
                     ProgressValue = p.Completed;
                     if (p.LastResult is { } r)
                     {
-                        var line = r.Success
-                            ? $"✓ {Path.GetFileName(r.InputPath)} → {Path.GetFileName(r.OutputPath)} [{r.BackendUsed}] {r.Elapsed.TotalSeconds:F2}s"
-                            : $"✗ {Path.GetFileName(r.InputPath)}: {r.Error}";
+                        string line;
+                        if (r.Success)
+                        {
+                            var sizePart = FormatSizeDelta(r.InputBytes, r.OutputBytes);
+                            line = $"✓ {Path.GetFileName(r.InputPath)} → {Path.GetFileName(r.OutputPath)} [{r.BackendUsed}]{sizePart} {r.Elapsed.TotalSeconds:F2}s";
+                        }
+                        else if (r.Skipped)
+                        {
+                            line = $"⊘ {Path.GetFileName(r.InputPath)}: skipped (output already exists)";
+                        }
+                        else
+                        {
+                            line = $"✗ {Path.GetFileName(r.InputPath)}: {r.Error}";
+                        }
                         LogLines.Add(line);
                         StatusText = p.Completed < p.Total
                             ? $"Converting... ({p.Completed:N0} / {p.Total:N0})"
-                            : $"Done: {p.Completed - p.Failed:N0} succeeded, {p.Failed:N0} failed.";
+                            : $"Done: {p.Completed - p.Failed - p.Skipped:N0} succeeded, {p.Skipped:N0} skipped, {p.Failed:N0} failed — {totalSw.Elapsed.TotalSeconds:F1}s";
                     }
                 });
             });
 
             try
             {
-                await engine.ConvertAllAsync(jobs, progress, _cts.Token);
+                var results = await engine.ConvertAllAsync(jobs, progress, _cts.Token);
+                totalSw.Stop();
+
+                var succeeded = results.Where(r => r.Success).ToList();
+                var totalIn = succeeded.Sum(r => r.InputBytes ?? 0);
+                var totalOut = succeeded.Sum(r => r.OutputBytes ?? 0);
+                if (succeeded.Count > 0 && totalIn > 0)
+                    LogLines.Add($"─── Total: {succeeded.Count} file(s)  {FormatSizeDelta(totalIn, totalOut).Trim()} ───");
             }
             catch (OperationCanceledException)
             {
-                StatusText = "Conversion cancelled.";
+                StatusText = $"Cancelled after {totalSw.Elapsed.TotalSeconds:F1}s.";
                 LogLines.Add("— Cancelled —");
             }
         }
@@ -220,6 +305,32 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnIsConvertingChanged(bool value) =>
         ConvertCommand.NotifyCanExecuteChanged();
+
+    private bool IsFormatSkipped(string path)
+    {
+        var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+        return ext switch
+        {
+            "jpg" or "jpeg" => SkipJpeg,
+            "png"           => SkipPng,
+            "gif"           => SkipGif,
+            "webp"          => SkipWebp,
+            "avif"          => SkipAvif,
+            "jxl"           => SkipJxl,
+            "heic" or "heif" => SkipHeic,
+            _               => false
+        };
+    }
+
+    private static string FormatSizeDelta(long? inputBytes, long? outputBytes)
+    {
+        if (inputBytes is null || outputBytes is null || inputBytes == 0) return string.Empty;
+        var inMb = inputBytes.Value / (1024.0 * 1024);
+        var outMb = outputBytes.Value / (1024.0 * 1024);
+        var pct = (outputBytes.Value - inputBytes.Value) * 100.0 / inputBytes.Value;
+        var sign = pct < 0 ? "" : "+";
+        return $"  {inMb:F1}MB→{outMb:F1}MB ({sign}{pct:F0}%)";
+    }
 
     private void UpdateStatus()
     {
@@ -240,12 +351,34 @@ public partial class FileEntryViewModel : ObservableObject
     public string Path { get; }
     public string FileName => System.IO.Path.GetFileName(Path);
     public string Size { get; }
+    [ObservableProperty] private BitmapSource? _thumbnail;
 
     public FileEntryViewModel(string path)
     {
         Path = path;
         var info = new FileInfo(path);
         Size = info.Exists ? FormatSize(info.Length) : "?";
+        _ = LoadThumbnailAsync(path);
+    }
+
+    private async Task LoadThumbnailAsync(string path)
+    {
+        try
+        {
+            var bmp = await Task.Run(() =>
+            {
+                var bi = new BitmapImage();
+                bi.BeginInit();
+                bi.UriSource = new Uri(path);
+                bi.DecodePixelHeight = 48;
+                bi.CacheOption = BitmapCacheOption.OnLoad;
+                bi.EndInit();
+                bi.Freeze();
+                return (BitmapSource)bi;
+            });
+            Thumbnail = bmp;
+        }
+        catch { /* unsupported format or bad file — placeholder stays */ }
     }
 
     private static string FormatSize(long bytes) => bytes switch
