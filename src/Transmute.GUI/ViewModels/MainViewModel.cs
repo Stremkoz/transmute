@@ -1,5 +1,9 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -11,9 +15,25 @@ using Transmute.Core.Models;
 
 namespace Transmute.GUI.ViewModels;
 
+// Raises a single Reset notification for batch adds instead of one per item,
+// keeping the UI fast when adding hundreds of files at once.
+public class BulkObservableCollection<T> : ObservableCollection<T>
+{
+    public void AddRange(IEnumerable<T> items)
+    {
+        foreach (var item in items)
+            Items.Add(item);
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
+}
+
 public partial class MainViewModel : ObservableObject
 {
     private readonly ConfigManager _configManager;
+    private bool _qualityUserCustomized = false;
+    private bool _suppressQualityTracking = false;
 
     [ObservableProperty] private string _targetFormat = "webp";
     [ObservableProperty] private int _quality = 85;
@@ -23,10 +43,11 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _isConverting = false;
     [ObservableProperty] private int _progressValue = 0;
     [ObservableProperty] private int _progressMax = 1;
-    [ObservableProperty] private string _statusText = "Drop files here to get started.";
+    [ObservableProperty] private string _statusText = "Drop images or folders here to get started.";
+    [ObservableProperty] private bool _includeSubfolders = true;
 
-    public ObservableCollection<FileEntryViewModel> InputFiles { get; } = [];
-    public ObservableCollection<string> LogLines { get; } = [];
+    public BulkObservableCollection<object> InputFiles { get; } = new();
+    public ObservableCollection<string> LogLines { get; } = new();
 
     public static string[] SupportedFormats { get; } =
     [
@@ -39,7 +60,9 @@ public partial class MainViewModel : ObservableObject
     {
         _configManager = configManager;
         var defaults = configManager.Config.Defaults;
+        _suppressQualityTracking = true;
         _quality = defaults.WebpQuality;
+        _suppressQualityTracking = false;
         _preserveMetadata = defaults.PreserveMetadata;
         _overwriteExisting = defaults.OverwriteExisting;
         InputFiles.CollectionChanged += (_, _) => ConvertCommand.NotifyCanExecuteChanged();
@@ -47,39 +70,64 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnTargetFormatChanged(string value)
     {
-        Quality = _configManager.Config.Defaults switch
+        if (!_qualityUserCustomized)
         {
-            { } d when value == "webp" => d.WebpQuality,
-            { } d when value is "jpg" or "jpeg" => d.JpegQuality,
-            { } d when value == "jxl" => d.JxlQuality,
-            { } d when value == "avif" => d.AvifQuality,
-            _ => 90
-        };
+            _suppressQualityTracking = true;
+            Quality = _configManager.Config.Defaults switch
+            {
+                { } d when value == "webp" => d.WebpQuality,
+                { } d when value is "jpg" or "jpeg" => d.JpegQuality,
+                { } d when value == "jxl" => d.JxlQuality,
+                { } d when value == "avif" => d.AvifQuality,
+                _ => 90
+            };
+            _suppressQualityTracking = false;
+        }
+        _qualityUserCustomized = false;
+    }
+
+    partial void OnQualityChanged(int value)
+    {
+        if (!_suppressQualityTracking)
+            _qualityUserCustomized = true;
     }
 
     public void AddFiles(IEnumerable<string> paths)
     {
-        foreach (var path in paths)
-        {
-            if (File.Exists(path) && InputFiles.All(f => f.Path != path))
-                InputFiles.Add(new FileEntryViewModel(path));
-        }
-        StatusText = $"{InputFiles.Count} file(s) queued.";
+        var existing = InputFiles.OfType<FileEntryViewModel>().Select(f => f.Path).ToHashSet();
+        var newEntries = paths
+            .Where(p => File.Exists(p) && !existing.Contains(p))
+            .Select(p => (object)new FileEntryViewModel(p))
+            .ToList();
+
+        if (newEntries.Count > 0)
+            InputFiles.AddRange(newEntries);
+
+        UpdateStatus();
+    }
+
+    public void AddFolder(string path, bool includeSubfolders)
+    {
+        if (InputFiles.OfType<FolderEntryViewModel>().Any(f => f.Path == path))
+            return;
+        InputFiles.Add(new FolderEntryViewModel(path, includeSubfolders));
+        UpdateStatus();
     }
 
     [RelayCommand]
-    private void RemoveFile(FileEntryViewModel? entry)
+    private void RemoveEntry(object? entry)
     {
         if (entry is not null)
             InputFiles.Remove(entry);
-        StatusText = $"{InputFiles.Count} file(s) queued.";
+        UpdateStatus();
     }
 
     [RelayCommand]
     private void ClearFiles()
     {
         InputFiles.Clear();
-        StatusText = "Files cleared.";
+        LogLines.Clear();
+        StatusText = "Drop images or folders here to get started.";
     }
 
     [RelayCommand(CanExecute = nameof(CanConvert))]
@@ -90,9 +138,8 @@ public partial class MainViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         IsConverting = true;
         ProgressValue = 0;
-        ProgressMax = InputFiles.Count;
         LogLines.Clear();
-        StatusText = "Converting...";
+        StatusText = "Preparing files...";
 
         var options = new ConversionOptions
         {
@@ -108,13 +155,29 @@ public partial class MainViewModel : ObservableObject
 
         using (temp)
         {
-            var jobs = InputFiles.Select(f => new ConversionJob
+            // Expand all queue entries (files + folders) into a flat job list
+            var jobs = new List<ConversionJob>();
+            foreach (var entry in InputFiles)
             {
-                InputPath = f.Path,
-                OutputPath = engine.ResolveOutputPath(f.Path, TargetFormat, options),
-                OutputFormat = TargetFormat,
-                Options = options,
-            }).ToList();
+                IEnumerable<string> filePaths = entry switch
+                {
+                    FileEntryViewModel fvm => [fvm.Path],
+                    FolderEntryViewModel folderVm => folderVm.GetImagePaths(),
+                    _ => []
+                };
+
+                foreach (var path in filePaths)
+                    jobs.Add(new ConversionJob
+                    {
+                        InputPath = path,
+                        OutputPath = engine.ResolveOutputPath(path, TargetFormat, options),
+                        OutputFormat = TargetFormat,
+                        Options = options,
+                    });
+            }
+
+            ProgressMax = Math.Max(1, jobs.Count);
+            StatusText = $"Converting {jobs.Count:N0} file(s)...";
 
             var progress = new Progress<ConversionProgress>(p =>
             {
@@ -128,8 +191,8 @@ public partial class MainViewModel : ObservableObject
                             : $"✗ {Path.GetFileName(r.InputPath)}: {r.Error}";
                         LogLines.Add(line);
                         StatusText = p.Completed < p.Total
-                            ? $"Converting... ({p.Completed}/{p.Total})"
-                            : $"Done: {p.Completed - p.Failed} succeeded, {p.Failed} failed.";
+                            ? $"Converting... ({p.Completed:N0} / {p.Total:N0})"
+                            : $"Done: {p.Completed - p.Failed:N0} succeeded, {p.Failed:N0} failed.";
                     }
                 });
             });
@@ -157,6 +220,19 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnIsConvertingChanged(bool value) =>
         ConvertCommand.NotifyCanExecuteChanged();
+
+    private void UpdateStatus()
+    {
+        var fileCount = InputFiles.OfType<FileEntryViewModel>().Count();
+        var folderCount = InputFiles.OfType<FolderEntryViewModel>().Count();
+        StatusText = (fileCount, folderCount) switch
+        {
+            (0, 0) => "Drop images or folders here to get started.",
+            (_, 0) => $"{fileCount:N0} file{(fileCount == 1 ? "" : "s")} queued.",
+            (0, _) => $"{folderCount} folder{(folderCount == 1 ? "" : "s")} queued.",
+            _ => $"{fileCount:N0} file{(fileCount == 1 ? "" : "s")} and {folderCount} folder{(folderCount == 1 ? "" : "s")} queued."
+        };
+    }
 }
 
 public partial class FileEntryViewModel : ObservableObject

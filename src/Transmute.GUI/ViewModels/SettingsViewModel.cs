@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -100,6 +101,38 @@ public partial class SettingsViewModel : ObservableObject
         DjxlPath = all["djxl"] ?? string.Empty;
         FfmpegPath = all["ffmpeg"] ?? string.Empty;
         MagickPath = all["magick"] ?? string.Empty;
+
+        var missing = all.Where(kvp => kvp.Value is null).Select(kvp => kvp.Key).ToList();
+        if (missing.Count == 0)
+        {
+            MessageBox.Show(
+                "All binaries found on PATH.",
+                "Auto-Detect Complete",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        else
+        {
+            var names = string.Join(", ", missing);
+            MessageBox.Show(
+                $"The following binaries were not found on PATH:\n\n    {names}\n\n" +
+                "Please enter their full paths in the fields above.\n" +
+                "If they are not installed, use the Download Binaries button (coming soon).",
+                "Some Binaries Not Found",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    [RelayCommand]
+    private void DownloadBinaries()
+    {
+        MessageBox.Show(
+            "Download links for each binary will be available here in a future update.\n\n" +
+            "For now, install them manually and run Auto-Detect, or paste their paths above.",
+            "Download Binaries — Coming Soon",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     [RelayCommand]

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Threading;
 using Transmute.Core.Config;
 using Transmute.GUI.ViewModels;
 
@@ -11,8 +12,19 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        DispatcherUnhandledException += OnUnhandledException;
         var vm = new MainViewModel(ConfigManager);
         var win = new MainWindow(vm);
         win.Show();
+    }
+
+    private static void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        MessageBox.Show(
+            $"Unhandled error:\n\n{e.Exception.GetType().Name}: {e.Exception.Message}\n\n{e.Exception.StackTrace}",
+            "Transmute — Error",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        e.Handled = true; // keep the app alive so we can read the message
     }
 }

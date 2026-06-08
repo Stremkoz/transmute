@@ -9,11 +9,10 @@ public static class ConvertCommand
 {
     public static Command Build(ConfigManager configManager)
     {
-        var inputsArg = new Argument<FileInfo[]>("inputs", "Input file(s) to convert")
+        var inputsArg = new Argument<string[]>("inputs", "Input file(s) or folder(s) to convert")
         {
             Arity = ArgumentArity.OneOrMore,
         };
-        inputsArg.ExistingOnly();
 
         var formatOpt = new Option<string>("--format", "Target output format (e.g. webp, avif, jxl, png)") { IsRequired = true };
         formatOpt.AddAlias("-f");
@@ -137,12 +136,35 @@ public static class ConvertCommand
             _ => null
         };
 
-    private static IEnumerable<string> ExpandInputs(FileInfo[] inputs, bool recursive)
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        foreach (var fi in inputs)
+        ".jpg", ".jpeg", ".png", ".webp", ".avif", ".jxl", ".tiff", ".tif",
+        ".gif", ".bmp", ".heic", ".heif", ".svg", ".hdr", ".jp2", ".j2k"
+    };
+
+    private static IEnumerable<string> ExpandInputs(string[] inputs, bool recursive)
+    {
+        foreach (var input in inputs)
         {
-            if (fi.Exists)
-                yield return fi.FullName;
+            if (File.Exists(input))
+            {
+                yield return input;
+            }
+            else if (Directory.Exists(input))
+            {
+                var option = recursive
+                    ? SearchOption.AllDirectories
+                    : SearchOption.TopDirectoryOnly;
+                foreach (var file in Directory.EnumerateFiles(input, "*", option))
+                {
+                    if (ImageExtensions.Contains(Path.GetExtension(file)))
+                        yield return file;
+                }
+            }
+            else
+            {
+                Console.Error.WriteLine($"Warning: '{input}' not found, skipping.");
+            }
         }
     }
 }

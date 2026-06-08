@@ -119,12 +119,17 @@
                                      />
                         </Grid>
 
-                        <Button Content="Auto-Detect All from PATH" Margin="0,12,0,0" Padding="12,6"
-                                Command="{Binding AutoDetectAllCommand}" HorizontalAlignment="Left"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="Auto-Detect All from PATH" Padding="12,6"
+                                    Command="{Binding AutoDetectAllCommand}"/>
+                            <Button Content="⬇ Download Binaries" Padding="12,6" Margin="8,0,0,0"
+                                    Command="{Binding DownloadBinariesCommand}"
+                                    Background="#E8F4FD" BorderBrush="#90CAF9" BorderThickness="1"/>
+                        </StackPanel>
 
                         <TextBlock Style="{StaticResource SectionHeader}" Text="Config File Location" Margin="0,20,0,4"/>
                         <TextBox IsReadOnly="True" Style="{StaticResource PathBox}"
-                                 Text="{Binding ConfigFilePath}" Background="#F0F0F0"/>
+                                 Text="{Binding ConfigFilePath, Mode=OneWay}" Background="#F0F0F0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
