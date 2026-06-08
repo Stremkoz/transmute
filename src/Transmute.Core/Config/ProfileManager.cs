@@ -154,6 +154,115 @@ public class ProfileManager
         }
     }
 
+    /// <summary>
+    /// Gets a single field from a named profile. Key forms:
+    ///   defaults.webpQuality   — nullable override (shows value or "(inherited)")
+    ///   filter.skip            — SkipFormats as comma-separated string
+    ///   filter.only            — OnlyFormats as comma-separated string
+    /// Pass null for key to get the full profile JSON.
+    /// </summary>
+    public string? GetField(string name, string? key, DefaultsConfig globalDefaults)
+    {
+        var profile = Load(name);
+        if (profile is null)
+            throw new ArgumentException($"Profile '{name}' not found.");
+
+        if (key is null)
+        {
+            var opts = new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            };
+            return System.Text.Json.JsonSerializer.Serialize(profile, opts);
+        }
+
+        var parts = key.Split('.', 2);
+        var (section, prop) = parts.Length == 2
+            ? (parts[0].ToLowerInvariant(), parts[1].ToLowerInvariant())
+            : (key.ToLowerInvariant(), string.Empty);
+
+        return (section, prop) switch
+        {
+            ("defaults", "webpquality")           => Inherited(profile.WebpQuality,           globalDefaults.WebpQuality),
+            ("defaults", "jpegquality")           => Inherited(profile.JpegQuality,           globalDefaults.JpegQuality),
+            ("defaults", "jxlquality")            => Inherited(profile.JxlQuality,            globalDefaults.JxlQuality),
+            ("defaults", "avifquality")           => Inherited(profile.AvifQuality,           globalDefaults.AvifQuality),
+            ("defaults", "preservemetadata")      => Inherited(profile.PreserveMetadata,      globalDefaults.PreserveMetadata),
+            ("defaults", "overwriteexisting")     => Inherited(profile.OverwriteExisting,     globalDefaults.OverwriteExisting),
+            ("defaults", "losslessdefault")       => Inherited(profile.LosslessDefault,       globalDefaults.LosslessDefault),
+            ("defaults", "webpmethod")            => Inherited(profile.WebpMethod,            globalDefaults.WebpMethod),
+            ("defaults", "jxleffort")             => Inherited(profile.JxlEffort,             globalDefaults.JxlEffort),
+            ("defaults", "outputnamingpattern")   => Inherited(profile.OutputNamingPattern,   globalDefaults.OutputNamingPattern),
+            ("defaults", "defaultoutputdirectory")=> Inherited(profile.DefaultOutputDirectory, globalDefaults.DefaultOutputDirectory),
+            ("filter", "skip")                    => profile.SkipFormats.Count > 0 ? string.Join(", ", profile.SkipFormats) : "(none)",
+            ("filter", "only")                    => profile.OnlyFormats.Count > 0 ? string.Join(", ", profile.OnlyFormats) : "(none)",
+            _ => throw new ArgumentException($"Unknown profile key: {key}")
+        };
+    }
+
+    /// <summary>
+    /// Sets a single field on a named profile and saves it.
+    /// Key forms match GetField. Use "null" to clear (revert to inherited).
+    /// For filter.skip / filter.only pass comma-separated extensions, or "null" to clear.
+    /// </summary>
+    public void SetField(string name, string key, string value)
+    {
+        var profile = Load(name) ?? throw new ArgumentException($"Profile '{name}' not found.");
+
+        var parts = key.Split('.', 2);
+        var (section, prop) = parts.Length == 2
+            ? (parts[0].ToLowerInvariant(), parts[1].ToLowerInvariant())
+            : (key.ToLowerInvariant(), string.Empty);
+
+        switch (section, prop)
+        {
+            case ("defaults", "webpquality"):            profile.WebpQuality           = NullableInt(value);   break;
+            case ("defaults", "jpegquality"):            profile.JpegQuality           = NullableInt(value);   break;
+            case ("defaults", "jxlquality"):             profile.JxlQuality            = NullableInt(value);   break;
+            case ("defaults", "avifquality"):            profile.AvifQuality           = NullableInt(value);   break;
+            case ("defaults", "preservemetadata"):       profile.PreserveMetadata      = NullableBool(value);  break;
+            case ("defaults", "overwriteexisting"):      profile.OverwriteExisting     = NullableBool(value);  break;
+            case ("defaults", "losslessdefault"):        profile.LosslessDefault       = NullableBool(value);  break;
+            case ("defaults", "webpmethod"):             profile.WebpMethod            = NullableInt(value);   break;
+            case ("defaults", "jxleffort"):              profile.JxlEffort             = NullableInt(value);   break;
+            case ("defaults", "outputnamingpattern"):    profile.OutputNamingPattern   = value == "null" ? null : value; break;
+            case ("defaults", "defaultoutputdirectory"): profile.DefaultOutputDirectory = value == "null" ? null : value; break;
+            case ("filter", "skip"):
+                if (value == "null") { profile.SkipFormats = []; profile.OnlyFormats = []; }
+                else { profile.SkipFormats = ParseFormats(value); profile.OnlyFormats = []; }
+                break;
+            case ("filter", "only"):
+                if (value == "null") { profile.OnlyFormats = []; profile.SkipFormats = []; }
+                else { profile.OnlyFormats = ParseFormats(value); profile.SkipFormats = []; }
+                break;
+            default:
+                throw new ArgumentException($"Unknown profile key: {key}");
+        }
+
+        Save(profile);
+    }
+
+    private static string Inherited<T>(T? value, T globalValue) where T : struct =>
+        value.HasValue ? value.Value.ToString()! : $"(inherited: {globalValue})";
+
+    private static string Inherited(string? value, string? globalValue) =>
+        value is not null ? value : $"(inherited: {globalValue ?? "(not set)"})";
+
+    private static int? NullableInt(string value) =>
+        value == "null" ? null : int.Parse(value);
+
+    private static bool? NullableBool(string value) =>
+        value == "null" ? null : bool.Parse(value);
+
+    private static List<string> ParseFormats(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+             .Select(s => s.TrimStart('.').ToLowerInvariant())
+             .Where(s => !string.IsNullOrEmpty(s))
+             .Distinct()
+             .ToList();
+
     private string FilePath(string name) =>
         Path.Combine(_folderPath, SanitizeFileName(name) + ".json");
 

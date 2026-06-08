@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 using Transmute.Core;
 using Transmute.Core.Config;
 using Transmute.Core.Models;
+using Transmute.Core.Processing;
 
 namespace Transmute.GUI.ViewModels;
 
@@ -62,6 +63,7 @@ public partial class MainViewModel : ObservableObject
     // Advanced panel — session-only, always reset to defaults on launch
     [ObservableProperty] private bool _showAdvanced = false;
     [ObservableProperty] private bool _sessionOverwrite = false;
+    [ObservableProperty] private bool _sessionOnlyMode = false;  // false = skip, true = only
     [ObservableProperty] private bool _skipJpeg = false;
     [ObservableProperty] private bool _skipPng = false;
     [ObservableProperty] private bool _skipGif = false;
@@ -69,6 +71,15 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _skipAvif = false;
     [ObservableProperty] private bool _skipJxl = false;
     [ObservableProperty] private bool _skipHeic = false;
+
+    public string SkipModeLabel => SessionOnlyMode ? "Only input formats:" : "Skip input formats:";
+    public string SkipModeHint  => SessionOnlyMode ? "(highlighted = only)" : "(highlighted = skipped)";
+
+    partial void OnSessionOnlyModeChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SkipModeLabel));
+        OnPropertyChanged(nameof(SkipModeHint));
+    }
 
     public BulkObservableCollection<object> InputFiles { get; } = new();
     public ObservableCollection<string> LogLines { get; } = new();
@@ -346,6 +357,23 @@ public partial class MainViewModel : ObservableObject
                 var totalOut = succeeded.Sum(r => r.OutputBytes ?? 0);
                 if (succeeded.Count > 0 && totalIn > 0)
                     LogLines.Add($"─── Total: {succeeded.Count} file(s)  {FormatSizeDelta(totalIn, totalOut).Trim()} ───");
+
+                // Write log file if enabled
+                if (config.Log.Enabled && results.Count > 0)
+                {
+                    try
+                    {
+                        var logDir = !string.IsNullOrEmpty(options.OutputDirectory)
+                            ? options.OutputDirectory
+                            : Path.GetDirectoryName(results[0].OutputPath) ?? ".";
+                        var logPath = LogWriter.Write(results, logDir, config.Log.Format, totalSw.Elapsed);
+                        LogLines.Add($"📄 Log written: {logPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        LogLines.Add($"⚠ Log file error: {ex.Message}");
+                    }
+                }
             }
             catch (OperationCanceledException)
             {
@@ -371,8 +399,8 @@ public partial class MainViewModel : ObservableObject
     {
         var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
 
-        // Session GUI skip chips (these are the user's explicit session overrides)
-        var sessionSkipped = ext switch
+        // Normalise jpg/jpeg to a single lookup
+        bool ChipFor(string e) => e switch
         {
             "jpg" or "jpeg"  => SkipJpeg,
             "png"            => SkipPng,
@@ -383,10 +411,18 @@ public partial class MainViewModel : ObservableObject
             "heic" or "heif" => SkipHeic,
             _                => false
         };
-        if (sessionSkipped) return true;
 
-        // Profile filter — only applies when the session has no skip chips active
-        // (session GUI toggles are the user's explicit override, so they take precedence)
+        bool anyChipChecked = SkipJpeg || SkipPng || SkipGif || SkipWebp || SkipAvif || SkipJxl || SkipHeic;
+
+        if (anyChipChecked)
+        {
+            bool thisChipChecked = ChipFor(ext);
+            // In "Only" mode: pass only checked formats (skip all others)
+            // In "Skip" mode: skip checked formats
+            return SessionOnlyMode ? !thisChipChecked : thisChipChecked;
+        }
+
+        // No session chips active — fall through to profile filter
         var profile = string.Equals(ActiveProfile, ProfileManager.DefaultProfileName, StringComparison.OrdinalIgnoreCase)
             ? null
             : _profileManager.Load(ActiveProfile);

@@ -7,7 +7,7 @@ namespace Transmute.CLI.Commands;
 
 public static class ProfileCommand
 {
-    public static Command Build(ProfileManager profileManager)
+    public static Command Build(ConfigManager configManager, ProfileManager profileManager)
     {
         var cmd = new Command("profile", "Manage conversion profiles");
 
@@ -16,7 +16,7 @@ public static class ProfileCommand
         cmd.AddCommand(BuildDuplicate(profileManager));
         cmd.AddCommand(BuildDelete(profileManager));
         cmd.AddCommand(BuildRename(profileManager));
-        cmd.AddCommand(BuildShow(profileManager));
+        cmd.AddCommand(BuildShow(configManager, profileManager));
         cmd.AddCommand(BuildPath(profileManager));
 
         return cmd;
@@ -144,21 +144,33 @@ public static class ProfileCommand
         return cmd;
     }
 
-    private static Command BuildShow(ProfileManager pm)
+    private static Command BuildShow(ConfigManager cm, ProfileManager pm)
     {
-        var nameArg = new Argument<string>("name", "Profile to show (omit for Default)")
+        var nameArg = new Argument<string>("name", "Profile to show (omit or 'Default' for global defaults)")
         {
             Arity = ArgumentArity.ZeroOrOne
         };
-        var cmd = new Command("show", "Show a profile's settings") { nameArg };
+        var effectiveOpt = new Option<bool>("--effective",
+            "Show the fully merged effective values (profile overrides applied on top of global defaults)");
+
+        var cmd = new Command("show", "Show a profile's settings") { nameArg, effectiveOpt };
         cmd.SetHandler((ctx) =>
         {
-            var name = ctx.ParseResult.GetValueForArgument(nameArg);
+            var name      = ctx.ParseResult.GetValueForArgument(nameArg);
+            var effective = ctx.ParseResult.GetValueForOption(effectiveOpt);
+
+            var opts = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            };
 
             if (string.IsNullOrEmpty(name) ||
                 string.Equals(name, ProfileManager.DefaultProfileName, StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("Default profile uses the global config. Run 'transmute config' to view it.");
+                Console.WriteLine("// Default profile — global defaults");
+                Console.WriteLine(JsonSerializer.Serialize(cm.Config.Defaults, opts));
                 return;
             }
 
@@ -170,16 +182,22 @@ public static class ProfileCommand
                 return;
             }
 
-            var options = new JsonSerializerOptions
+            if (effective)
             {
-                WriteIndented = true,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            };
-            Console.WriteLine(JsonSerializer.Serialize(profile, options));
+                var merged = profile.ApplyOver(cm.Config.Defaults);
+                Console.WriteLine($"// Profile '{name}' — effective values (merged with global defaults)");
+                Console.WriteLine(JsonSerializer.Serialize(merged, opts));
+            }
+            else
+            {
+                Console.WriteLine($"// Profile '{name}' — stored overrides (null fields inherit from global)");
+                Console.WriteLine(JsonSerializer.Serialize(profile, opts));
+            }
 
             if (profile.HasOnlyFilter)
-                Console.Error.WriteLine($"\nNote: This profile has OnlyFormats set — only {string.Join(", ", profile.OnlyFormats)} will be processed.");
+                Console.WriteLine($"\n// Input filter: ONLY {string.Join(", ", profile.OnlyFormats)}");
+            else if (profile.HasSkipFilter)
+                Console.WriteLine($"\n// Input filter: SKIP {string.Join(", ", profile.SkipFormats)}");
         });
         return cmd;
     }

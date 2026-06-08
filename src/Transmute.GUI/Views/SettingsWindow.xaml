@@ -8,6 +8,36 @@
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
 
     <Window.Resources>
+        <!-- Segmented toggle button used in the filter Skip/Only pill -->
+        <Style x:Key="FilterSegment" TargetType="ToggleButton">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="{TemplateBinding Tag}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#E3F2FD"/>
+                                <Setter Property="Foreground" Value="#0078D4"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#F0F4FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -195,6 +225,51 @@
                                  Text="{Binding TempDirectory, UpdateSourceTrigger=PropertyChanged}"
                                  />
                     </Grid>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="Log File" Margin="0,16,0,4"/>
+                    <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,8">
+                        After each conversion, write a log file beside the output images.
+                        Disabled by default.
+                    </TextBlock>
+                    <CheckBox Content="Write log file after conversion"
+                              IsChecked="{Binding LogEnabled}" Margin="0,0,0,8"/>
+
+                    <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Log format"
+                                   IsEnabled="{Binding LogEnabled}"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                    IsEnabled="{Binding LogEnabled}">
+                            <Border BorderBrush="#BBBBBB" BorderThickness="1" CornerRadius="4"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <ToggleButton Content=".log  (text)" Style="{StaticResource FilterSegment}"
+                                                  IsChecked="{Binding LogFormatIsJson,
+                                                      Converter={StaticResource InverseBoolConverter}}"
+                                                  Tag="4,0,0,0"/>
+                                    <Rectangle Width="1" Fill="#BBBBBB" VerticalAlignment="Stretch"/>
+                                    <ToggleButton Content=".json" Style="{StaticResource FilterSegment}"
+                                                  IsChecked="{Binding LogFormatIsJson}"
+                                                  Tag="0,0,4,0"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" FontSize="11" Foreground="#666">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Human-readable text file"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LogFormatIsJson}" Value="True">
+                                                <Setter Property="Text" Value="Structured JSON — good for scripts and CLI"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
             </TabItem>
 
@@ -333,6 +408,49 @@
                         <Button Grid.Column="2" Content="Clear" Style="{StaticResource Btn}"
                                 Click="ClearDefaultOutput_Click"/>
                     </Grid>
+
+                    <!-- Input format filter — named profiles only; hidden for Default -->
+                    <StackPanel Visibility="{Binding IsDefaultProfile,
+                                    Converter={StaticResource InverseBoolToVisibleConverter}}">
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="Input Format Filter" Margin="0,16,0,4"/>
+                        <TextBlock FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,0,0,8">
+                            Restrict which input formats this profile acts on. Leave empty to process everything.
+                            Comma-separated extensions, e.g. <Run FontFamily="Consolas">jpg, png</Run>
+                        </TextBlock>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Skip / Only segmented pill -->
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border BorderBrush="#BBBBBB" BorderThickness="1" CornerRadius="4"
+                                        VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ToggleButton Content="Skip" Style="{StaticResource FilterSegment}"
+                                                      IsChecked="{Binding ProfileFilterIsOnly,
+                                                          Converter={StaticResource InverseBoolConverter}}"
+                                                      Tag="4,0,0,0"/>
+                                        <Rectangle Width="1" Fill="#BBBBBB" VerticalAlignment="Stretch"/>
+                                        <ToggleButton Content="Only" Style="{StaticResource FilterSegment}"
+                                                      IsChecked="{Binding ProfileFilterIsOnly}"
+                                                      Tag="0,0,4,0"/>
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="formats:" VerticalAlignment="Center" FontSize="12" Foreground="#555"/>
+                            </StackPanel>
+
+                            <TextBox Grid.Column="1" Style="{StaticResource PathBox}"
+                                     Text="{Binding ProfileFormatFilter, UpdateSourceTrigger=PropertyChanged}"
+                                     VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock FontSize="10" Foreground="#888" Margin="150,3,0,0">
+                            Enter extension names without dots. Empty = no filter (all formats processed).
+                        </TextBlock>
+                    </StackPanel>
+
                 </StackPanel>
                 </ScrollViewer>
             </TabItem>

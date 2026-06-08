@@ -7,6 +7,7 @@
         xmlns:vm="clr-namespace:Transmute.GUI.ViewModels"
         mc:Ignorable="d"
         Title="Transmute — Image Converter" Height="740" Width="900"
+        Icon="pack://application:,,,/Assets/Transmute.ico"
         MinWidth="720" MinHeight="560"
         AllowDrop="True"
         Drop="Window_Drop"
@@ -259,13 +260,11 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>   <!-- Toolbar -->
-            <RowDefinition Height="*"/>      <!-- Queue list -->
-            <RowDefinition Height="Auto"/>   <!-- Controls: format + quality -->
-            <RowDefinition Height="Auto"/>   <!-- Controls: buttons -->
-            <RowDefinition Height="Auto"/>   <!-- Advanced panel (collapsed when hidden) -->
-            <RowDefinition Height="150"/>    <!-- Log panel -->
-            <RowDefinition Height="Auto"/>   <!-- Status bar -->
+            <RowDefinition Height="Auto"/>            <!-- Toolbar -->
+            <RowDefinition Height="*" MinHeight="200"/> <!-- Queue + controls -->
+            <RowDefinition Height="6"/>              <!-- Drag handle -->
+            <RowDefinition Height="150" MinHeight="80"/> <!-- Log panel -->
+            <RowDefinition Height="Auto"/>            <!-- Status bar -->
         </Grid.RowDefinitions>
 
         <!-- ── Toolbar ── -->
@@ -298,8 +297,17 @@
             </Grid>
         </Border>
 
+        <!-- ── Content area: queue + controls stacked inside a nested grid ── -->
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="80"/> <!-- Queue -->
+                <RowDefinition Height="Auto"/>              <!-- Controls: format + quality -->
+                <RowDefinition Height="Auto"/>              <!-- Controls: buttons -->
+                <RowDefinition Height="Auto"/>              <!-- Advanced panel -->
+            </Grid.RowDefinitions>
+
         <!-- ── Queue / Drop Zone ── -->
-        <Border Grid.Row="1" Margin="12,10,12,0" Background="White" CornerRadius="8"
+        <Border Grid.Row="0" Margin="12,10,12,0" Background="White" CornerRadius="8"
                 BorderBrush="#DCDFE6" BorderThickness="1"
                 AllowDrop="True" Drop="DropZone_Drop"
                 DragEnter="DropZone_DragEnter" DragLeave="DropZone_DragLeave"
@@ -331,7 +339,7 @@
         </Border>
 
         <!-- ── Controls row 1: format + quality + output ── -->
-        <Border Grid.Row="2" Margin="12,8,12,0" Background="White" CornerRadius="8"
+        <Border Grid.Row="1" Margin="12,8,12,0" Background="White" CornerRadius="8"
                 BorderBrush="#DCDFE6" BorderThickness="1" Padding="14,10">
             <StackPanel>
                 <!-- Format, lossless, quality, preserve metadata -->
@@ -431,7 +439,7 @@
         </Border>
 
         <!-- ── Controls row 2: action buttons ── -->
-        <Border Grid.Row="3" Margin="12,4,12,0" Padding="14,8">
+        <Border Grid.Row="2" Margin="12,4,12,0" Padding="14,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -495,7 +503,7 @@
         </Border>
 
         <!-- ── Advanced session options panel ── -->
-        <Border Grid.Row="4" Margin="12,0,12,0"
+        <Border Grid.Row="3" Margin="12,0,12,0"
                 Background="#F8F8FF" BorderBrush="#C5C8FF" BorderThickness="1" CornerRadius="8"
                 Padding="14,10"
                 Visibility="{Binding ShowAdvanced, Converter={StaticResource BoolToVisibleConverter}}">
@@ -516,11 +524,27 @@
                 <!-- Divider -->
                 <Rectangle Grid.Column="1" Width="1" Fill="#C5C8FF" VerticalAlignment="Stretch" Margin="11,0"/>
 
-                <!-- Skip format label -->
-                <TextBlock Grid.Column="2" Text="Skip input formats:"
-                           VerticalAlignment="Center" FontSize="12" Foreground="#555" Margin="0,0,10,0"/>
+                <!-- Skip/Only mode toggle + label -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <Border BorderBrush="#C5C8FF" BorderThickness="1" CornerRadius="4"
+                            VerticalAlignment="Center" Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal">
+                            <ToggleButton Content="Skip" Style="{StaticResource LosslessSegment}"
+                                          IsChecked="{Binding SessionOnlyMode, Converter={StaticResource InverseBoolConverter}}"
+                                          Tag="4,0,0,0" BorderThickness="0" BorderBrush="Transparent"
+                                          Background="Transparent" FontSize="10.5" Padding="7,3"/>
+                            <Rectangle Width="1" Fill="#C5C8FF" VerticalAlignment="Stretch"/>
+                            <ToggleButton Content="Only" Style="{StaticResource LosslessSegment}"
+                                          IsChecked="{Binding SessionOnlyMode}"
+                                          Tag="0,0,4,0" BorderThickness="0" BorderBrush="Transparent"
+                                          Background="Transparent" FontSize="10.5" Padding="7,3"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="input formats:" VerticalAlignment="Center"
+                               FontSize="12" Foreground="#555"/>
+                </StackPanel>
 
-                <!-- Format chips — checked = that format is excluded -->
+                <!-- Format chips — semantics depend on Skip/Only mode -->
                 <WrapPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                     <ToggleButton Content="JPG" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJpeg}"/>
                     <ToggleButton Content="PNG" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipPng}"/>
@@ -529,14 +553,33 @@
                     <ToggleButton Content="AVIF" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipAvif}"/>
                     <ToggleButton Content="JXL" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipJxl}"/>
                     <ToggleButton Content="HEIC" Style="{StaticResource FormatChip}" IsChecked="{Binding SkipHeic}"/>
-                    <TextBlock Text="(highlighted = skipped)" VerticalAlignment="Center"
+                    <TextBlock Text="{Binding SkipModeHint}" VerticalAlignment="Center"
                                FontSize="10" Foreground="#AAA" Margin="4,0,0,0" FontStyle="Italic"/>
                 </WrapPanel>
             </Grid>
         </Border>
 
+        </Grid>
+        <!-- end content area -->
+
+        <!-- ── Drag handle / splitter between content and log ── -->
+        <GridSplitter Grid.Row="2"
+                      HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                      ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
+                      Background="#DCDFE6" Cursor="SizeNS">
+            <!-- Grip dots -->
+            <GridSplitter.Template>
+                <ControlTemplate TargetType="GridSplitter">
+                    <Border Background="#E4E6EA" BorderBrush="#CCCCCC" BorderThickness="0,1,0,1">
+                        <TextBlock Text="· · ·" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="#AAAAAA" FontSize="10"/>
+                    </Border>
+                </ControlTemplate>
+            </GridSplitter.Template>
+        </GridSplitter>
+
         <!-- ── Log panel ── -->
-        <Border Grid.Row="5" Margin="12,4,12,0" Background="#16161E" CornerRadius="8">
+        <Border Grid.Row="3" Margin="12,0,12,0" Background="#16161E" CornerRadius="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10"
                           x:Name="LogScrollViewer">
                 <ItemsControl ItemsSource="{Binding LogLines}">
@@ -552,7 +595,7 @@
         </Border>
 
         <!-- ── Status bar ── -->
-        <Border Grid.Row="6" Background="#F0F2F5" Padding="14,7"
+        <Border Grid.Row="4" Background="#F0F2F5" Padding="14,7"
                 BorderBrush="#DCDFE6" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>

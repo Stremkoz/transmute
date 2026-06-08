@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Transmute.Core;
 using Transmute.Core.Config;
 using Transmute.Core.Models;
+using Transmute.Core.Processing;
 
 namespace Transmute.CLI.Commands;
 
@@ -10,7 +11,8 @@ public static class ConvertCommand
 {
     public static Command Build(ConfigManager configManager, ProfileManager profileManager)
     {
-        var inputsArg = new Argument<string[]>("inputs", "Input file(s) or folder(s) to convert")
+        var inputsArg = new Argument<string[]>("inputs",
+            "Input file(s) or folder(s) to convert. Pass '-' to read paths from stdin (one per line).")
         {
             Arity = ArgumentArity.OneOrMore,
         };
@@ -63,11 +65,23 @@ public static class ConvertCommand
             AllowMultipleArgumentsPerToken = true,
         };
 
+        var namePatternOpt = new Option<string?>("--name-pattern",
+            "Output filename pattern, e.g. '{name}-converted.{ext}'. Overrides config/profile setting.");
+        namePatternOpt.AddAlias("-n");
+
+        var logOpt   = new Option<bool>("--log",    "Write a log file after conversion, even when disabled in config");
+        var noLogOpt = new Option<bool>("--no-log", "Skip the log file, even when enabled in config");
+
+        var logFormatOpt = new Option<string?>("--log-format", "Log format: 'text' (default) or 'json'");
+
+        var dryRunOpt = new Option<bool>("--dry-run", "Preview which files would be converted and their output paths, without converting");
+
         var cmd = new Command("convert", "Convert image(s) to a target format")
         {
             inputsArg, formatOpt, outputOpt, outputDirOpt, qualityOpt, losslessOpt,
             methodOpt, effortOpt, jobsOpt, overwriteOpt, preserveMetaOpt, backendOpt,
-            recursiveOpt, profileOpt, skipOpt, onlyOpt,
+            recursiveOpt, profileOpt, skipOpt, onlyOpt, namePatternOpt,
+            logOpt, noLogOpt, logFormatOpt, dryRunOpt,
         };
 
         cmd.SetHandler(async (ctx) =>
@@ -88,6 +102,11 @@ public static class ConvertCommand
             var profileName  = ctx.ParseResult.GetValueForOption(profileOpt);
             var skipRaw      = ctx.ParseResult.GetValueForOption(skipOpt);
             var onlyRaw      = ctx.ParseResult.GetValueForOption(onlyOpt);
+            var namePattern  = ctx.ParseResult.GetValueForOption(namePatternOpt);
+            var logFlag      = ctx.ParseResult.GetValueForOption(logOpt);
+            var noLogFlag    = ctx.ParseResult.GetValueForOption(noLogOpt);
+            var logFormat    = ctx.ParseResult.GetValueForOption(logFormatOpt);
+            var dryRun       = ctx.ParseResult.GetValueForOption(dryRunOpt);
             var ct           = ctx.GetCancellationToken();
 
             // Normalize skip/only token lists — each token may itself be comma-separated
@@ -121,18 +140,15 @@ public static class ConvertCommand
 
             if (onlyTokens.Count > 0)
             {
-                // CLI --only: replaces everything
                 onlyFormats = onlyTokens;
                 Console.Error.WriteLine($"Format filter: only processing {string.Join(", ", onlyFormats)}.");
             }
             else if (skipTokens.Count > 0)
             {
-                // CLI --skip: replaces everything
                 skipFormats = skipTokens;
             }
             else if (profile is not null)
             {
-                // No CLI filter — use profile's filter
                 if (profile.HasOnlyFilter)
                 {
                     onlyFormats = profile.OnlyFormats
@@ -155,17 +171,17 @@ public static class ConvertCommand
 
             var options = new ConversionOptions
             {
-                Quality          = quality ?? GetDefaultQuality(format, defaults),
-                Lossless         = effectiveLossless,
-                WebpMethod       = method ?? defaults.WebpMethod,
-                JxlEffort        = effort ?? defaults.JxlEffort,
-                PreserveMetadata = preserveMeta,
-                Overwrite        = overwrite || defaults.OverwriteExisting,
-                OutputDirectory  = outputDir?.FullName ?? defaults.DefaultOutputDirectory,
-                OutputFile       = output,
-                ForcedBackend    = backend,
-                MaxParallelJobs  = jobs,
-                OutputNamingPattern = defaults.OutputNamingPattern,
+                Quality             = quality ?? GetDefaultQuality(format, defaults),
+                Lossless            = effectiveLossless,
+                WebpMethod          = method ?? defaults.WebpMethod,
+                JxlEffort           = effort ?? defaults.JxlEffort,
+                PreserveMetadata    = preserveMeta,
+                Overwrite           = overwrite || defaults.OverwriteExisting,
+                OutputDirectory     = outputDir?.FullName ?? defaults.DefaultOutputDirectory,
+                OutputFile          = output,
+                ForcedBackend       = backend,
+                MaxParallelJobs     = jobs,
+                OutputNamingPattern = namePattern ?? defaults.OutputNamingPattern,
             };
 
             if (output is not null && inputs.Length > 1)
@@ -189,7 +205,7 @@ public static class ConvertCommand
                     return;
                 }
 
-                // Warn about same-format inputs that will be skipped unless --overwrite is set
+                // Warn about same-format inputs
                 var sameFormat = allInputs
                     .Where(p => Path.GetExtension(p).TrimStart('.').Equals(fmt, StringComparison.OrdinalIgnoreCase))
                     .ToList();
@@ -210,8 +226,35 @@ public static class ConvertCommand
                         Options      = options,
                     }).ToList();
 
-                var modeLabel = effectiveLossless ? "lossless" : $"q{options.Quality}";
-                Console.WriteLine($"Converting {conversionJobs.Count} file(s) to {format.ToUpperInvariant()} ({modeLabel})...");
+                // ── Dry run — show plan and exit ──────────────────────────────────────
+                if (dryRun)
+                {
+                    var modeLabel = effectiveLossless ? "lossless" : $"q{options.Quality}";
+                    Console.WriteLine($"Dry run — {conversionJobs.Count} file(s) would be converted to {fmt.ToUpperInvariant()} ({modeLabel}):");
+                    Console.WriteLine();
+
+                    var inputColWidth = conversionJobs.Max(j => Path.GetFileName(j.InputPath).Length);
+                    foreach (var job in conversionJobs)
+                    {
+                        var inName  = Path.GetFileName(job.InputPath).PadRight(inputColWidth);
+                        var outName = Path.GetFileName(job.OutputPath);
+                        Console.WriteLine($"  {inName}  →  {outName}");
+                        if (job.InputPath != Path.GetDirectoryName(job.InputPath) + Path.DirectorySeparatorChar + Path.GetFileName(job.InputPath))
+                            Console.WriteLine($"    {job.InputPath}");
+                    }
+
+                    Console.WriteLine();
+                    if (namePattern is not null)
+                        Console.WriteLine($"  Name pattern : {namePattern}");
+                    if (options.OutputDirectory is not null)
+                        Console.WriteLine($"  Output dir   : {options.OutputDirectory}");
+                    Console.WriteLine($"  Overwrite    : {options.Overwrite}");
+                    return;
+                }
+
+                // ── Actual conversion ─────────────────────────────────────────────────
+                var modeStr = effectiveLossless ? "lossless" : $"q{options.Quality}";
+                Console.WriteLine($"Converting {conversionJobs.Count} file(s) to {format.ToUpperInvariant()} ({modeStr})...");
 
                 var totalSw = Stopwatch.StartNew();
                 var progress = new Progress<ConversionProgress>(p =>
@@ -240,12 +283,31 @@ public static class ConvertCommand
                 var skippedCount = results.Count(r => r.Skipped);
                 var failedCount  = results.Count(r => !r.Success && !r.Skipped);
 
-                var totalIn  = succeeded.Sum(r => r.InputBytes ?? 0);
-                var totalOut = succeeded.Sum(r => r.OutputBytes ?? 0);
+                var totalIn   = succeeded.Sum(r => r.InputBytes ?? 0);
+                var totalOut  = succeeded.Sum(r => r.OutputBytes ?? 0);
                 var totalSize = totalIn > 0 ? $"  {FormatSizeDelta(totalIn, totalOut).Trim()}" : string.Empty;
 
                 var skippedPart = skippedCount > 0 ? $", {skippedCount} skipped" : string.Empty;
                 Console.WriteLine($"\nDone: {succeeded.Count} succeeded{skippedPart}, {failedCount} failed — {totalSw.Elapsed.TotalSeconds:F1}s{totalSize}");
+
+                // Write log file — --log enables, --no-log suppresses, otherwise use config
+                bool writeLog = noLogFlag ? false : (logFlag ? true : config.Log.Enabled);
+                if (writeLog && results.Count > 0)
+                {
+                    try
+                    {
+                        var effectiveFormat = logFormat ?? config.Log.Format;
+                        var logDir = options.OutputDirectory
+                            ?? Path.GetDirectoryName(results[0].OutputPath)
+                            ?? ".";
+                        var logPath = LogWriter.Write(results, logDir, effectiveFormat, totalSw.Elapsed);
+                        Console.WriteLine($"Log written: {logPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Warning: could not write log file: {ex.Message}");
+                    }
+                }
 
                 if (failedCount > 0)
                     ctx.ExitCode = 1;
@@ -296,6 +358,34 @@ public static class ConvertCommand
     {
         foreach (var input in inputs)
         {
+            // "-" means read paths from stdin, one per line
+            if (input == "-")
+            {
+                string? line;
+                while ((line = Console.In.ReadLine()) is not null)
+                {
+                    line = line.Trim();
+                    if (string.IsNullOrEmpty(line)) continue;
+
+                    if (File.Exists(line))
+                    {
+                        var ext = Path.GetExtension(line).TrimStart('.').ToLowerInvariant();
+                        if (IsAllowed(ext, skipFormats, onlyFormats))
+                            yield return line;
+                    }
+                    else if (Directory.Exists(line))
+                    {
+                        foreach (var f in EnumerateFolder(line, recursive, skipFormats, onlyFormats))
+                            yield return f;
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"Warning: '{line}' not found, skipping.");
+                    }
+                }
+                continue;
+            }
+
             if (File.Exists(input))
             {
                 var ext = Path.GetExtension(input).TrimStart('.').ToLowerInvariant();
@@ -304,18 +394,26 @@ public static class ConvertCommand
             }
             else if (Directory.Exists(input))
             {
-                var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-                foreach (var file in Directory.EnumerateFiles(input, "*", option))
-                {
-                    var ext = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
-                    if (ImageExtensions.Contains($".{ext}") && IsAllowed(ext, skipFormats, onlyFormats))
-                        yield return file;
-                }
+                foreach (var f in EnumerateFolder(input, recursive, skipFormats, onlyFormats))
+                    yield return f;
             }
             else
             {
                 Console.Error.WriteLine($"Warning: '{input}' not found, skipping.");
             }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateFolder(
+        string folder, bool recursive,
+        HashSet<string> skipFormats, HashSet<string>? onlyFormats)
+    {
+        var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        foreach (var file in Directory.EnumerateFiles(folder, "*", option))
+        {
+            var ext = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
+            if (ImageExtensions.Contains($".{ext}") && IsAllowed(ext, skipFormats, onlyFormats))
+                yield return file;
         }
     }
 

@@ -7,6 +7,13 @@ public class AppConfig
     public BinariesConfig Binaries { get; set; } = new();
     public ProcessingConfig Processing { get; set; } = new();
     public DefaultsConfig Defaults { get; set; } = new();
+    public LogConfig Log { get; set; } = new();
+}
+
+public class LogConfig
+{
+    public bool Enabled { get; set; } = false;
+    public string Format { get; set; } = "text";  // "text" or "json"
 }
 
 public class BinariesConfig

@@ -41,6 +41,14 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _outputNamingPattern = string.Empty;
     [ObservableProperty] private string? _defaultOutputDirectory;
 
+    // Log file — global settings
+    [ObservableProperty] private bool _logEnabled = false;
+    [ObservableProperty] private bool _logFormatIsJson = false;  // false=text, true=json
+
+    // Format filter — per named profile only; Default profile has no filter
+    [ObservableProperty] private string _profileFormatFilter = string.Empty;  // comma-separated
+    [ObservableProperty] private bool _profileFilterIsOnly = false;            // false=skip, true=only
+
     // Profile selection — synced with main window on open
     [ObservableProperty] private string _selectedProfile = ProfileManager.DefaultProfileName;
     public ObservableCollection<string> Profiles { get; } = new();
@@ -83,16 +91,18 @@ public partial class SettingsViewModel : ObservableObject
     private void LoadDefaults()
     {
         DefaultsConfig d;
+        ProfileConfig? rawProfile = null;
+
         if (IsDefaultProfile)
         {
             d = _configManager.Config.Defaults;
         }
         else
         {
-            var profile = _profileManager.Load(SelectedProfile);
-            if (profile is null) { LoadDefaults(); return; }
+            rawProfile = _profileManager.Load(SelectedProfile);
+            if (rawProfile is null) { LoadDefaults(); return; }
             // Show effective values (profile overrides on top of global) so the user sees what they actually get
-            d = profile.ApplyOver(_configManager.Config.Defaults);
+            d = rawProfile.ApplyOver(_configManager.Config.Defaults);
         }
 
         WebpQuality        = d.WebpQuality;
@@ -106,6 +116,23 @@ public partial class SettingsViewModel : ObservableObject
         JxlEffort          = d.JxlEffort;
         OutputNamingPattern = d.OutputNamingPattern;
         DefaultOutputDirectory = d.DefaultOutputDirectory ?? string.Empty;
+
+        // Format filter is profile-specific only
+        if (rawProfile?.HasOnlyFilter == true)
+        {
+            ProfileFilterIsOnly = true;
+            ProfileFormatFilter = string.Join(", ", rawProfile.OnlyFormats);
+        }
+        else if (rawProfile?.HasSkipFilter == true)
+        {
+            ProfileFilterIsOnly = false;
+            ProfileFormatFilter = string.Join(", ", rawProfile.SkipFormats);
+        }
+        else
+        {
+            ProfileFilterIsOnly = false;
+            ProfileFormatFilter = string.Empty;
+        }
     }
 
     private void LoadGlobalOnly()
@@ -121,6 +148,9 @@ public partial class SettingsViewModel : ObservableObject
         MaxParallelJobs = c.Processing.MaxParallelJobs;
         VipsConcurrency = c.Processing.VipsConcurrency;
         TempDirectory   = c.Processing.TempDirectory ?? string.Empty;
+
+        LogEnabled      = c.Log.Enabled;
+        LogFormatIsJson = string.Equals(c.Log.Format, "json", StringComparison.OrdinalIgnoreCase);
     }
 
     [RelayCommand]
@@ -138,6 +168,9 @@ public partial class SettingsViewModel : ObservableObject
         c.Processing.MaxParallelJobs = MaxParallelJobs;
         c.Processing.VipsConcurrency = VipsConcurrency;
         c.Processing.TempDirectory   = NullIfEmpty(TempDirectory);
+
+        c.Log.Enabled = LogEnabled;
+        c.Log.Format  = LogFormatIsJson ? "json" : "text";
 
         if (IsDefaultProfile)
         {
@@ -178,6 +211,24 @@ public partial class SettingsViewModel : ObservableObject
             existing.DefaultOutputDirectory = NullIfEmpty(DefaultOutputDirectory ?? string.Empty) != global.DefaultOutputDirectory
                 ? NullIfEmpty(DefaultOutputDirectory ?? string.Empty)
                 : null;
+
+            // Format filter
+            var parsedFormats = ProfileFormatFilter
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.TrimStart('.').ToLowerInvariant())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .Distinct()
+                .ToList();
+            if (ProfileFilterIsOnly)
+            {
+                existing.OnlyFormats = parsedFormats;
+                existing.SkipFormats = [];
+            }
+            else
+            {
+                existing.SkipFormats = parsedFormats;
+                existing.OnlyFormats = [];
+            }
 
             _profileManager.Save(existing);
         }
