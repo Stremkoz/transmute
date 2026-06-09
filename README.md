@@ -639,7 +639,7 @@ Summary: 2 succeeded, 1 skipped, 1 failed
 - Windows (GUI requires WPF)
 
 ```bash
-git clone https://github.com/yourname/transmute
+git clone https://github.com/Stremkoz/transmute
 cd transmute
 
 # Build everything
