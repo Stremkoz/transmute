@@ -1,6 +1,6 @@
 # CLI Reference
 
-Transmute's command-line interface is available as `Transmute.CLI.exe` (or `transmute` if it's on your PATH). Every command accepts `--help` for a quick inline reference.
+Transmute's command-line interface is available as `Transmute-cli.exe` (or `transmute` if it's on your PATH). Every command accepts `--help` for a quick inline reference.
 
 ---
 
