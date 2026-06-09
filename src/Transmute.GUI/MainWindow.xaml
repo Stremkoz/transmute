@@ -200,23 +200,28 @@
         <!-- ── Queue list item container ── -->
         <Style x:Key="QueueItemStyle" TargetType="ListViewItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background"       Value="Transparent"/>
             <Setter Property="Padding"          Value="0"/>
             <Setter Property="Margin"           Value="0"/>
             <Setter Property="BorderThickness"  Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListViewItem">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                BorderThickness="0,0,0,1"
-                                BorderBrush="{DynamicResource ListItemBorderBrush}">
-                            <ContentPresenter/>
+                        <Border x:Name="SelAccent" BorderThickness="0"
+                                BorderBrush="{DynamicResource AccentBrush}">
+                            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                    BorderThickness="0,0,0,1"
+                                    BorderBrush="{DynamicResource ListItemBorderBrush}">
+                                <ContentPresenter/>
+                            </Border>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ListItemHoverBackground}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ListItemSelectedBackground}"/>
+                                <Setter TargetName="Bd"       Property="Background"    Value="{DynamicResource ListItemSelectedBackground}"/>
+                                <Setter TargetName="SelAccent" Property="BorderThickness" Value="3,0,0,0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -412,15 +417,28 @@
                               ItemContainerStyle="{StaticResource QueueItemStyle}"
                               BorderThickness="0" Background="Transparent"
                               AllowDrop="True"
+                              SelectionMode="Extended"
                               PreviewMouseMove="QueueList_PreviewMouseMove"
                               DragOver="QueueList_DragOver"
                               Drop="QueueList_Drop"
                               DragLeave="QueueList_DragLeave"
+                              PreviewMouseRightButtonDown="QueueList_PreviewMouseRightButtonDown"
+                              ContextMenuOpening="QueueList_ContextMenuOpening"
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling"
                               ScrollViewer.IsDeferredScrollingEnabled="True"
                               Visibility="{Binding InputFiles.Count,
-                                  Converter={StaticResource NonZeroToVisibleConverter}}"/>
+                                  Converter={StaticResource NonZeroToVisibleConverter}}">
+                        <ListView.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Tag="remove"     Header="Remove"                 Click="QueueCtx_Click"/>
+                                <MenuItem Tag="openfolder" Header="Open containing folder" Click="QueueCtx_Click"/>
+                                <MenuItem Tag="selectall"  Header="Select all"             Click="QueueCtx_Click"/>
+                                <Separator/>
+                                <MenuItem Tag="clear"      Header="Clear queue"            Click="QueueCtx_Click"/>
+                            </ContextMenu>
+                        </ListView.ContextMenu>
+                    </ListView>
                 </Grid>
             </Border>
 

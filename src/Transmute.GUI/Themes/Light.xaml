@@ -42,8 +42,8 @@
     <SolidColorBrush x:Key="SecondaryButtonHoverBackground"  Color="#E8E8E8"/>
 
     <!-- Queue list items -->
-    <SolidColorBrush x:Key="ListItemHoverBackground"    Color="#F5F8FF"/>
-    <SolidColorBrush x:Key="ListItemSelectedBackground" Color="#EAF2FB"/>
+    <SolidColorBrush x:Key="ListItemHoverBackground"    Color="#EBF2FF"/>
+    <SolidColorBrush x:Key="ListItemSelectedBackground" Color="#C8DFF5"/>
     <SolidColorBrush x:Key="ListItemBorderBrush"        Color="#EBEBEB"/>
 
     <!-- Segmented toggle buttons -->

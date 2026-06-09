@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private int    _dragSourceIndex = -1;
     private Point  _dragStart;
     private DropIndicatorAdorner? _dropAdorner;
+    private List<int>? _dragSourceIndices;
 
     public MainWindow(MainViewModel vm)
     {
@@ -97,9 +98,16 @@ public partial class MainWindow : Window
             {
                 _dragSourceIndex = idx;
                 _dragStart = e.GetPosition(QueueList);
+                _dragSourceIndices = QueueList.SelectedItems.Contains(ctx) && QueueList.SelectedItems.Count > 1
+                    ? QueueList.SelectedItems.Cast<object>()
+                        .Select(item => _vm.InputFiles.IndexOf(item))
+                        .Where(i => i >= 0)
+                        .OrderBy(i => i)
+                        .ToList()
+                    : null;
             }
         }
-        e.Handled = true; // prevent list item selection on gripper click
+        e.Handled = true;
     }
 
     private void QueueList_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -115,28 +123,37 @@ public partial class MainWindow : Window
 
         // DoDragDrop is synchronous — clean up after it returns
         _dragSourceIndex = -1;
+        _dragSourceIndices = null;
         RemoveDropIndicator();
     }
 
     private void QueueList_DragOver(object sender, DragEventArgs e)
     {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+            return;
+        }
         if (_dragSourceIndex < 0)
         {
             e.Effects = DragDropEffects.None;
             e.Handled = true;
             return;
         }
-
         e.Effects = DragDropEffects.Move;
         e.Handled = true;
-
         var (toIndex, y) = GetDropInfo(e);
-        // Suppress indicator at positions that would be no-ops
-        var adjusted = toIndex > _dragSourceIndex ? toIndex - 1 : toIndex;
-        if (adjusted == _dragSourceIndex)
-            RemoveDropIndicator();
-        else
+        if (_dragSourceIndices != null)
+        {
             ShowDropIndicator(y);
+        }
+        else
+        {
+            var adjusted = toIndex > _dragSourceIndex ? toIndex - 1 : toIndex;
+            if (adjusted == _dragSourceIndex) RemoveDropIndicator();
+            else ShowDropIndicator(y);
+        }
     }
 
     private void QueueList_DragLeave(object sender, DragEventArgs e)
@@ -150,8 +167,26 @@ public partial class MainWindow : Window
         if (_dragSourceIndex < 0) return;
 
         var (toIndex, _) = GetDropInfo(e);
-        _vm.MoveEntry(_dragSourceIndex, toIndex);
+
+        if (_dragSourceIndices != null)
+        {
+            var movedItems = _dragSourceIndices.Select(i => _vm.InputFiles[i]).ToList();
+            _vm.MoveEntries(_dragSourceIndices, toIndex);
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.DataBind, () =>
+            {
+                QueueList.SelectedItems.Clear();
+                foreach (var item in movedItems)
+                    if (QueueList.Items.Contains(item))
+                        QueueList.SelectedItems.Add(item);
+            });
+        }
+        else
+        {
+            _vm.MoveEntry(_dragSourceIndex, toIndex);
+        }
+
         _dragSourceIndex = -1;
+        _dragSourceIndices = null;
         e.Handled = true;
     }
 
@@ -307,10 +342,76 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Delete && QueueList.SelectedItem is { } item)
+        if (e.Key == Key.Delete && !_vm.IsConverting && QueueList.SelectedItems.Count > 0)
         {
-            _vm.RemoveEntryCommand.Execute(item);
+            _vm.RemoveEntries(QueueList.SelectedItems.Cast<object>().ToList());
             e.Handled = true;
+        }
+    }
+
+    // ── Queue context menu ────────────────────────────────────────────────────
+
+    private void QueueList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var element = e.OriginalSource as DependencyObject;
+        while (element is not null and not ListViewItem)
+            element = VisualTreeHelper.GetParent(element);
+
+        if (element is ListViewItem lvi && lvi.DataContext is { } clickedItem
+            && !QueueList.SelectedItems.Contains(clickedItem))
+        {
+            QueueList.SelectedItem = clickedItem;
+        }
+    }
+
+    private void QueueList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (QueueList.ContextMenu is not ContextMenu cm) return;
+        int sel = QueueList.SelectedItems.Count;
+        foreach (var mi in cm.Items.OfType<MenuItem>())
+        {
+            switch (mi.Tag as string)
+            {
+                case "remove":
+                    mi.IsEnabled = sel > 0;
+                    mi.Header = sel > 1 ? $"Remove ({sel} items)" : "Remove";
+                    break;
+                case "openfolder":
+                    mi.IsEnabled = sel == 1;
+                    break;
+                case "selectall":
+                case "clear":
+                    mi.IsEnabled = _vm.InputFiles.Count > 0;
+                    break;
+            }
+        }
+    }
+
+    private void QueueCtx_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem mi) return;
+        switch (mi.Tag as string)
+        {
+            case "remove":
+                _vm.RemoveEntries(QueueList.SelectedItems.Cast<object>().ToList());
+                break;
+            case "openfolder":
+                string? dir = QueueList.SelectedItem switch
+                {
+                    FileEntryViewModel fvm   => System.IO.Path.GetDirectoryName(fvm.Path),
+                    FolderEntryViewModel fld => fld.Path,
+                    _                        => null
+                };
+                if (dir != null)
+                    try { System.Diagnostics.Process.Start("explorer.exe", $"\"{dir}\""); }
+                    catch { }
+                break;
+            case "selectall":
+                QueueList.SelectAll();
+                break;
+            case "clear":
+                _vm.ClearFilesCommand.Execute(null);
+                break;
         }
     }
 

@@ -17,17 +17,12 @@ using Transmute.Core.Processing;
 
 namespace Transmute.GUI.ViewModels;
 
-// Raises a single Reset notification for batch adds instead of one per item,
-// keeping the UI fast when adding hundreds of files at once.
 public class BulkObservableCollection<T> : ObservableCollection<T>
 {
     public void AddRange(IEnumerable<T> items)
     {
         foreach (var item in items)
-            Items.Add(item);
-        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
-        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
-        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+            Add(item);
     }
 }
 
@@ -265,6 +260,32 @@ public partial class MainViewModel : ObservableObject
         var adjusted = toIndex > fromIndex ? toIndex - 1 : toIndex;
         if (adjusted != fromIndex)
             InputFiles.Move(fromIndex, adjusted);
+    }
+
+    public void RemoveEntries(IEnumerable<object> entries)
+    {
+        foreach (var entry in entries.ToList())
+            InputFiles.Remove(entry);
+        UpdateStatus();
+    }
+
+    public void MoveEntries(IList<int> sourceIndices, int toIndex)
+    {
+        if (sourceIndices.Count == 0) return;
+        var sorted = sourceIndices.OrderBy(i => i).ToList();
+        if (sorted[0] < 0 || sorted[^1] >= InputFiles.Count) return;
+        toIndex = Math.Clamp(toIndex, 0, InputFiles.Count);
+
+        var items = sorted.Select(i => InputFiles[i]).ToList();
+        int removedBeforeTarget = sorted.Count(i => i < toIndex);
+        int insertAt = toIndex - removedBeforeTarget;
+
+        foreach (var idx in sorted.AsEnumerable().Reverse())
+            InputFiles.RemoveAt(idx);
+
+        insertAt = Math.Clamp(insertAt, 0, InputFiles.Count);
+        for (int j = 0; j < items.Count; j++)
+            InputFiles.Insert(insertAt + j, items[j]);
     }
 
     [RelayCommand]
