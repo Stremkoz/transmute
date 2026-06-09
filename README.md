@@ -9,6 +9,7 @@ Transmute converts images between formats using the best available tool for the 
 ## Table of Contents
 
 - [Features](#features)
+- [Preview](#preview)
 - [Supported Formats](#supported-formats)
 - [Requirements & Installation](#requirements--installation)
   - [Installing Backends](#installing-backends)
@@ -49,6 +50,25 @@ Transmute converts images between formats using the best available tool for the 
 - **Log files** — optional text or JSON conversion log written alongside output files
 - **Stdin piping** — feed file paths from other tools via stdin
 - **Light / Dark / System theme** — full dark mode support across all windows
+
+---
+
+## Preview
+
+<p align="center">
+  <img src="docs/previews/DarkLight.png" alt="Light and dark theme" width="800"/>
+  <br><em>Light and dark theme</em>
+</p>
+
+<p align="center">
+  <img src="docs/previews/Transmute2.png" alt="Batch conversion complete — 42 files, 330 MB → 26.3 MB (-92%)" width="800"/>
+  <br><em>Batch conversion complete — 42 files, 330 MB → 26.3 MB (-92%)</em>
+</p>
+
+<p align="center">
+  <img src="docs/previews/Transmute.png" alt="Advanced panel with per-session format filters" width="800"/>
+  <br><em>Advanced panel with per-session format filters</em>
+</p>
 
 ---
 
