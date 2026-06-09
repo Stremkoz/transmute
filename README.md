@@ -77,33 +77,33 @@ JPEG, PNG, WebP, AVIF, HEIF/HEIC, TIFF, GIF (animated), APNG (animated), BMP, JP
 
 **Runtime:** .NET 9.0
 
-Download the latest release from the [Releases page](#). Extract and run `Transmute.GUI.exe` for the GUI or `Transmute.CLI.exe` for the CLI.
+Download the latest release from the [Releases page](../../releases). Extract the zip and run `transmute-gui.exe` for the GUI or `transmute.exe` for the CLI.
 
-Transmute works out of the box with no additional software if libvips is bundled in the release. Other backends are optional and extend format and quality support.
+Transmute itself has no mandatory dependencies beyond .NET 9, but it needs at least one backend installed to do anything useful. libvips covers the most ground and is the recommended starting point.
 
 ### Installing Backends
 
-Transmute discovers backends automatically from your system `PATH`. Install any of the following to extend its capabilities:
+Transmute discovers backends automatically from your system `PATH`. All backends are optional — install whichever formats you need:
 
 | Backend | What it adds | Get it |
 |---------|-------------|--------|
-| **libvips** | Fast general-purpose conversion (JPEG, PNG, TIFF, AVIF, HEIC, WebP, JP2, SVG, …) | Bundled in releases, or [libvips.github.io](https://libvips.github.io/libvips/) |
+| **libvips** | Fast general-purpose conversion (JPEG, PNG, TIFF, AVIF, HEIC, WebP, JP2, SVG, …) | [libvips.github.io](https://libvips.github.io/libvips/) |
 | **cwebp / dwebp** | Best-quality WebP encoding and decoding | [developers.google.com/speed/webp](https://developers.google.com/speed/webp/docs/precompiled) |
 | **cjxl / djxl** | JPEG XL encoding and decoding | [github.com/libjxl/libjxl](https://github.com/libjxl/libjxl/releases) |
 | **ffmpeg** | Animated GIF/APNG/WebP, video frame extraction | [ffmpeg.org/download.html](https://ffmpeg.org/download.html) |
 | **ImageMagick** | Broad format fallback (PSD, EPS, EXR, PDF, ICO, …) | [imagemagick.org](https://imagemagick.org/script/download.php) |
 
-Check which backends Transmute can find:
+Add each backend's `bin` folder to your system PATH, or check which ones Transmute can already find:
 
 ```
 transmute backends
 ```
 
-If a binary isn't on `PATH`, you can set its path manually:
+If a binary isn't on `PATH`, you can point Transmute directly to it. The paths below are **examples** — use wherever you actually installed the tool:
 
 ```
-transmute config set binaries.cwebp "C:\tools\libwebp\bin\cwebp.exe"
-transmute config set binaries.cjxl  "C:\tools\libjxl\cjxl.exe"
+transmute config set binaries.cwebp "C:\path\to\cwebp.exe"
+transmute config set binaries.cjxl  "C:\path\to\cjxl.exe"
 ```
 
 ### Portable vs Installed Mode
@@ -117,7 +117,7 @@ transmute config set binaries.cjxl  "C:\tools\libjxl\cjxl.exe"
 
 ### GUI Quick Start
 
-1. Launch `Transmute.GUI.exe`
+1. Launch `transmute-gui.exe`
 2. Drag images or folders onto the window (or use **Ctrl+O** to browse)
 3. Pick a target format from the dropdown
 4. Adjust quality with the slider if needed
