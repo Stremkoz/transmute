@@ -61,12 +61,12 @@ Transmute converts images between formats using the best available tool for the 
 </p>
 
 <p align="center">
-  <img src="docs/previews/Transmute2.png" alt="Batch conversion complete — 42 files, 330 MB → 26.3 MB (-92%)" width="800"/>
+  <img src="docs/previews/Transmute.png" alt="Batch conversion complete — 42 files, 330 MB → 26.3 MB (-92%)" width="800"/>
   <br><em>Batch conversion complete — 42 files, 330 MB → 26.3 MB (-92%)</em>
 </p>
 
 <p align="center">
-  <img src="docs/previews/Transmute.png" alt="Advanced panel with per-session format filters" width="800"/>
+  <img src="docs/previews/Transmute2.png" alt="Advanced panel with per-session format filters" width="800"/>
   <br><em>Advanced panel with per-session format filters</em>
 </p>
 
