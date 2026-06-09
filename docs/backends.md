@@ -8,7 +8,7 @@ Transmute delegates the actual work of converting images to external tools calle
 
 ### libvips (NetVips)
 
-The fastest general-purpose backend. Handles most static image formats without needing any external binary.
+The fastest general-purpose backend. Handles most static image formats without needing any other external binary.
 
 **Best for:** JPEG, PNG, TIFF, AVIF, HEIF/HEIC, WebP (static), GIF (static), SVG, JPEG 2000, HDR
 
