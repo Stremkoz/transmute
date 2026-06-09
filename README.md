@@ -1,13 +1,13 @@
 # Transmute
+**A smart, multi-backend image converter for Windows — with both a GUI and a full-featured CLI.**
+
+Transmute converts images between formats using the best available tool for the job. Drop files into the GUI, or script bulk conversions with the CLI. It automatically selects from up to five conversion backends (libvips, cwebp, cjxl, ffmpeg, ImageMagick), chains them together when needed, and degrades gracefully when some are not installed.
+
 
 <p align="center">
   <img src="docs/previews/DarkLight.png" alt="Light and dark theme" width="800"/>
   <br><em>Light and dark theme</em>
 </p>
-
-**A smart, multi-backend image converter for Windows — with both a GUI and a full-featured CLI.**
-
-Transmute converts images between formats using the best available tool for the job. Drop files into the GUI, or script bulk conversions with the CLI. It automatically selects from up to five conversion backends (libvips, cwebp, cjxl, ffmpeg, ImageMagick), chains them together when needed, and degrades gracefully when some are not installed.
 
 ---
 
