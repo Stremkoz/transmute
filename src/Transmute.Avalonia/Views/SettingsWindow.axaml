@@ -1,0 +1,324 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Transmute.Avalonia"
+        xmlns:vm="clr-namespace:Transmute.Avalonia.ViewModels"
+        x:Class="Transmute.Avalonia.Views.SettingsWindow"
+        Title="Transmute Settings" Width="660" Height="620"
+        WindowStartupLocation="CenterOwner" CanResize="False"
+        Background="{DynamicResource AppBackground}">
+
+    <Grid RowDefinitions="*,Auto">
+
+        <TabControl Grid.Row="0">
+
+            <!-- ── Binaries tab ── -->
+            <TabItem Header="Binaries">
+                <ScrollViewer Margin="16">
+                    <StackPanel>
+                        <TextBlock Classes="sectionHeader" Text="Backend Binary Paths"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,10"
+                                   Text="Leave blank to auto-detect from system PATH. Enter a full path to override."/>
+
+                        <Grid Margin="0,4" ColumnDefinitions="100,*">
+                            <TextBlock Classes="label" Text="cwebp"/>
+                            <TextBox Grid.Column="1" Classes="path" Text="{Binding CwebpPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="100,*">
+                            <TextBlock Classes="label" Text="dwebp"/>
+                            <TextBox Grid.Column="1" Classes="path" Text="{Binding DwebpPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="100,*">
+                            <TextBlock Classes="label" Text="cjxl"/>
+                            <TextBox Grid.Column="1" Classes="path" Text="{Binding CjxlPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="100,*">
+                            <TextBlock Classes="label" Text="djxl"/>
+                            <TextBox Grid.Column="1" Classes="path" Text="{Binding DjxlPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="100,*">
+                            <TextBlock Classes="label" Text="ffmpeg"/>
+                            <TextBox Grid.Column="1" Classes="path" Text="{Binding FfmpegPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="100,*">
+                            <TextBlock Classes="label" Text="magick"/>
+                            <TextBox Grid.Column="1" Classes="path" Text="{Binding MagickPath}"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Spacing="8">
+                            <Button Content="Auto-Detect All from PATH" Classes="secondary"
+                                    Command="{Binding AutoDetectAllCommand}"/>
+                            <Button Content="⬇ Download Binaries" Classes="secondary"
+                                    Command="{Binding DownloadBinariesCommand}"/>
+                        </StackPanel>
+
+                        <TextBlock Classes="sectionHeader" Text="Config File Location" Margin="0,20,0,4"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4" Spacing="6">
+                            <TextBlock Classes="hint" Text="Mode:" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding ConfigMode}" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource FolderTitleBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBox IsReadOnly="True" Classes="path"
+                                 Text="{Binding ConfigFilePath, Mode=OneWay}"
+                                 Background="{DynamicResource ReadOnlyInputBackground}"/>
+                        <TextBlock Classes="hint" Margin="0,4,0,0" FontSize="10"
+                                   Text="To use portable mode: place a file named &quot;portable&quot; (no extension) beside the exe, or copy config.json there. Transmute will use that file instead of AppData."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ── Processing tab ── -->
+            <TabItem Header="Processing">
+                <ScrollViewer Margin="16">
+                    <StackPanel>
+                        <TextBlock Classes="sectionHeader" Text="Parallel Processing"/>
+
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="Max parallel jobs"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="0" Maximum="32" Value="{Binding MaxParallelJobs}"
+                                        Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="{Binding MaxParallelJobs, StringFormat='{}{0} (0 = auto)'}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="libvips threads"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="0" Maximum="32" Value="{Binding VipsConcurrency}"
+                                        Width="200" VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="{Binding VipsConcurrency, StringFormat='{}{0} (0 = uncapped)'}"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Classes="hint" Margin="150,2,0,0"
+                                   Text="libvips will use every available core if uncapped. 2–4 is a good limit when running multiple parallel jobs."/>
+
+                        <TextBlock Classes="sectionHeader" Text="Temp Directory" Margin="0,16,0,6"/>
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="Temp directory"/>
+                            <TextBox Grid.Column="1" Classes="path" Text="{Binding TempDirectory}"/>
+                        </Grid>
+
+                        <TextBlock Classes="sectionHeader" Text="Notifications" Margin="0,16,0,4"/>
+                        <CheckBox Content="Play sound on completion"
+                                  IsChecked="{Binding PlaySoundOnCompletion}" Margin="0,0,0,4"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,8"
+                                   Text="Uses system sounds — a chime for success, a warning sound if there were failures or routing fallbacks. Respects your system volume. (On Linux, requires PulseAudio/PipeWire's paplay or canberra-gtk-play.)"/>
+
+                        <TextBlock Classes="sectionHeader" Text="Log File" Margin="0,8,0,4"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,8"
+                                   Text="After each conversion, write a log file beside the output images. Disabled by default."/>
+                        <CheckBox Content="Write log file after conversion"
+                                  IsChecked="{Binding LogEnabled}" Margin="0,0,0,8"/>
+
+                        <Grid Margin="0,2" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="Log format" IsEnabled="{Binding LogEnabled}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" IsEnabled="{Binding LogEnabled}" Spacing="10">
+                                <Border BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1"
+                                        CornerRadius="4" VerticalAlignment="Center" ClipToBounds="True">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ToggleButton Content=".log  (text)" Classes="segment" FontSize="11" Padding="9,3"
+                                                      IsChecked="{Binding LogFormatIsJson, Converter={x:Static local:Converters.InverseBool}}"/>
+                                        <Rectangle Width="1" Fill="{DynamicResource InputBorderBrush}"/>
+                                        <ToggleButton Content=".json" Classes="segment" FontSize="11" Padding="9,3"
+                                                      IsChecked="{Binding LogFormatIsJson}"/>
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock VerticalAlignment="Center" Classes="hint"
+                                           Text="{Binding LogFormatHint}"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ── Defaults tab ── -->
+            <TabItem Header="Defaults">
+                <ScrollViewer Margin="16">
+                    <StackPanel>
+
+                        <!-- Profile selector banner -->
+                        <Border Background="{DynamicResource ProfileBannerBackground}"
+                                BorderBrush="{DynamicResource ProfileBannerBorderBrush}"
+                                BorderThickness="1" CornerRadius="6"
+                                Padding="12,8" Margin="0,0,0,14">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="Editing profile:" FontSize="12" FontWeight="SemiBold"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <ComboBox ItemsSource="{Binding Profiles}"
+                                              SelectedItem="{Binding SelectedProfile}"
+                                              MinWidth="160" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,6,0,0" TextWrapping="Wrap"
+                                           Text="{Binding ProfileBannerText}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Classes="sectionHeader" Text="Default Quality"/>
+
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="WebP quality"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="1" Maximum="100" Value="{Binding WebpQuality}" Width="200"
+                                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding WebpQuality, StringFormat={}{0}%}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="JPEG quality"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="1" Maximum="100" Value="{Binding JpegQuality}" Width="200"
+                                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding JpegQuality, StringFormat={}{0}%}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="JXL quality"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="1" Maximum="100" Value="{Binding JxlQuality}" Width="200"
+                                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding JxlQuality, StringFormat={}{0}%}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="AVIF quality"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="1" Maximum="100" Value="{Binding AvifQuality}" Width="200"
+                                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding AvifQuality, StringFormat={}{0}%}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Classes="sectionHeader" Text="Compression Effort" Margin="0,16,0,4"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,8"
+                                   Text="Higher effort = smaller files but slower encoding."/>
+
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="WebP method"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="0" Maximum="6" Value="{Binding WebpMethod}" Width="200"
+                                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding WebpMethod, StringFormat='{}{0} / 6'}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="JXL effort"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="1" Maximum="9" Value="{Binding JxlEffort}" Width="200"
+                                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding JxlEffort, StringFormat='{}{0} / 9'}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Classes="sectionHeader" Text="Behavior" Margin="0,16,0,6"/>
+
+                        <Grid Margin="0,4" ColumnDefinitions="150,*">
+                            <TextBlock Classes="label" Text="Metadata"/>
+                            <ComboBox Grid.Column="1" Width="380" HorizontalAlignment="Left" FontSize="12"
+                                      ItemsSource="{x:Static vm:SettingsViewModel.MetadataModes}"
+                                      SelectedValue="{Binding MetadataMode}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      DisplayMemberBinding="{Binding Label}"/>
+                        </Grid>
+
+                        <CheckBox Content="Overwrite existing files" IsChecked="{Binding OverwriteExisting}" Margin="0,4"/>
+
+                        <TextBlock Classes="sectionHeader" Text="Lossless Default" Margin="0,16,0,4"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,8"
+                                   Text="Applies to formats that support it (JXL, WebP). Can be overridden per session in the main window."/>
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <RadioButton Content="Lossless" IsChecked="{Binding LosslessDefault}"
+                                         VerticalAlignment="Center"/>
+                            <RadioButton Content="Lossy (quality-based)"
+                                         IsChecked="{Binding LosslessDefault, Converter={x:Static local:Converters.InverseBool}}"
+                                         VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <TextBlock Classes="sectionHeader" Text="Output Naming Pattern" Margin="0,16,0,4"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,6"
+                                   Text="Tokens: {name} = filename without extension,  {ext} = target format,  {original_ext} = source extension,  {date} = yyyyMMdd,  {counter} = auto-padded sequence number (e.g. 001, 002… for a 100+ file batch)"/>
+                        <TextBox Classes="path" Text="{Binding OutputNamingPattern}"/>
+
+                        <TextBlock Classes="sectionHeader" Text="Default Output Folder" Margin="0,16,0,4"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,6"
+                                   Text="Where converted files are saved by default. Leave empty to save beside the source file. Can be overridden per session in the main window."/>
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBox Grid.Column="0" Classes="path" Text="{Binding DefaultOutputDirectory}"/>
+                            <Button Grid.Column="1" Content="Browse…" Classes="secondary"
+                                    Padding="10,5" Margin="4,0,0,0" FontSize="11"
+                                    Click="BrowseDefaultOutput_Click"/>
+                            <Button Grid.Column="2" Content="Clear" Classes="secondary"
+                                    Padding="10,5" Margin="4,0,0,0" FontSize="11"
+                                    Click="ClearDefaultOutput_Click"/>
+                        </Grid>
+
+                        <!-- Input format filter — named profiles only; hidden for Default -->
+                        <StackPanel IsVisible="{Binding IsNamedProfile}">
+                            <TextBlock Classes="sectionHeader" Text="Input Format Filter" Margin="0,16,0,4"/>
+                            <TextBlock Classes="hint" Margin="0,0,0,8"
+                                       Text="Restrict which input formats this profile acts on. Leave empty to process everything. Comma-separated extensions, e.g. jpg, png"/>
+
+                            <Grid ColumnDefinitions="150,*">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                                    <Border BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1"
+                                            CornerRadius="4" VerticalAlignment="Center" ClipToBounds="True">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ToggleButton Content="Skip" Classes="segment" FontSize="11" Padding="9,3"
+                                                          IsChecked="{Binding ProfileFilterIsOnly, Converter={x:Static local:Converters.InverseBool}}"/>
+                                            <Rectangle Width="1" Fill="{DynamicResource InputBorderBrush}"/>
+                                            <ToggleButton Content="Only" Classes="segment" FontSize="11" Padding="9,3"
+                                                          IsChecked="{Binding ProfileFilterIsOnly}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Text="formats:" Classes="label"/>
+                                </StackPanel>
+                                <TextBox Grid.Column="1" Classes="path" VerticalAlignment="Center"
+                                         Text="{Binding ProfileFormatFilter}"/>
+                            </Grid>
+                            <TextBlock Classes="hint" FontSize="10" Margin="150,3,0,0"
+                                       Text="Enter extension names without dots. Empty = no filter (all formats processed)."/>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ── Appearance tab ── -->
+            <TabItem Header="Appearance">
+                <StackPanel Margin="16">
+                    <TextBlock Classes="sectionHeader" Text="Theme"/>
+                    <TextBlock Classes="hint" Margin="0,0,0,10"
+                               Text="Choose how Transmute looks. System follows your OS light/dark setting and updates automatically when you change it."/>
+
+                    <Grid Margin="0,4" ColumnDefinitions="150,*">
+                        <TextBlock Classes="label" Text="Colour scheme"/>
+                        <ComboBox Grid.Column="1" Width="240" HorizontalAlignment="Left" FontSize="12"
+                                  ItemsSource="{x:Static vm:SettingsViewModel.Themes}"
+                                  SelectedValue="{Binding Theme}"
+                                  SelectedValueBinding="{Binding Value}"
+                                  DisplayMemberBinding="{Binding Label}"/>
+                    </Grid>
+
+                    <TextBlock Classes="hint" FontSize="10" Margin="150,4,0,0"
+                               Text="The theme previews immediately. Hit Save to persist the choice."/>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- Footer buttons -->
+        <Border Grid.Row="1" Background="{DynamicResource SettingsFooterBackground}"
+                BorderBrush="{DynamicResource SettingsFooterBorderBrush}"
+                BorderThickness="0,1,0,0" Padding="16,10">
+            <Grid ColumnDefinitions="*,Auto,8,Auto">
+                <Button Grid.Column="1" Content="Reset to Defaults" Classes="secondary"
+                        Command="{Binding ResetDefaultsCommand}"/>
+                <Button Grid.Column="3" Content="Save" Classes="primary" Padding="16,6"
+                        Command="{Binding SaveCommand}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

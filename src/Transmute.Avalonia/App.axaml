@@ -1,0 +1,367 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Transmute.Avalonia.App"
+             RequestedThemeVariant="Default">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+
+                <ResourceDictionary x:Key="Light">
+                    <!-- Structural backgrounds -->
+                    <SolidColorBrush x:Key="AppBackground"          Color="#F0F2F5"/>
+                    <SolidColorBrush x:Key="SurfaceBackground"      Color="White"/>
+                    <SolidColorBrush x:Key="ToolbarBackground"      Color="#1E1E2E"/>
+                    <SolidColorBrush x:Key="LogBackground"          Color="#16161E"/>
+                    <SolidColorBrush x:Key="StatusBarBackground"    Color="#F0F2F5"/>
+
+                    <!-- Borders and dividers -->
+                    <SolidColorBrush x:Key="PanelBorderBrush"       Color="#DCDFE6"/>
+                    <SolidColorBrush x:Key="RowDividerBrush"        Color="#EBEBEB"/>
+
+                    <!-- Text -->
+                    <SolidColorBrush x:Key="TextPrimaryBrush"       Color="#1A1A2E"/>
+                    <SolidColorBrush x:Key="TextSecondaryBrush"     Color="#555555"/>
+                    <SolidColorBrush x:Key="TextMutedBrush"         Color="#999999"/>
+                    <SolidColorBrush x:Key="LogTextBrush"           Color="#C8C8D4"/>
+
+                    <!-- Accent -->
+                    <SolidColorBrush x:Key="AccentBrush"            Color="#0078D4"/>
+
+                    <!-- Inputs -->
+                    <SolidColorBrush x:Key="InputBackground"        Color="White"/>
+                    <SolidColorBrush x:Key="InputBorderBrush"       Color="#CCCCCC"/>
+
+                    <!-- Folder rows -->
+                    <SolidColorBrush x:Key="FolderRowBackground"    Color="#F0F7FF"/>
+                    <SolidColorBrush x:Key="FolderRowAccentBrush"   Color="#C5DCF5"/>
+                    <SolidColorBrush x:Key="FolderTitleBrush"       Color="#0D47A1"/>
+                    <SolidColorBrush x:Key="FolderSubtitleBrush"    Color="#1565C0"/>
+
+                    <!-- Advanced panel -->
+                    <SolidColorBrush x:Key="AdvancedPanelBackground"    Color="#F8F8FF"/>
+                    <SolidColorBrush x:Key="AdvancedPanelBorderBrush"   Color="#C5C8FF"/>
+
+                    <!-- Secondary buttons -->
+                    <SolidColorBrush x:Key="SecondaryButtonBackground"       Color="White"/>
+                    <SolidColorBrush x:Key="SecondaryButtonForeground"       Color="#333333"/>
+                    <SolidColorBrush x:Key="SecondaryButtonBorderBrush"      Color="#CCCCCC"/>
+                    <SolidColorBrush x:Key="SecondaryButtonHoverBackground"  Color="#E8E8E8"/>
+
+                    <!-- Queue list items -->
+                    <SolidColorBrush x:Key="ListItemHoverBackground"    Color="#EBF2FF"/>
+                    <SolidColorBrush x:Key="ListItemSelectedBackground" Color="#C8DFF5"/>
+                    <SolidColorBrush x:Key="ListItemBorderBrush"        Color="#EBEBEB"/>
+
+                    <!-- Segmented toggle buttons -->
+                    <SolidColorBrush x:Key="SegmentCheckedBackground"   Color="#E3F2FD"/>
+                    <SolidColorBrush x:Key="SegmentCheckedBrush"        Color="#0078D4"/>
+                    <SolidColorBrush x:Key="SegmentHoverBackground"     Color="#F0F4FF"/>
+
+                    <!-- Settings-specific -->
+                    <SolidColorBrush x:Key="SectionHeaderBrush"         Color="#1E1E2E"/>
+                    <SolidColorBrush x:Key="ProfileBannerBackground"    Color="#F0F4FF"/>
+                    <SolidColorBrush x:Key="ProfileBannerBorderBrush"   Color="#7C83FD"/>
+                    <SolidColorBrush x:Key="SettingsFooterBackground"   Color="#F0F0F0"/>
+                    <SolidColorBrush x:Key="SettingsFooterBorderBrush"  Color="#DDDDDD"/>
+
+                    <!-- Toolbar buttons -->
+                    <SolidColorBrush x:Key="ToolbarButtonBackground"    Color="#2E2E40"/>
+                    <SolidColorBrush x:Key="ToolbarButtonForeground"    Color="#CCCCCC"/>
+                    <SolidColorBrush x:Key="ToolbarButtonBorderBrush"   Color="#444444"/>
+                    <SolidColorBrush x:Key="ToolbarMutedBrush"          Color="#AAAAAA"/>
+
+                    <!-- Grid splitter -->
+                    <SolidColorBrush x:Key="SplitterBackground"         Color="#E4E6EA"/>
+                    <SolidColorBrush x:Key="SplitterBorderBrush"        Color="#CCCCCC"/>
+                    <SolidColorBrush x:Key="SplitterTextBrush"          Color="#AAAAAA"/>
+
+                    <!-- Drag gripper -->
+                    <SolidColorBrush x:Key="GripperBrush"               Color="#C8C8C8"/>
+
+                    <!-- Drop zone empty state -->
+                    <SolidColorBrush x:Key="DropEmptyPrimaryBrush"      Color="#AAAAAA"/>
+                    <SolidColorBrush x:Key="DropEmptySecondaryBrush"    Color="#CCCCCC"/>
+
+                    <!-- Thumbnail placeholder -->
+                    <SolidColorBrush x:Key="ThumbnailPlaceholderBrush"  Color="#EAECF0"/>
+
+                    <!-- Warning banner (orange) -->
+                    <SolidColorBrush x:Key="WarningBannerBackground"     Color="#FFF3E0"/>
+                    <SolidColorBrush x:Key="WarningBannerBorderBrush"    Color="#FFA726"/>
+                    <SolidColorBrush x:Key="WarningBannerIconForeground" Color="#E65100"/>
+                    <SolidColorBrush x:Key="WarningBannerTextForeground" Color="#BF360C"/>
+
+                    <!-- Remove / delete button hover -->
+                    <SolidColorBrush x:Key="RemoveButtonHoverBackground" Color="#FFDDDD"/>
+                    <SolidColorBrush x:Key="RemoveButtonHoverForeground" Color="#CC0000"/>
+
+                    <!-- Primary (accent) button states -->
+                    <SolidColorBrush x:Key="PrimaryButtonHoverBackground"    Color="#106EBE"/>
+                    <SolidColorBrush x:Key="PrimaryButtonDisabledBackground" Color="#CCCCCC"/>
+                    <SolidColorBrush x:Key="PrimaryButtonDisabledForeground" Color="#888888"/>
+
+                    <!-- Read-only input field -->
+                    <SolidColorBrush x:Key="ReadOnlyInputBackground"     Color="#F0F0F0"/>
+
+                    <!-- Format chip checked state -->
+                    <SolidColorBrush x:Key="ChipCheckedBackground"       Color="#FDECEA"/>
+                    <SolidColorBrush x:Key="ChipCheckedBorderBrush"      Color="#E57373"/>
+                    <SolidColorBrush x:Key="ChipCheckedForeground"       Color="#C62828"/>
+                </ResourceDictionary>
+
+                <ResourceDictionary x:Key="Dark">
+                    <!-- Structural backgrounds -->
+                    <SolidColorBrush x:Key="AppBackground"          Color="#1B1B27"/>
+                    <SolidColorBrush x:Key="SurfaceBackground"      Color="#252535"/>
+                    <SolidColorBrush x:Key="ToolbarBackground"      Color="#111120"/>
+                    <SolidColorBrush x:Key="LogBackground"          Color="#0E0E18"/>
+                    <SolidColorBrush x:Key="StatusBarBackground"    Color="#1B1B27"/>
+
+                    <!-- Borders and dividers -->
+                    <SolidColorBrush x:Key="PanelBorderBrush"       Color="#363650"/>
+                    <SolidColorBrush x:Key="RowDividerBrush"        Color="#2C2C3E"/>
+
+                    <!-- Text -->
+                    <SolidColorBrush x:Key="TextPrimaryBrush"       Color="#E0E0EE"/>
+                    <SolidColorBrush x:Key="TextSecondaryBrush"     Color="#AAAABB"/>
+                    <SolidColorBrush x:Key="TextMutedBrush"         Color="#60607A"/>
+                    <SolidColorBrush x:Key="LogTextBrush"           Color="#C8C8D4"/>
+
+                    <!-- Accent -->
+                    <SolidColorBrush x:Key="AccentBrush"            Color="#4EA0FF"/>
+
+                    <!-- Inputs -->
+                    <SolidColorBrush x:Key="InputBackground"        Color="#1E1E2E"/>
+                    <SolidColorBrush x:Key="InputBorderBrush"       Color="#484860"/>
+
+                    <!-- Folder rows -->
+                    <SolidColorBrush x:Key="FolderRowBackground"    Color="#192238"/>
+                    <SolidColorBrush x:Key="FolderRowAccentBrush"   Color="#2D4470"/>
+                    <SolidColorBrush x:Key="FolderTitleBrush"       Color="#7AACF5"/>
+                    <SolidColorBrush x:Key="FolderSubtitleBrush"    Color="#6090D8"/>
+
+                    <!-- Advanced panel -->
+                    <SolidColorBrush x:Key="AdvancedPanelBackground"    Color="#1E1E2E"/>
+                    <SolidColorBrush x:Key="AdvancedPanelBorderBrush"   Color="#48489E"/>
+
+                    <!-- Secondary buttons -->
+                    <SolidColorBrush x:Key="SecondaryButtonBackground"       Color="#2E2E44"/>
+                    <SolidColorBrush x:Key="SecondaryButtonForeground"       Color="#D0D0E0"/>
+                    <SolidColorBrush x:Key="SecondaryButtonBorderBrush"      Color="#484860"/>
+                    <SolidColorBrush x:Key="SecondaryButtonHoverBackground"  Color="#383852"/>
+
+                    <!-- Queue list items -->
+                    <SolidColorBrush x:Key="ListItemHoverBackground"    Color="#2A2A44"/>
+                    <SolidColorBrush x:Key="ListItemSelectedBackground" Color="#1A2E52"/>
+                    <SolidColorBrush x:Key="ListItemBorderBrush"        Color="#2C2C3E"/>
+
+                    <!-- Segmented toggle buttons -->
+                    <SolidColorBrush x:Key="SegmentCheckedBackground"   Color="#152233"/>
+                    <SolidColorBrush x:Key="SegmentCheckedBrush"        Color="#4EA0FF"/>
+                    <SolidColorBrush x:Key="SegmentHoverBackground"     Color="#1A1A2A"/>
+
+                    <!-- Settings-specific -->
+                    <SolidColorBrush x:Key="SectionHeaderBrush"         Color="#E0E0EE"/>
+                    <SolidColorBrush x:Key="ProfileBannerBackground"    Color="#1E1E34"/>
+                    <SolidColorBrush x:Key="ProfileBannerBorderBrush"   Color="#5858CC"/>
+                    <SolidColorBrush x:Key="SettingsFooterBackground"   Color="#1D1D2A"/>
+                    <SolidColorBrush x:Key="SettingsFooterBorderBrush"  Color="#363650"/>
+
+                    <!-- Toolbar buttons -->
+                    <SolidColorBrush x:Key="ToolbarButtonBackground"    Color="#252538"/>
+                    <SolidColorBrush x:Key="ToolbarButtonForeground"    Color="#C0C0D0"/>
+                    <SolidColorBrush x:Key="ToolbarButtonBorderBrush"   Color="#404055"/>
+                    <SolidColorBrush x:Key="ToolbarMutedBrush"          Color="#888899"/>
+
+                    <!-- Grid splitter -->
+                    <SolidColorBrush x:Key="SplitterBackground"         Color="#252538"/>
+                    <SolidColorBrush x:Key="SplitterBorderBrush"        Color="#363650"/>
+                    <SolidColorBrush x:Key="SplitterTextBrush"          Color="#606070"/>
+
+                    <!-- Drag gripper -->
+                    <SolidColorBrush x:Key="GripperBrush"               Color="#484862"/>
+
+                    <!-- Drop zone empty state -->
+                    <SolidColorBrush x:Key="DropEmptyPrimaryBrush"      Color="#606070"/>
+                    <SolidColorBrush x:Key="DropEmptySecondaryBrush"    Color="#484858"/>
+
+                    <!-- Thumbnail placeholder -->
+                    <SolidColorBrush x:Key="ThumbnailPlaceholderBrush"  Color="#2C2C3E"/>
+
+                    <!-- Warning banner (orange, muted for dark) -->
+                    <SolidColorBrush x:Key="WarningBannerBackground"     Color="#2A1A0A"/>
+                    <SolidColorBrush x:Key="WarningBannerBorderBrush"    Color="#A06020"/>
+                    <SolidColorBrush x:Key="WarningBannerIconForeground" Color="#FF9860"/>
+                    <SolidColorBrush x:Key="WarningBannerTextForeground" Color="#FFAB70"/>
+
+                    <!-- Remove / delete button hover -->
+                    <SolidColorBrush x:Key="RemoveButtonHoverBackground" Color="#3A1A1A"/>
+                    <SolidColorBrush x:Key="RemoveButtonHoverForeground" Color="#FF6B6B"/>
+
+                    <!-- Primary (accent) button states -->
+                    <SolidColorBrush x:Key="PrimaryButtonHoverBackground"    Color="#3A8FEE"/>
+                    <SolidColorBrush x:Key="PrimaryButtonDisabledBackground" Color="#3C3C50"/>
+                    <SolidColorBrush x:Key="PrimaryButtonDisabledForeground" Color="#60607A"/>
+
+                    <!-- Read-only input field -->
+                    <SolidColorBrush x:Key="ReadOnlyInputBackground"     Color="#1D1D2A"/>
+
+                    <!-- Format chip checked state -->
+                    <SolidColorBrush x:Key="ChipCheckedBackground"       Color="#3A1A1A"/>
+                    <SolidColorBrush x:Key="ChipCheckedBorderBrush"      Color="#A05050"/>
+                    <SolidColorBrush x:Key="ChipCheckedForeground"       Color="#FF8A80"/>
+                </ResourceDictionary>
+
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- ── Primary (accent) button ── -->
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryButtonHoverBackground}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryButtonDisabledBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonDisabledForeground}"/>
+        </Style>
+
+        <!-- ── Secondary button ── -->
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="{DynamicResource SecondaryButtonBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryButtonForeground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SecondaryButtonBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style Selector="Button.secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SecondaryButtonHoverBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryButtonForeground}"/>
+        </Style>
+
+        <!-- ── Danger button ── -->
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="#D32F2F"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="12,6"/>
+        </Style>
+        <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#B71C1C"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- ── Toolbar variant of secondary button ── -->
+        <Style Selector="Button.toolbar">
+            <Setter Property="Background" Value="{DynamicResource ToolbarButtonBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ToolbarButtonForeground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ToolbarButtonBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style Selector="Button.toolbar:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SecondaryButtonHoverBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ToolbarButtonForeground}"/>
+        </Style>
+
+        <!-- ── Remove (✕) button ── -->
+        <Style Selector="Button.remove">
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.remove:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RemoveButtonHoverBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource RemoveButtonHoverForeground}"/>
+        </Style>
+
+        <!-- ── Segmented toggle (Lossless/Lossy, Skip/Only, log format) ── -->
+        <Style Selector="ToggleButton.segment">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Padding" Value="11,5"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.segment:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SegmentHoverBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.segment:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SegmentCheckedBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SegmentCheckedBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.segment:checked">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- ── Format skip chip ── -->
+        <Style Selector="ToggleButton.chip">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="9,4"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="{DynamicResource AppBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SecondaryButtonBorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ChipCheckedBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ChipCheckedBorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChipCheckedForeground}"/>
+        </Style>
+
+        <!-- ── Section header text in settings ── -->
+        <Style Selector="TextBlock.sectionHeader">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource SectionHeaderBrush}"/>
+            <Setter Property="Margin" Value="0,12,0,6"/>
+        </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <!-- ── Monospace path box ── -->
+        <Style Selector="TextBox.path">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontFamily" Value="Consolas, Menlo, monospace"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+    </Application.Styles>
+</Application>

@@ -1,0 +1,132 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Transmute.Avalonia.Views.BinaryDownloadsWindow"
+        Title="Download Binaries" Width="660" Height="660"
+        MinWidth="560" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackground}">
+
+    <Grid Margin="20" RowDefinitions="Auto,*,Auto,Auto">
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Download Binaries" FontSize="15" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Classes="hint" Margin="0,4,0,0"
+                       Text="Click Open to go to each tool's official download page. After installing, use Auto-Detect in the Binaries tab, or paste the full path manually."/>
+        </StackPanel>
+
+        <!-- Tool list -->
+        <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}" CornerRadius="8"
+                BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock FontWeight="SemiBold" FontSize="12" Text="cwebp / dwebp"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock FontFamily="Consolas, Menlo, monospace" FontSize="11" Margin="0,3,0,0"
+                                           Foreground="{DynamicResource FolderTitleBrush}"
+                                           Text="developers.google.com/speed/webp/docs/precompiled"/>
+                                <TextBlock Classes="hint" Margin="0,3,0,0"
+                                           Text="{Binding CwebpInstructions}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Open" Classes="primary" Padding="12,5" FontSize="11"
+                                    VerticalAlignment="Top" Tag="https://developers.google.com/speed/webp/docs/precompiled"
+                                    Click="OpenUrl_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock FontWeight="SemiBold" FontSize="12" Text="libvips"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock FontFamily="Consolas, Menlo, monospace" FontSize="11" Margin="0,3,0,0"
+                                           Foreground="{DynamicResource FolderTitleBrush}"
+                                           Text="github.com/libvips/libvips/releases"/>
+                                <TextBlock Classes="hint" Margin="0,3,0,0"
+                                           Text="{Binding VipsInstructions}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Open" Classes="primary" Padding="12,5" FontSize="11"
+                                    VerticalAlignment="Top" Tag="https://github.com/libvips/libvips/releases"
+                                    Click="OpenUrl_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock FontWeight="SemiBold" FontSize="12" Text="cjxl / djxl"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock FontFamily="Consolas, Menlo, monospace" FontSize="11" Margin="0,3,0,0"
+                                           Foreground="{DynamicResource FolderTitleBrush}"
+                                           Text="github.com/libjxl/libjxl/releases"/>
+                                <TextBlock Classes="hint" Margin="0,3,0,0"
+                                           Text="{Binding CjxlInstructions}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Open" Classes="primary" Padding="12,5" FontSize="11"
+                                    VerticalAlignment="Top" Tag="https://github.com/libjxl/libjxl/releases"
+                                    Click="OpenUrl_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <Border BorderBrush="{DynamicResource RowDividerBrush}" BorderThickness="0,0,0,1" Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock FontWeight="SemiBold" FontSize="12" Text="ffmpeg"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock FontFamily="Consolas, Menlo, monospace" FontSize="11" Margin="0,3,0,0"
+                                           Foreground="{DynamicResource FolderTitleBrush}"
+                                           Text="ffmpeg.org/download.html"/>
+                                <TextBlock Classes="hint" Margin="0,3,0,0"
+                                           Text="{Binding FfmpegInstructions}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Open" Classes="primary" Padding="12,5" FontSize="11"
+                                    VerticalAlignment="Top" Tag="https://ffmpeg.org/download.html"
+                                    Click="OpenUrl_Click"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock FontWeight="SemiBold" FontSize="12" Text="ImageMagick"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock FontFamily="Consolas, Menlo, monospace" FontSize="11" Margin="0,3,0,0"
+                                           Foreground="{DynamicResource FolderTitleBrush}"
+                                           Text="imagemagick.org/download"/>
+                                <TextBlock Classes="hint" Margin="0,3,0,0"
+                                           Text="{Binding MagickInstructions}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Open" Classes="primary" Padding="12,5" FontSize="11"
+                                    VerticalAlignment="Top" Tag="https://imagemagick.org/download/#gsc.tab=0"
+                                    Click="OpenUrl_Click"/>
+                        </Grid>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- PATH instructions -->
+        <Border Grid.Row="2" Margin="0,10,0,0" Background="{DynamicResource ToolbarBackground}"
+                CornerRadius="8" Padding="16,12">
+            <StackPanel>
+                <TextBlock Text="{Binding PathHeader}" FontSize="12" FontWeight="SemiBold"
+                           Foreground="#7C83FD" Margin="0,0,0,6"/>
+                <TextBlock FontSize="11" Foreground="#C8C8D4" TextWrapping="Wrap" LineHeight="18"
+                           Text="{Binding PathInstructionsPrimary}"/>
+                <TextBlock Margin="0,6,0,0" FontSize="11" Foreground="#C8C8D4" TextWrapping="Wrap" LineHeight="18"
+                           Text="{Binding PathInstructionsSecondary}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Close -->
+        <Button Grid.Row="3" Content="Close" Classes="secondary"
+                HorizontalAlignment="Right" Margin="0,10,0,0"
+                Padding="16,7" IsCancel="True" Click="Close_Click"/>
+    </Grid>
+</Window>

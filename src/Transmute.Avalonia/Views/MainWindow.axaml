@@ -1,0 +1,393 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Transmute.Avalonia"
+        xmlns:vm="clr-namespace:Transmute.Avalonia.ViewModels"
+        x:Class="Transmute.Avalonia.Views.MainWindow"
+        Title="Transmute — Image Converter"
+        Width="900" Height="740" MinWidth="720" MinHeight="560"
+        Icon="/Assets/Transmute.ico"
+        Background="{DynamicResource AppBackground}"
+        DragDrop.AllowDrop="True">
+
+    <Window.DataTemplates>
+        <!-- File entry row — Avalonia picks templates by item type, no selector class needed -->
+        <DataTemplate DataType="vm:FileEntryViewModel">
+            <Grid Margin="4,6,8,6" ColumnDefinitions="20,38,*,72,28">
+                <!-- Drag gripper -->
+                <TextBlock Grid.Column="0" Text="⠿" FontSize="14"
+                           Foreground="{DynamicResource GripperBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Cursor="SizeAll" ToolTip.Tip="Drag to reorder"
+                           PointerPressed="Gripper_PointerPressed"/>
+
+                <!-- Thumbnail -->
+                <Border Grid.Column="1" Width="34" Height="34" CornerRadius="3"
+                        Background="{DynamicResource ThumbnailPlaceholderBrush}"
+                        VerticalAlignment="Center" ClipToBounds="True">
+                    <Panel>
+                        <TextBlock Text="📄" FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Opacity="0.45"/>
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                    </Panel>
+                </Border>
+
+                <!-- Name / path -->
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="6,0">
+                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Path}" FontSize="10"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+
+                <!-- Size -->
+                <TextBlock Grid.Column="3" Text="{Binding Size}" VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="11" Margin="0,0,10,0"/>
+
+                <!-- Remove -->
+                <Button Grid.Column="4" Content="✕" Classes="remove"
+                        VerticalAlignment="Center"
+                        Command="{Binding $parent[Window].DataContext.RemoveEntryCommand}"
+                        CommandParameter="{Binding}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Folder entry row -->
+        <DataTemplate DataType="vm:FolderEntryViewModel">
+            <Border Background="{DynamicResource FolderRowBackground}"
+                    BorderBrush="{DynamicResource FolderRowAccentBrush}"
+                    BorderThickness="3,0,0,0">
+                <Grid Margin="4,8,8,8" ColumnDefinitions="20,22,*,28">
+                    <TextBlock Grid.Column="0" Text="⠿" FontSize="14"
+                               Foreground="{DynamicResource GripperBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Cursor="SizeAll" ToolTip.Tip="Drag to reorder"
+                               PointerPressed="Gripper_PointerPressed"/>
+
+                    <TextBlock Grid.Column="1" Text="📁" FontSize="16" VerticalAlignment="Center"/>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="6,0">
+                        <TextBlock Text="{Binding FolderName}" FontWeight="Bold" FontSize="12"
+                                   Foreground="{DynamicResource FolderTitleBrush}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CountText}" FontSize="11"
+                                       Foreground="{DynamicResource FolderSubtitleBrush}"/>
+                            <TextBlock Text="  ·  " FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBlock Text="{Binding Path}" FontSize="10"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button Grid.Column="3" Content="✕" Classes="remove"
+                            VerticalAlignment="Center"
+                            Command="{Binding $parent[Window].DataContext.RemoveEntryCommand}"
+                            CommandParameter="{Binding}"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.DataTemplates>
+
+    <Grid RowDefinitions="Auto,*,6,150,Auto">
+
+        <!-- ── Toolbar ── -->
+        <Border Grid.Row="0" Background="{DynamicResource ToolbarBackground}">
+            <Grid Margin="14,10" ColumnDefinitions="*,Auto">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                    <TextBlock Text="⚡" FontSize="18" Foreground="#7C83FD"/>
+                    <TextBlock Text="Transmute" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                    <TextBlock Text="Profile:" Foreground="{DynamicResource ToolbarMutedBrush}"
+                               FontSize="11.5" VerticalAlignment="Center"/>
+                    <ComboBox ItemsSource="{Binding Profiles}"
+                              SelectedItem="{Binding ActiveProfile}"
+                              VerticalAlignment="Center" MinWidth="120" FontSize="12"/>
+                    <Button Content="🗂 Profiles" Classes="toolbar" Click="OpenProfiles_Click"/>
+                    <Button Content="⚙ Settings" Classes="toolbar" Click="OpenSettings_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ── Content area ── -->
+        <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto,Auto">
+
+            <!-- ── Queue / Drop Zone ── -->
+            <Border Grid.Row="0" Margin="12,10,12,0" x:Name="DropZoneBorder"
+                    Background="{DynamicResource SurfaceBackground}" CornerRadius="8"
+                    BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1"
+                    DragDrop.AllowDrop="True">
+                <Panel>
+                    <!-- Empty state -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                IsVisible="{Binding InputFiles.Count, Converter={x:Static local:Converters.IsZero}}">
+                        <TextBlock Text="📂" FontSize="52" HorizontalAlignment="Center" Opacity="0.35"/>
+                        <TextBlock Text="Drop images or folders here" FontSize="14"
+                                   Foreground="{DynamicResource DropEmptyPrimaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,8,0,4"/>
+                        <TextBlock Text="or choose what to add" FontSize="11"
+                                   Foreground="{DynamicResource DropEmptySecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                    Margin="0,16,0,0" Spacing="8">
+                            <Button Content="+ Add Files" Classes="secondary" Padding="14,8"
+                                    Click="AddFiles_Click"/>
+                            <Button Content="📁 Add Folder" Classes="secondary" Padding="14,8"
+                                    Click="AddFolder_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Populated list -->
+                    <Grid RowDefinitions="Auto,*"
+                          IsVisible="{Binding InputFiles.Count, Converter={x:Static local:Converters.IsNonZero}}">
+                        <Border Grid.Row="0" BorderBrush="{DynamicResource RowDividerBrush}"
+                                BorderThickness="0,0,0,1" Padding="12,8">
+                            <Grid ColumnDefinitions="*,Auto,8,Auto">
+                                <TextBlock Text="Queue" VerticalAlignment="Center"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <Button Grid.Column="1" Content="+ Add Files" Classes="secondary"
+                                        Padding="10,5" FontSize="11" Click="AddFiles_Click"/>
+                                <Button Grid.Column="3" Content="📁 Add Folder" Classes="secondary"
+                                        Padding="10,5" FontSize="11" Click="AddFolder_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <ListBox x:Name="QueueList" Grid.Row="1"
+                                 ItemsSource="{Binding InputFiles}"
+                                 SelectionMode="Multiple"
+                                 Background="Transparent" BorderThickness="0"
+                                 DragDrop.AllowDrop="True">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0"/>
+                                    <Setter Property="MinHeight" Value="0"/>
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ContextMenu>
+                                <ContextMenu Opened="QueueContextMenu_Opened">
+                                    <MenuItem x:Name="CtxRemove" Header="Remove" Click="QueueCtxRemove_Click"/>
+                                    <MenuItem x:Name="CtxOpenFolder" Header="Open containing folder" Click="QueueCtxOpenFolder_Click"/>
+                                    <MenuItem x:Name="CtxSelectAll" Header="Select all" Click="QueueCtxSelectAll_Click"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="CtxClear" Header="Clear queue" Command="{Binding ClearFilesCommand}"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
+                    </Grid>
+                </Panel>
+            </Border>
+
+            <!-- ── Controls row 1: format + quality + metadata + output ── -->
+            <Border Grid.Row="1" Margin="12,8,12,0"
+                    Background="{DynamicResource SurfaceBackground}" CornerRadius="8"
+                    BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1"
+                    Padding="14,10">
+                <StackPanel Spacing="8">
+                    <Grid ColumnDefinitions="Auto,110,16,Auto,12,Auto,160,Auto,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Format" Classes="label" Margin="0,0,8,0"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{x:Static vm:MainViewModel.SupportedFormats}"
+                                  SelectedItem="{Binding TargetFormat}"
+                                  VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+
+                        <!-- Lossless/Lossy pill -->
+                        <Border Grid.Column="3" VerticalAlignment="Center"
+                                IsVisible="{Binding LosslessVisible}"
+                                BorderBrush="{DynamicResource SecondaryButtonBorderBrush}"
+                                BorderThickness="1" CornerRadius="5" ClipToBounds="True">
+                            <StackPanel Orientation="Horizontal">
+                                <ToggleButton Content="Lossless" Classes="segment"
+                                              IsChecked="{Binding Lossless}"/>
+                                <Rectangle Width="1" Fill="{DynamicResource SecondaryButtonBorderBrush}"/>
+                                <ToggleButton Content="Lossy" Classes="segment"
+                                              IsChecked="{Binding Lossless, Converter={x:Static local:Converters.InverseBool}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Grid.Column="5" Text="Quality" Classes="label" Margin="0,0,8,0"/>
+                        <Slider Grid.Column="6" Minimum="1" Maximum="100" Value="{Binding Quality}"
+                                VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"
+                                IsEnabled="{Binding QualityEnabled}"/>
+                        <TextBlock Grid.Column="7" VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   FontSize="12" MinWidth="36"
+                                   Text="{Binding Quality, StringFormat={}{0}%}"/>
+
+                        <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                            <TextBlock Text="Metadata" Classes="label"/>
+                            <ComboBox VerticalAlignment="Center" FontSize="12" MinWidth="160"
+                                      ItemsSource="{x:Static vm:MainViewModel.MetadataModes}"
+                                      SelectedValue="{Binding MetadataMode}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      DisplayMemberBinding="{Binding Label}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{DynamicResource RowDividerBrush}"/>
+
+                    <!-- Output directory -->
+                    <Grid ColumnDefinitions="52,*,Auto,Auto,Auto">
+                        <TextBlock Grid.Column="0" Text="Output" Classes="label" Margin="0,0,8,0"/>
+                        <TextBox Grid.Column="1" Classes="path" VerticalAlignment="Center"
+                                 Text="{Binding OutputDirectory}"
+                                 Watermark="Same folder as source  (leave empty for default)"/>
+                        <Button Grid.Column="2" Content="Browse…" Classes="secondary"
+                                Padding="10,5" Margin="8,0,0,0" FontSize="11"
+                                Click="BrowseOutputDir_Click"/>
+                        <Button Grid.Column="3" Content="↩ Clear" Classes="secondary"
+                                Padding="10,5" Margin="4,0,0,0" FontSize="11"
+                                Command="{Binding ClearOutputDirectoryCommand}"
+                                ToolTip.Tip="Reset to beside source"/>
+                        <Button Grid.Column="4" Content="📂 Open" Classes="secondary"
+                                Padding="10,5" Margin="4,0,0,0" FontSize="11"
+                                Command="{Binding OpenOutputDirectoryCommand}"
+                                ToolTip.Tip="Open output folder in your file manager"
+                                IsVisible="{Binding OutputDirectory, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ── Controls row 2: action buttons ── -->
+            <Border Grid.Row="2" Margin="12,4,12,0" Padding="14,8">
+                <Grid ColumnDefinitions="Auto,*,Auto,8,Auto,8,Auto">
+                    <CheckBox Grid.Column="0" Content="Include subfolders"
+                              IsChecked="{Binding IncludeSubfolders}"
+                              VerticalAlignment="Center" FontSize="12"
+                              Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                    <ToggleButton Grid.Column="2" Content="⚙ Advanced" Classes="segment"
+                                  IsChecked="{Binding ShowAdvanced}"
+                                  Padding="12,7" FontSize="13" CornerRadius="5"
+                                  BorderBrush="{DynamicResource SecondaryButtonBorderBrush}"
+                                  BorderThickness="1"/>
+
+                    <!-- Split Clear button: left clears log, chevron opens more options -->
+                    <Border Grid.Column="4" CornerRadius="5" BorderThickness="1"
+                            BorderBrush="{DynamicResource SecondaryButtonBorderBrush}"
+                            VerticalAlignment="Center" ClipToBounds="True">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Clear" Padding="12,7" FontSize="13"
+                                    Background="{DynamicResource SecondaryButtonBackground}"
+                                    Foreground="{DynamicResource SecondaryButtonForeground}"
+                                    BorderThickness="0" CornerRadius="0"
+                                    Command="{Binding ClearLogCommand}"
+                                    ToolTip.Tip="Clear the conversion log"/>
+                            <Rectangle Width="1" Fill="{DynamicResource SecondaryButtonBorderBrush}"/>
+                            <Button Content="▾" Width="22" Padding="0,7" FontSize="9"
+                                    Background="{DynamicResource SecondaryButtonBackground}"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
+                                    BorderThickness="0" CornerRadius="0"
+                                    HorizontalContentAlignment="Center"
+                                    ToolTip.Tip="More clear options">
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuItem Header="Clear log" Command="{Binding ClearLogCommand}"/>
+                                        <MenuItem Header="Clear queue" Command="{Binding ClearFilesCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Clear completed from log" Command="{Binding ClearCompletedCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Clear all" Command="{Binding ClearAllCommand}"/>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <Button Grid.Column="6" Content="⚡  Convert" Classes="primary"
+                            Command="{Binding ConvertCommand}" Padding="20,7" FontWeight="SemiBold"/>
+                </Grid>
+            </Border>
+
+            <!-- ── Advanced session options ── -->
+            <Border Grid.Row="3" Margin="12,0,12,0"
+                    Background="{DynamicResource AdvancedPanelBackground}"
+                    BorderBrush="{DynamicResource AdvancedPanelBorderBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="14,10"
+                    IsVisible="{Binding ShowAdvanced}">
+                <Grid ColumnDefinitions="Auto,24,Auto,12,*">
+                    <CheckBox Grid.Column="0" Content="Overwrite existing files (this session)"
+                              IsChecked="{Binding SessionOverwrite}"
+                              VerticalAlignment="Center" FontSize="12"
+                              Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                    <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource AdvancedPanelBorderBrush}"
+                               VerticalAlignment="Stretch" Margin="11,0"/>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                        <Border BorderBrush="{DynamicResource AdvancedPanelBorderBrush}" BorderThickness="1"
+                                CornerRadius="4" VerticalAlignment="Center" ClipToBounds="True">
+                            <StackPanel Orientation="Horizontal">
+                                <ToggleButton Content="Skip" Classes="segment" FontSize="10.5" Padding="7,3"
+                                              IsChecked="{Binding SessionOnlyMode, Converter={x:Static local:Converters.InverseBool}}"/>
+                                <Rectangle Width="1" Fill="{DynamicResource AdvancedPanelBorderBrush}"/>
+                                <ToggleButton Content="Only" Classes="segment" FontSize="10.5" Padding="7,3"
+                                              IsChecked="{Binding SessionOnlyMode}"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="input formats:" VerticalAlignment="Center"
+                                   FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <WrapPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ToggleButton Content="JPG"  Classes="chip" IsChecked="{Binding SkipJpeg}"/>
+                        <ToggleButton Content="PNG"  Classes="chip" IsChecked="{Binding SkipPng}"/>
+                        <ToggleButton Content="GIF"  Classes="chip" IsChecked="{Binding SkipGif}"/>
+                        <ToggleButton Content="WebP" Classes="chip" IsChecked="{Binding SkipWebp}"/>
+                        <ToggleButton Content="AVIF" Classes="chip" IsChecked="{Binding SkipAvif}"/>
+                        <ToggleButton Content="JXL"  Classes="chip" IsChecked="{Binding SkipJxl}"/>
+                        <ToggleButton Content="HEIC" Classes="chip" IsChecked="{Binding SkipHeic}"/>
+                        <TextBlock Text="{Binding SkipModeHint}" VerticalAlignment="Center"
+                                   FontSize="10" Foreground="{DynamicResource TextMutedBrush}"
+                                   Margin="4,0,0,0" FontStyle="Italic"/>
+                    </WrapPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ── Grid splitter ── -->
+        <GridSplitter Grid.Row="2" ResizeDirection="Rows"
+                      Background="{DynamicResource SplitterBackground}"/>
+
+        <!-- ── Log panel ── -->
+        <Border Grid.Row="3" Margin="12,0,12,0"
+                Background="{DynamicResource LogBackground}" CornerRadius="8">
+            <ScrollViewer x:Name="LogScrollViewer" Padding="10"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding LogLines}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}"
+                                       Foreground="{DynamicResource LogTextBrush}"
+                                       FontFamily="Cascadia Code, Consolas, Menlo, monospace"
+                                       FontSize="11.5" Margin="0,1.5"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ── Status bar ── -->
+        <Border Grid.Row="4" Background="{DynamicResource StatusBarBackground}" Padding="14,7"
+                BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="*,220,Auto">
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ProgressBar Grid.Column="1" Value="{Binding ProgressValue}"
+                             Maximum="{Binding ProgressMax}"
+                             Height="6" MinWidth="0" Margin="0,0,10,0" VerticalAlignment="Center"
+                             Background="{DynamicResource RowDividerBrush}"
+                             Foreground="{DynamicResource AccentBrush}"/>
+                <Button Grid.Column="2" Content="Cancel" Classes="danger"
+                        Command="{Binding CancelCommand}" Padding="12,5" FontSize="11"
+                        IsVisible="{Binding IsConverting}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

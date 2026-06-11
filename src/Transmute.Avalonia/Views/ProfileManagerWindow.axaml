@@ -1,0 +1,66 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Transmute.Avalonia.Views.ProfileManagerWindow"
+        Title="Transmute — Profiles" Width="520" Height="460"
+        WindowStartupLocation="CenterOwner" CanResize="False"
+        Background="{DynamicResource AppBackground}">
+
+    <Grid Margin="16" RowDefinitions="Auto,8,*,12,Auto,12,Auto,16,Auto">
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Profile Manager" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Classes="hint" Margin="0,4,0,0"
+                       Text="Create and manage profiles. To edit a profile's settings, select it here, then open Settings — the Defaults tab will apply to the selected profile."/>
+        </StackPanel>
+
+        <!-- Profile list -->
+        <ListBox Grid.Row="2"
+                 ItemsSource="{Binding Profiles}"
+                 SelectedItem="{Binding SelectedProfile}"
+                 BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1"
+                 Background="{DynamicResource SurfaceBackground}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontSize="12" Margin="4,2" VerticalAlignment="Center"/>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- OnlyFormats warning banner -->
+        <Border Grid.Row="4" Background="{DynamicResource WarningBannerBackground}"
+                BorderBrush="{DynamicResource WarningBannerBorderBrush}" BorderThickness="1" CornerRadius="5"
+                Padding="10,8" IsVisible="{Binding SelectedProfileHasOnlyFilter}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="⚠" FontSize="13" Foreground="{DynamicResource WarningBannerIconForeground}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding OnlyFilterWarningText}" FontSize="11"
+                           Foreground="{DynamicResource WarningBannerTextForeground}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="430"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Action buttons -->
+        <WrapPanel Grid.Row="6" Orientation="Horizontal">
+            <Button Content="New Profile" Classes="primary" FontSize="12" Padding="12,6" Margin="0,0,6,0"
+                    Command="{Binding CreateProfileCommand}"/>
+            <Button Content="Duplicate" Classes="secondary" FontSize="12" Margin="0,0,6,0"
+                    Command="{Binding DuplicateProfileCommand}"/>
+            <Button Content="Rename" Classes="secondary" FontSize="12" Margin="0,0,6,0"
+                    Command="{Binding RenameProfileCommand}"/>
+            <Button Content="Delete" Classes="danger" FontSize="12"
+                    Command="{Binding DeleteProfileCommand}"/>
+        </WrapPanel>
+
+        <!-- Footer: path + close -->
+        <Grid Grid.Row="8" ColumnDefinitions="*,Auto">
+            <Button Grid.Column="0" Content="📂 Open Profiles Folder" Classes="secondary"
+                    HorizontalAlignment="Left" FontSize="12"
+                    Command="{Binding OpenProfilesFolderCommand}"/>
+            <Button Grid.Column="1" Content="Close" Classes="secondary"
+                    Width="90" FontSize="12" HorizontalContentAlignment="Center"
+                    IsCancel="True" Click="Close_Click"/>
+        </Grid>
+    </Grid>
+</Window>
