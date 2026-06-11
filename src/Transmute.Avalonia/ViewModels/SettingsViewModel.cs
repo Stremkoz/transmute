@@ -38,6 +38,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _losslessDefault;
     [ObservableProperty] private int _webpMethod;
     [ObservableProperty] private int _jxlEffort;
+    [ObservableProperty] private double _jxlDistance;
     [ObservableProperty] private string _outputNamingPattern = string.Empty;
     [ObservableProperty] private string? _defaultOutputDirectory;
 
@@ -155,6 +156,7 @@ public partial class SettingsViewModel : ObservableObject
         LosslessDefault    = d.LosslessDefault;
         WebpMethod         = d.WebpMethod;
         JxlEffort          = d.JxlEffort;
+        JxlDistance        = d.JxlDistance;
         OutputNamingPattern = d.OutputNamingPattern;
         DefaultOutputDirectory = d.DefaultOutputDirectory ?? string.Empty;
 
@@ -231,6 +233,7 @@ public partial class SettingsViewModel : ObservableObject
             c.Defaults.LosslessDefault      = LosslessDefault;
             c.Defaults.WebpMethod           = WebpMethod;
             c.Defaults.JxlEffort            = JxlEffort;
+            c.Defaults.JxlDistance          = JxlDistance;
             c.Defaults.OutputNamingPattern  = OutputNamingPattern;
             c.Defaults.DefaultOutputDirectory = NullIfEmpty(DefaultOutputDirectory ?? string.Empty);
             _configManager.Save();
@@ -254,6 +257,7 @@ public partial class SettingsViewModel : ObservableObject
             existing.LosslessDefault      = LosslessDefault      != global.LosslessDefault      ? LosslessDefault      : null;
             existing.WebpMethod           = WebpMethod           != global.WebpMethod           ? WebpMethod           : null;
             existing.JxlEffort            = JxlEffort            != global.JxlEffort            ? JxlEffort            : null;
+            existing.JxlDistance          = JxlDistance          != global.JxlDistance          ? JxlDistance          : null;
             existing.OutputNamingPattern  = OutputNamingPattern  != global.OutputNamingPattern  ? OutputNamingPattern  : null;
             existing.DefaultOutputDirectory = NullIfEmpty(DefaultOutputDirectory ?? string.Empty) != global.DefaultOutputDirectory
                 ? NullIfEmpty(DefaultOutputDirectory ?? string.Empty)

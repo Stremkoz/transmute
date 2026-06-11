@@ -233,10 +233,22 @@
                         <StackPanel Orientation="Horizontal" Spacing="16">
                             <RadioButton Content="Lossless" IsChecked="{Binding LosslessDefault}"
                                          VerticalAlignment="Center"/>
-                            <RadioButton Content="Lossy (quality-based)"
+                            <RadioButton Content="Lossy"
                                          IsChecked="{Binding LosslessDefault, Converter={x:Static local:Converters.InverseBool}}"
                                          VerticalAlignment="Center"/>
                         </StackPanel>
+
+                        <TextBlock Classes="sectionHeader" Text="JXL Distance" Margin="0,16,0,4"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,8"
+                                   Text="When JXL is set to Lossy above, this controls the cjxl -d distance: 0 = lossless, 0.1-1.0 = visually lossless (lower = better), 1.1-2 = lossy. This replaces JXL quality as the lossy/lossless control."/>
+                        <Grid Margin="0,4" ColumnDefinitions="150,*" IsEnabled="{Binding LosslessDefault, Converter={x:Static local:Converters.InverseBool}}">
+                            <TextBlock Classes="label" Text="JXL distance"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Slider Minimum="0" Maximum="2" Value="{Binding JxlDistance}" Width="200"
+                                        VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="0.1"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding JxlDistance, StringFormat='{}{0:F1}'}"/>
+                            </StackPanel>
+                        </Grid>
 
                         <TextBlock Classes="sectionHeader" Text="Output Naming Pattern" Margin="0,16,0,4"/>
                         <TextBlock Classes="hint" Margin="0,0,0,6"

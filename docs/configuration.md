@@ -104,6 +104,11 @@ The config file is plain JSON — open it in any text editor. Transmute re-reads
     // 1 = fastest encoding, 9 = slowest / smallest file. Default: 7.
     "jxlEffort": 7,
 
+    // JPEG XL distance used when LosslessDefault is false and no --quality or
+    // --distance is passed. 0 = lossless, 0.1-1.0 = visually lossless,
+    // 1.1-2 = lossy. Lower values preserve more detail and make larger files.
+    "jxlDistance": 1.0,
+
     // How to handle image metadata in output files.
     // "PreserveAll"  — keep EXIF, XMP, IPTC, ICC colour profile (default)
     // "StripAll"     — remove all metadata
@@ -156,17 +161,32 @@ Each lossy format has an independent quality default. Quality is on a 0–100 sc
 | Format | Backend | How quality is applied |
 |--------|---------|----------------------|
 | WebP | cwebp | `-q <value>` directly |
-| JXL | cjxl | Converted to a distance value: lower quality → higher distance → more compression |
+| JXL | cjxl | Uses explicit distance when set; otherwise quality is converted to distance |
 | AVIF | libvips | `Q` parameter |
 | JPEG | cjxl / libvips | Standard JPEG quality |
 
 Quality `0` means maximum compression (worst quality), `100` means minimum compression (best quality / lossless-like).
 
+For JPEG XL, `defaults.jxlDistance` and `--distance` expose cjxl's native `-d`
+control directly. Distance `0` is lossless, `0.1` to `1.0` is visually
+lossless with lower values preserving more detail, and `1.1` to `2.0` is lossy.
+An explicit distance takes precedence over JXL quality.
+
 ### `losslessDefault`
 
-When `true`, JXL and WebP conversions use lossless encoding unless you explicitly pass `--quality` to request lossy. This is the default because lossless is lossless — you can always re-compress later, but you can't recover lost quality.
+When `true`, JXL and WebP conversions use lossless encoding unless you explicitly pass `--quality` or JXL `--distance` to request lossy. This is the default because lossless is lossless — you can always re-compress later, but you can't recover lost quality.
 
 Set to `false` if you want lossy to be the default and only use lossless when you explicitly pass `--lossless`.
+
+### `jxlDistance`
+
+Controls the default JXL distance when `losslessDefault` is `false` and the run
+does not provide `--quality` or `--distance`. This is the preferred JXL
+lossless/lossy control:
+
+- `0` = lossless
+- `0.1`–`1.0` = visually lossless, lower is higher quality
+- `1.1`–`2.0` = lossy
 
 ### `webpMethod`
 

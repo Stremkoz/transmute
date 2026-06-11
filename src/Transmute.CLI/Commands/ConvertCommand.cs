@@ -36,6 +36,10 @@ public static class ConvertCommand
         var effortOpt = new Option<int?>("--effort", "JXL effort level 1-9 (default from config, usually 7)");
         effortOpt.AddAlias("-e");
 
+        var distanceOpt = new Option<double?>("--distance",
+            "JXL distance 0-2 (0 = lossless, 0.1-1.0 = visually lossless, 1.1-2 = lossy). Overrides --quality for JXL output.");
+        distanceOpt.AddAlias("-d");
+
         var jobsOpt = new Option<int>("--jobs", () => 0, "Number of parallel jobs (0 = CPU count)");
         jobsOpt.AddAlias("-j");
 
@@ -87,7 +91,7 @@ public static class ConvertCommand
         var cmd = new Command("convert", "Convert image(s) to a target format")
         {
             inputsArg, formatOpt, outputOpt, outputDirOpt, qualityOpt, losslessOpt,
-            methodOpt, effortOpt, jobsOpt, overwriteOpt, metadataOpt, backendOpt,
+            methodOpt, effortOpt, distanceOpt, jobsOpt, overwriteOpt, metadataOpt, backendOpt,
             recursiveOpt, profileOpt, skipOpt, onlyOpt, namePatternOpt,
             logOpt, noLogOpt, logFormatOpt, dryRunOpt, verboseOpt,
         };
@@ -102,6 +106,7 @@ public static class ConvertCommand
             var lossless     = ctx.ParseResult.GetValueForOption(losslessOpt);
             var method       = ctx.ParseResult.GetValueForOption(methodOpt);
             var effort       = ctx.ParseResult.GetValueForOption(effortOpt);
+            var distance     = ctx.ParseResult.GetValueForOption(distanceOpt);
             var jobs         = ctx.ParseResult.GetValueForOption(jobsOpt);
             var overwrite    = ctx.ParseResult.GetValueForOption(overwriteOpt);
             var metaMode     = ctx.ParseResult.GetValueForOption(metadataOpt);
@@ -174,9 +179,25 @@ public static class ConvertCommand
             }
 
             var fmt = format.ToLowerInvariant();
+            bool jxlDistanceOverride = distance.HasValue && fmt == "jxl";
             bool effectiveLossless = lossless
                 ? true
-                : (fmt is "jxl" or "webp") && defaults.LosslessDefault;
+                : (fmt is "jxl" or "webp") && defaults.LosslessDefault && quality is null && !jxlDistanceOverride;
+
+            // For JXL: an explicit --distance always wins. Otherwise, if the user hasn't pinned
+            // quality/lossless either, fall back to the configured default distance instead of
+            // the quality-derived formula. --distance 0 is equivalent to --lossless.
+            double? jxlDistance = null;
+            if (fmt == "jxl")
+            {
+                if (distance.HasValue)
+                    jxlDistance = distance.Value;
+                else if (!effectiveLossless && quality is null)
+                    jxlDistance = defaults.JxlDistance;
+
+                if (jxlDistance == 0)
+                    effectiveLossless = true;
+            }
 
             var options = new ConversionOptions
             {
@@ -184,6 +205,7 @@ public static class ConvertCommand
                 Lossless            = effectiveLossless,
                 WebpMethod          = method ?? defaults.WebpMethod,
                 JxlEffort           = effort ?? defaults.JxlEffort,
+                JxlDistance         = jxlDistance,
                 Metadata            = metaMode ?? defaults.MetadataMode,
                 Overwrite           = overwrite || defaults.OverwriteExisting,
                 OutputDirectory     = outputDir?.FullName ?? defaults.DefaultOutputDirectory,
@@ -238,7 +260,7 @@ public static class ConvertCommand
                 // ── Dry run — show plan and exit ──────────────────────────────────────
                 if (dryRun)
                 {
-                    var modeLabel = effectiveLossless ? "lossless" : $"q{options.Quality}";
+                    var modeLabel = GetModeLabel(options, effectiveLossless);
                     Console.WriteLine($"Dry run — {conversionJobs.Count} file(s) would be converted to {fmt.ToUpperInvariant()} ({modeLabel}):");
                     Console.WriteLine();
 
@@ -262,7 +284,7 @@ public static class ConvertCommand
                 }
 
                 // ── Actual conversion ─────────────────────────────────────────────────
-                var modeStr = effectiveLossless ? "lossless" : $"q{options.Quality}";
+                var modeStr = GetModeLabel(options, effectiveLossless);
                 Console.WriteLine($"Converting {conversionJobs.Count} file(s) to {format.ToUpperInvariant()} ({modeStr})...");
 
                 var totalSw = Stopwatch.StartNew();
@@ -379,6 +401,18 @@ public static class ConvertCommand
         return sb.ToString();
     }
 
+    // Mode label for dry-run / progress headers, e.g. "lossless", "q85", or "distance 1.00" (JXL).
+    private static string GetModeLabel(ConversionOptions options, bool effectiveLossless)
+    {
+        if (effectiveLossless)
+            return "lossless";
+
+        if (options.JxlDistance.HasValue)
+            return $"distance {options.JxlDistance.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}";
+
+        return $"q{options.Quality}";
+    }
+
     private static string FormatSettings(ConversionOptions opts, string outputFormat)
     {
         var parts = new List<string>();
@@ -386,6 +420,8 @@ public static class ConvertCommand
 
         if (opts.Lossless)
             parts.Add("lossless");
+        else if (fmt == "jxl" && opts.JxlDistance.HasValue)
+            parts.Add($"distance={opts.JxlDistance.Value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}");
         else if (opts.Quality.HasValue)
             parts.Add($"quality={opts.Quality}");
 

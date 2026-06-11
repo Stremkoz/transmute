@@ -186,6 +186,7 @@ public class ConfigManager
             case "losslessdefault": _config.Defaults.LosslessDefault = bool.Parse(value); break;
             case "webpmethod": _config.Defaults.WebpMethod = int.Parse(value); break;
             case "jxleffort": _config.Defaults.JxlEffort = int.Parse(value); break;
+            case "jxldistance": _config.Defaults.JxlDistance = double.Parse(value, System.Globalization.CultureInfo.InvariantCulture); break;
             case "outputnamingpattern": _config.Defaults.OutputNamingPattern = value; break;
             case "defaultoutputdirectory": _config.Defaults.DefaultOutputDirectory = value == "null" ? null : value; break;
             default: throw new ArgumentException($"Unknown default: {prop}");
@@ -203,6 +204,7 @@ public class ConfigManager
         "losslessdefault" => _config.Defaults.LosslessDefault.ToString(),
         "webpmethod" => _config.Defaults.WebpMethod.ToString(),
         "jxleffort" => _config.Defaults.JxlEffort.ToString(),
+        "jxldistance" => _config.Defaults.JxlDistance.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "outputnamingpattern" => _config.Defaults.OutputNamingPattern,
         "defaultoutputdirectory" => _config.Defaults.DefaultOutputDirectory,
         _ => throw new ArgumentException($"Unknown default: {prop}")

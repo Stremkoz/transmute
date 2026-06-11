@@ -53,6 +53,7 @@ The reference JPEG XL encoder and decoder from the libjxl project.
 **Notes:**
 - Preferred for JXL output — this is the reference encoder and produces the best JXL results
 - Supports both lossy (distance-based) and lossless encoding
+- `--distance` / `-d` controls JXL distance directly: 0 is lossless, 0.1-1.0 is visually lossless, and 1.1-2 is lossy
 - `--effort` / `-e` (1–9) controls the speed/size tradeoff: 1 is fastest, 9 is smallest file
 - Like cwebp, formats not natively supported are pre-converted via a PNG intermediate
 - Install: [github.com/libjxl/libjxl/releases](https://github.com/libjxl/libjxl/releases)

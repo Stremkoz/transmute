@@ -44,6 +44,7 @@ Useful when you want a variation of an existing preset:
 transmute profile duplicate Default archival
 transmute config set --profile archival defaults.losslessDefault true
 transmute config set --profile archival defaults.jxlEffort 9
+transmute config set --profile archival defaults.jxlDistance 0.5
 ```
 
 You can also duplicate another named profile:
@@ -100,6 +101,7 @@ This shows the actual value that would be used for each setting — profile over
 | Lossless default | `defaults.losslessDefault` | Boolean — applies to JXL and WebP |
 | WebP method | `defaults.webpMethod` | 0–6 (speed/quality tradeoff) |
 | JXL effort | `defaults.jxlEffort` | 1–9 (speed/size tradeoff) |
+| JXL distance | `defaults.jxlDistance` | 0 lossless, 0.1–1.0 visually lossless, 1.1–2 lossy |
 | Metadata mode | `defaults.metadataMode` | PreserveAll, StripAll, ColorProfile, Copyright |
 | Overwrite | `defaults.overwriteExisting` | Boolean |
 | Output directory | `defaults.defaultOutputDirectory` | Path or null (beside input) |
@@ -190,6 +192,7 @@ Each profile is stored as a JSON file in the profiles folder. You can edit these
   "losslessDefault": null,
   "webpMethod": null,
   "jxlEffort": null,
+  "jxlDistance": null,
   "defaultOutputDirectory": "C:\\Users\\me\\Desktop\\converted",
   "outputNamingPattern": null,
   "skipFormats": ["gif", "webp"],
@@ -223,6 +226,18 @@ transmute profile create archival
 transmute config set --profile archival defaults.losslessDefault true
 transmute config set --profile archival defaults.jxlEffort 9
 transmute config set --profile archival defaults.metadataMode PreserveAll
+```
+
+### Visually lossless JXL
+
+Uses JXL's native distance control for a smaller output than lossless while
+staying in the visually lossless range:
+
+```bash
+transmute profile create jxl-vl
+transmute config set --profile jxl-vl defaults.losslessDefault false
+transmute config set --profile jxl-vl defaults.jxlDistance 0.8
+transmute config set --profile jxl-vl defaults.jxlEffort 7
 ```
 
 ### JPEG-only conversion

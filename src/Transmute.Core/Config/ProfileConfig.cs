@@ -17,6 +17,7 @@ public class ProfileConfig
     public bool? LosslessDefault { get; set; }
     public int? WebpMethod { get; set; }
     public int? JxlEffort { get; set; }
+    public double? JxlDistance { get; set; }
     public string? DefaultOutputDirectory { get; set; }
     public string? OutputNamingPattern { get; set; }
 
@@ -49,6 +50,7 @@ public class ProfileConfig
         LosslessDefault        = LosslessDefault        ?? global.LosslessDefault,
         WebpMethod             = WebpMethod             ?? global.WebpMethod,
         JxlEffort              = JxlEffort              ?? global.JxlEffort,
+        JxlDistance            = JxlDistance            ?? global.JxlDistance,
         DefaultOutputDirectory = DefaultOutputDirectory ?? global.DefaultOutputDirectory,
         OutputNamingPattern    = OutputNamingPattern    ?? global.OutputNamingPattern,
     };

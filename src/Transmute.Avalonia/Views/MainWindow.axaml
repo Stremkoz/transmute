@@ -190,7 +190,7 @@
                     BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1"
                     Padding="14,10">
                 <StackPanel Spacing="8">
-                    <Grid ColumnDefinitions="Auto,110,16,Auto,12,Auto,160,Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,110,16,Auto,12,Auto,150,Auto,Auto,*,Auto">
                         <TextBlock Grid.Column="0" Text="Format" Classes="label" Margin="0,0,8,0"/>
                         <ComboBox Grid.Column="1"
                                   ItemsSource="{x:Static vm:MainViewModel.SupportedFormats}"
@@ -211,16 +211,34 @@
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Grid.Column="5" Text="Quality" Classes="label" Margin="0,0,8,0"/>
+                        <TextBlock Grid.Column="5" Text="Quality" Classes="label" Margin="0,0,8,0"
+                                   IsVisible="{Binding QualityVisible}"/>
                         <Slider Grid.Column="6" Minimum="1" Maximum="100" Value="{Binding Quality}"
                                 VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"
-                                IsEnabled="{Binding QualityEnabled}"/>
+                                IsEnabled="{Binding QualityEnabled}"
+                                IsVisible="{Binding QualityVisible}"/>
                         <TextBlock Grid.Column="7" VerticalAlignment="Center" Margin="6,0,0,0"
                                    Foreground="{DynamicResource TextPrimaryBrush}"
                                    FontSize="12" MinWidth="36"
-                                   Text="{Binding Quality, StringFormat={}{0}%}"/>
+                                   Text="{Binding Quality, StringFormat={}{0}%}"
+                                   IsVisible="{Binding QualityVisible}"/>
 
-                        <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                        <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6"
+                                    IsVisible="{Binding JxlDistanceVisible}"
+                                    Margin="12,0,0,0">
+                            <TextBlock Text="Distance" Classes="label"
+                                       ToolTip.Tip="JPEG XL distance: 0 lossless, 0.1-1.0 visually lossless, 1.1-2 lossy"/>
+                            <Slider Minimum="0" Maximum="2" Value="{Binding JxlDistance}"
+                                    Width="110"
+                                    VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="0.1"
+                                    ToolTip.Tip="Changing this overrides JXL quality for this session"/>
+                            <TextBlock VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       FontSize="12" MinWidth="28"
+                                       Text="{Binding JxlDistance, StringFormat={}{0:F1}}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="10" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
                             <TextBlock Text="Metadata" Classes="label"/>
                             <ComboBox VerticalAlignment="Center" FontSize="12" MinWidth="160"
                                       ItemsSource="{x:Static vm:MainViewModel.MetadataModes}"
@@ -278,20 +296,26 @@
                                     Foreground="{DynamicResource SecondaryButtonForeground}"
                                     BorderThickness="0" CornerRadius="0"
                                     Command="{Binding ClearLogCommand}"
-                                    ToolTip.Tip="Clear the conversion log"/>
+                                    PointerPressed="ClearSplitButton_PointerPressed"
+                                    ToolTip.Tip="Clear the conversion log (right-click for more options)"/>
                             <Rectangle Width="1" Fill="{DynamicResource SecondaryButtonBorderBrush}"/>
-                            <Button Content="▾" Width="22" Padding="0,7" FontSize="9"
+                            <Button x:Name="ClearChevronButton" Content="▾" Width="22" Padding="0,7" FontSize="9"
                                     Background="{DynamicResource SecondaryButtonBackground}"
                                     Foreground="{DynamicResource TextSecondaryBrush}"
                                     BorderThickness="0" CornerRadius="0"
                                     HorizontalContentAlignment="Center"
+                                    PointerPressed="ClearSplitButton_PointerPressed"
                                     ToolTip.Tip="More clear options">
                                 <Button.Flyout>
                                     <MenuFlyout Placement="BottomEdgeAlignedRight">
                                         <MenuItem Header="Clear log" Command="{Binding ClearLogCommand}"/>
                                         <MenuItem Header="Clear queue" Command="{Binding ClearFilesCommand}"/>
                                         <Separator/>
-                                        <MenuItem Header="Clear completed from log" Command="{Binding ClearCompletedCommand}"/>
+                                        <MenuItem Header="Clear completed" Command="{Binding ClearCompletedCommand}"/>
+                                        <MenuItem Header="Clear skipped" Command="{Binding ClearSkippedCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Keep errors only" Command="{Binding KeepErrorsOnlyCommand}"/>
+                                        <MenuItem Header="Keep errors and skipped" Command="{Binding KeepErrorsAndSkippedCommand}"/>
                                         <Separator/>
                                         <MenuItem Header="Clear all" Command="{Binding ClearAllCommand}"/>
                                     </MenuFlyout>
@@ -360,19 +384,52 @@
         <!-- ── Log panel ── -->
         <Border Grid.Row="3" Margin="12,0,12,0"
                 Background="{DynamicResource LogBackground}" CornerRadius="8">
-            <ScrollViewer x:Name="LogScrollViewer" Padding="10"
-                          VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding LogLines}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}"
-                                       Foreground="{DynamicResource LogTextBrush}"
-                                       FontFamily="Cascadia Code, Consolas, Menlo, monospace"
-                                       FontSize="11.5" Margin="0,1.5"/>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+            <ListBox x:Name="LogList"
+                     ItemsSource="{Binding LogLines}"
+                     Background="Transparent" BorderThickness="0"
+                     Padding="10,6"
+                     SelectionMode="Multiple"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     PointerPressed="LogList_PointerPressed">
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="4,1.5"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    </Style>
+                    <Style Selector="TextBlock.success">
+                        <Setter Property="Foreground" Value="{DynamicResource LogTextBrush}"/>
+                    </Style>
+                    <Style Selector="TextBlock.skipped">
+                        <Setter Property="Foreground" Value="{DynamicResource LogSkippedBrush}"/>
+                    </Style>
+                    <Style Selector="TextBlock.error">
+                        <Setter Property="Foreground" Value="{DynamicResource LogErrorBrush}"/>
+                    </Style>
+                    <Style Selector="TextBlock.info">
+                        <Setter Property="Foreground" Value="{DynamicResource LogInfoBrush}"/>
+                    </Style>
+                </ListBox.Styles>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="vm:LogEntryViewModel">
+                        <TextBlock Text="{Binding Text}"
+                                   Classes.success="{Binding IsSuccess}"
+                                   Classes.skipped="{Binding IsSkipped}"
+                                   Classes.error="{Binding IsError}"
+                                   Classes.info="{Binding IsInfo}"
+                                   TextWrapping="Wrap"
+                                   FontFamily="Cascadia Code, Consolas, Menlo, monospace"
+                                   FontSize="11.5"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.ContextMenu>
+                    <ContextMenu Opened="LogContextMenu_Opened">
+                        <MenuItem x:Name="LogCtxOpenFolder" Header="Open containing folder" Click="LogCtxOpenFolder_Click"/>
+                        <MenuItem x:Name="LogCtxCopyPath" Header="Copy file path" Click="LogCtxCopyPath_Click"/>
+                        <MenuItem Header="Copy line" Click="LogCtxCopyLine_Click"/>
+                    </ContextMenu>
+                </ListBox.ContextMenu>
+            </ListBox>
         </Border>
 
         <!-- ── Status bar ── -->

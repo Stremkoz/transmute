@@ -40,7 +40,7 @@ Transmute converts images between formats using the best available tool for the 
 
 ## Features
 
-- **GUI and CLI** — a clean WPF interface for interactive use and a full CLI for scripting and automation
+- **GUI and CLI** — a clean Avalonia interface for interactive use and a full CLI for scripting and automation
 - **Smart backend routing** — automatically picks the right converter (libvips, cwebp, cjxl, ffmpeg, ImageMagick) based on format pair
 - **Two-step conversion** — chains backends transparently when no single tool can handle a format pair directly
 - **Graceful fallback** — if a preferred backend isn't installed, Transmute falls back rather than failing
@@ -97,7 +97,7 @@ JPEG, PNG, WebP, AVIF, HEIF/HEIC, TIFF, GIF (animated), APNG (animated), BMP, JP
 
 **Runtime:** .NET 9.0
 
-Download the latest release from the [Releases page](../../releases). Extract the zip and run `transmute-gui.exe` for the GUI or `transmute.exe` for the CLI.
+Download the latest release from the [Releases page](../../releases). Extract the zip and run `transmute-avalonia.exe` for the GUI or `transmute.exe` for the CLI.
 
 Transmute itself has no mandatory dependencies beyond .NET 9, but it needs at least one backend installed to do anything useful. libvips covers the most ground and is the recommended starting point.
 
@@ -137,17 +137,17 @@ transmute config set binaries.cjxl  "C:\path\to\cjxl.exe"
 
 ### GUI Quick Start
 
-1. Launch `transmute-gui.exe`
+1. Launch `transmute-avalonia.exe`
 2. Drag images or folders onto the window (or use **Ctrl+O** to browse)
 3. Pick a target format from the dropdown
-4. Adjust quality with the slider if needed
+4. Adjust quality, or JPEG XL distance, if needed
 5. Click **Convert**
 
 The log panel at the bottom shows live progress. When finished, a summary line shows how many files succeeded, were skipped, or failed.
 
 **Tips:**
 - Use the **Profile** dropdown to switch between saved conversion presets
-- Open **Settings** (`Ctrl+,`) to configure default quality, output directory, and backend paths
+- Open **Settings** (`Ctrl+,`) to configure default quality, JPEG XL distance, output directory, and backend paths
 - Open the **Profile Manager** (`Ctrl+Shift+P`) to create and manage named profiles
 - Press **Delete** to remove selected items from the queue
 - Expand the **Advanced** panel to set per-session format filters
@@ -214,6 +214,7 @@ transmute convert <inputs...> --format <fmt> [options]
 | `--lossless` | `-l` | Lossless encoding (WebP and JXL only) |
 | `--method <0–6>` | | WebP compression method (0 = fastest, 6 = best) |
 | `--effort <1–9>` | `-e` | JXL effort level (1 = fastest, 9 = best) |
+| `--distance <0–2>` | `-d` | JXL distance: 0 = lossless, 0.1–1.0 = visually lossless, 1.1–2 = lossy |
 
 #### Filtering
 
@@ -245,6 +246,9 @@ transmute convert ./photos --format webp --quality 85
 
 # Lossless JXL, recursive, output to separate folder
 transmute convert ./originals --format jxl --lossless --recursive --output-dir ./archive
+
+# Visually lossless JXL using explicit distance
+transmute convert ./photos --format jxl --distance 0.8
 
 # HEIC to AVIF, skip any existing WebP files
 transmute convert . --format avif --skip webp
@@ -287,6 +291,7 @@ Transmute waits for each file to finish being written before processing it (conf
 | `--profile <name>` | `-p` | Use a named profile for defaults |
 | `--stable-time <ms>` | | Milliseconds a file must be unchanged before processing (default: 500, min: 50) |
 | `--quality <0–100>` | `-q` | Lossy quality |
+| `--distance <0–2>` | `-d` | JXL distance; overrides quality for JXL output |
 | `--lossless` | | Lossless encoding |
 | `--overwrite` | | Overwrite existing output files |
 | `--metadata <mode>` | | Metadata handling |
@@ -380,6 +385,7 @@ transmute config set defaults.webpQuality 80
 
 # Set a value on a named profile (profile must exist first)
 transmute config set --profile archival defaults.losslessDefault true
+transmute config set --profile archival defaults.jxlDistance 0.8
 
 # Clear a profile override (revert to inheriting from global)
 transmute config set --profile archival defaults.webpQuality null
@@ -398,6 +404,7 @@ transmute config set --profile archival defaults.webpQuality null
 | `defaults.losslessDefault` | bool | Default lossless mode for JXL and WebP |
 | `defaults.webpMethod` | int | WebP compression method (0–6) |
 | `defaults.jxlEffort` | int | JXL effort (1–9) |
+| `defaults.jxlDistance` | double | JXL distance when lossy JXL is the default |
 | `defaults.defaultOutputDirectory` | string | Default output directory (`null` = beside input) |
 | `defaults.outputNamingPattern` | string | Filename pattern (e.g. `{name}.{ext}`) |
 | `processing.maxParallelJobs` | int | Parallel jobs (0 = CPU count) |
@@ -464,7 +471,7 @@ Profiles are named sets of conversion defaults. When you pass `--profile <name>`
 Profiles can override:
 - Quality per format (WebP, JPEG, JXL, AVIF)
 - Lossless mode
-- WebP method and JXL effort
+- WebP method, JXL effort, and JXL distance
 - Metadata mode
 - Overwrite behaviour
 - Default output directory
@@ -522,6 +529,7 @@ Transmute stores its configuration in a JSON file. Run `transmute config path` t
     "losslessDefault": true,          // Lossless on for JXL and WebP by default
     "webpMethod": 6,                  // 0 (fast) – 6 (best)
     "jxlEffort": 7,                   // 1 (fast) – 9 (best)
+    "jxlDistance": 1.0,               // JXL distance when lossy JXL is the default
     "defaultOutputDirectory": null,   // null = output beside input file
     "outputNamingPattern": "{name}.{ext}"
   },
@@ -636,7 +644,6 @@ Summary: 2 succeeded, 1 skipped, 1 failed
 
 **Prerequisites:**
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9)
-- Windows (GUI requires WPF)
 
 ```bash
 git clone https://github.com/Stremkoz/transmute
@@ -649,9 +656,12 @@ dotnet build
 dotnet test
 
 # Publish self-contained Windows release
-dotnet publish src/Transmute.GUI/Transmute.GUI.csproj -c Release -r win-x64 --self-contained
+dotnet publish src/Transmute.Avalonia/Transmute.Avalonia.csproj -c Release -r win-x64 --self-contained
 dotnet publish src/Transmute.CLI/Transmute.CLI.csproj -c Release -r win-x64 --self-contained
 ```
+
+> The original WPF GUI (`src/Transmute.GUI/`) is archived and retired; it remains on disk
+> as a reference implementation but is no longer built or published.
 
 Output lands in `publish/`.
 

@@ -27,16 +27,24 @@ public partial class MainViewModel : ObservableObject
     private readonly ProfileManager _profileManager;
     private bool _qualityUserCustomized = false;
     private bool _suppressQualityTracking = false;
+    private bool _jxlDistanceUserCustomized = false;
+    private bool _suppressJxlDistanceTracking = false;
 
-    // Formats where lossless encoding is a meaningful option
+    // Formats with a Lossless/Lossy toggle + quality slider
     private static readonly HashSet<string> LosslessCapableFormats =
-        new(StringComparer.OrdinalIgnoreCase) { "jxl", "webp" };
+        new(StringComparer.OrdinalIgnoreCase) { "webp" };
 
     [ObservableProperty] private string _targetFormat = "webp";
     [ObservableProperty] private int _quality = 85;
+    [ObservableProperty] private bool _qualityVisible = true;
     [ObservableProperty] private bool _lossless = true;
     [ObservableProperty] private bool _losslessVisible = true;
     [ObservableProperty] private bool _qualityEnabled = false;
+
+    // JXL distance (-d): 0 = lossless, 0.1-1.0 = visually lossless, 1.1-2 = lossy.
+    // It overrides JXL quality only after the session distance slider is changed.
+    [ObservableProperty] private double _jxlDistance = 1.0;
+    [ObservableProperty] private bool _jxlDistanceVisible = false;
     [ObservableProperty] private MetadataMode _metadataMode = MetadataMode.PreserveAll;
     [ObservableProperty] private bool _overwriteExisting = false;
     [ObservableProperty] private string? _outputDirectory;
@@ -72,7 +80,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     public BulkObservableCollection<object> InputFiles { get; } = new();
-    public ObservableCollection<string> LogLines { get; } = new();
+    public ObservableCollection<LogEntryViewModel> LogLines { get; } = new();
 
     public static string[] SupportedFormats { get; } =
     [
@@ -149,6 +157,14 @@ public partial class MainViewModel : ObservableObject
         if (LosslessVisible)
             Lossless = defaults.LosslessDefault;
 
+        if (string.Equals(TargetFormat, "jxl", StringComparison.OrdinalIgnoreCase))
+        {
+            _suppressJxlDistanceTracking = true;
+            JxlDistance = JxlDistanceFromDefaults(defaults);
+            _suppressJxlDistanceTracking = false;
+            _jxlDistanceUserCustomized = false;
+        }
+
         MetadataMode = defaults.MetadataMode;
         OverwriteExisting = defaults.OverwriteExisting;
         OutputDirectory = defaults.DefaultOutputDirectory;
@@ -162,6 +178,9 @@ public partial class MainViewModel : ObservableObject
             : _profileManager.Load(ActiveProfile);
         return profile?.ApplyOver(_configManager.Config.Defaults) ?? _configManager.Config.Defaults;
     }
+
+    // JXL's default -d distance: lossless (0) when LosslessDefault is on, otherwise the configured distance.
+    private static double JxlDistanceFromDefaults(DefaultsConfig d) => d.LosslessDefault ? 0 : d.JxlDistance;
 
     partial void OnTargetFormatChanged(string value)
     {
@@ -183,10 +202,22 @@ public partial class MainViewModel : ObservableObject
         }
         _qualityUserCustomized = false;
 
+        var isJxl = string.Equals(value, "jxl", StringComparison.OrdinalIgnoreCase);
+
         LosslessVisible = LosslessCapableFormats.Contains(value);
         if (LosslessVisible)
             Lossless = EffectiveDefaults().LosslessDefault;
 
+        JxlDistanceVisible = isJxl;
+        if (isJxl)
+        {
+            _suppressJxlDistanceTracking = true;
+            JxlDistance = JxlDistanceFromDefaults(EffectiveDefaults());
+            _suppressJxlDistanceTracking = false;
+        }
+        _jxlDistanceUserCustomized = false;
+
+        QualityVisible = true;
         QualityEnabled = !LosslessVisible || !Lossless;
     }
 
@@ -198,7 +229,17 @@ public partial class MainViewModel : ObservableObject
     partial void OnQualityChanged(int value)
     {
         if (!_suppressQualityTracking)
+        {
             _qualityUserCustomized = true;
+            if (string.Equals(TargetFormat, "jxl", StringComparison.OrdinalIgnoreCase))
+                _jxlDistanceUserCustomized = false;
+        }
+    }
+
+    partial void OnJxlDistanceChanged(double value)
+    {
+        if (!_suppressJxlDistanceTracking && JxlDistanceVisible)
+            _jxlDistanceUserCustomized = true;
     }
 
     public void AddFiles(IEnumerable<string> paths)
@@ -242,12 +283,22 @@ public partial class MainViewModel : ObservableObject
     private void ClearLog() => LogLines.Clear();
 
     [RelayCommand]
-    private void ClearCompleted()
+    private void ClearCompleted() => RemoveLogEntriesWhere(e => e.Kind == LogEntryKind.Success);
+
+    [RelayCommand]
+    private void ClearSkipped() => RemoveLogEntriesWhere(e => e.Kind == LogEntryKind.Skipped);
+
+    [RelayCommand]
+    private void KeepErrorsOnly() => RemoveLogEntriesWhere(e => e.Kind != LogEntryKind.Error);
+
+    [RelayCommand]
+    private void KeepErrorsAndSkipped() =>
+        RemoveLogEntriesWhere(e => e.Kind != LogEntryKind.Error && e.Kind != LogEntryKind.Skipped);
+
+    private void RemoveLogEntriesWhere(Func<LogEntryViewModel, bool> predicate)
     {
-        var toRemove = LogLines
-            .Where(l => l.StartsWith("✓") || l.StartsWith("⊘") || l.StartsWith("─"))
-            .ToList();
-        foreach (var line in toRemove) LogLines.Remove(line);
+        var toRemove = LogLines.Where(predicate).ToList();
+        foreach (var entry in toRemove) LogLines.Remove(entry);
     }
 
     [RelayCommand]
@@ -325,6 +376,10 @@ public partial class MainViewModel : ObservableObject
             Lossless = LosslessVisible && Lossless,
             WebpMethod = defaults.WebpMethod,
             JxlEffort = defaults.JxlEffort,
+            JxlDistance = string.Equals(TargetFormat, "jxl", StringComparison.OrdinalIgnoreCase)
+                && _jxlDistanceUserCustomized
+                ? JxlDistance
+                : null,
             Metadata = MetadataMode,
             Overwrite = OverwriteExisting || SessionOverwrite,
             OutputDirectory = OutputDirectory,
@@ -389,21 +444,24 @@ public partial class MainViewModel : ObservableObject
                     ProgressValue = p.Completed;
                     if (p.LastResult is { } r)
                     {
-                        string line;
+                        LogEntryViewModel entry;
                         if (r.Success)
                         {
                             var sizePart = FormatSizeDelta(r.InputBytes, r.OutputBytes);
-                            line = $"✓ {Path.GetFileName(r.InputPath)} → {Path.GetFileName(r.OutputPath)} [{r.BackendUsed}]{sizePart} {r.Elapsed.TotalSeconds:F2}s";
+                            var line = $"✓ {Path.GetFileName(r.InputPath)} → {Path.GetFileName(r.OutputPath)} [{r.BackendUsed}]{sizePart} {r.Elapsed.TotalSeconds:F2}s";
+                            entry = new LogEntryViewModel(line, LogEntryKind.Success, r.OutputPath);
                         }
                         else if (r.Skipped)
                         {
-                            line = $"⊘ {Path.GetFileName(r.InputPath)}: skipped (output already exists)";
+                            var line = $"⊘ {Path.GetFileName(r.InputPath)}: skipped (output already exists)";
+                            entry = new LogEntryViewModel(line, LogEntryKind.Skipped, r.OutputPath);
                         }
                         else
                         {
-                            line = $"✗ {Path.GetFileName(r.InputPath)}: {r.Error}";
+                            var line = $"✗ {Path.GetFileName(r.InputPath)}: {r.Error}";
+                            entry = new LogEntryViewModel(line, LogEntryKind.Error, r.InputPath);
                         }
-                        LogLines.Add(line);
+                        LogLines.Add(entry);
                         StatusText = p.Completed < p.Total
                             ? $"Converting... ({p.Completed:N0} / {p.Total:N0})"
                             : $"Done: {p.Completed - p.Failed - p.Skipped:N0} succeeded, {p.Skipped:N0} skipped, {p.Failed:N0} failed — {totalSw.Elapsed.TotalSeconds:F1}s";
@@ -421,7 +479,9 @@ public partial class MainViewModel : ObservableObject
                 var totalIn = succeeded.Sum(r => r.InputBytes ?? 0);
                 var totalOut = succeeded.Sum(r => r.OutputBytes ?? 0);
                 if (succeeded.Count > 0 && totalIn > 0)
-                    LogLines.Add($"─── Total: {succeeded.Count} file(s)  {FormatSizeDelta(totalIn, totalOut).Trim()} ───");
+                    LogLines.Add(new LogEntryViewModel(
+                        $"─── Total: {succeeded.Count} file(s)  {FormatSizeDelta(totalIn, totalOut).Trim()} ───",
+                        LogEntryKind.Info));
 
                 // Write log file if enabled
                 if (config.Log.Enabled && results.Count > 0)
@@ -432,18 +492,18 @@ public partial class MainViewModel : ObservableObject
                             ? options.OutputDirectory
                             : Path.GetDirectoryName(results[0].OutputPath) ?? ".";
                         var logPath = LogWriter.Write(results, logDir, config.Log.Format, totalSw.Elapsed);
-                        LogLines.Add($"📄 Log written: {logPath}");
+                        LogLines.Add(new LogEntryViewModel($"📄 Log written: {logPath}", LogEntryKind.Info, logPath));
                     }
                     catch (Exception ex)
                     {
-                        LogLines.Add($"⚠ Log file error: {ex.Message}");
+                        LogLines.Add(new LogEntryViewModel($"⚠ Log file error: {ex.Message}", LogEntryKind.Error));
                     }
                 }
             }
             catch (OperationCanceledException)
             {
                 StatusText = $"Cancelled after {totalSw.Elapsed.TotalSeconds:F1}s.";
-                LogLines.Add("— Cancelled —");
+                LogLines.Add(new LogEntryViewModel("— Cancelled —", LogEntryKind.Info));
             }
         }
 

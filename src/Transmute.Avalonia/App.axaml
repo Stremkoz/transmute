@@ -24,6 +24,9 @@
                     <SolidColorBrush x:Key="TextSecondaryBrush"     Color="#555555"/>
                     <SolidColorBrush x:Key="TextMutedBrush"         Color="#999999"/>
                     <SolidColorBrush x:Key="LogTextBrush"           Color="#C8C8D4"/>
+                    <SolidColorBrush x:Key="LogSkippedBrush"        Color="#E5C100"/>
+                    <SolidColorBrush x:Key="LogErrorBrush"          Color="#FF6B6B"/>
+                    <SolidColorBrush x:Key="LogInfoBrush"           Color="#5DD9D9"/>
 
                     <!-- Accent -->
                     <SolidColorBrush x:Key="AccentBrush"            Color="#0078D4"/>
@@ -127,6 +130,9 @@
                     <SolidColorBrush x:Key="TextSecondaryBrush"     Color="#AAAABB"/>
                     <SolidColorBrush x:Key="TextMutedBrush"         Color="#60607A"/>
                     <SolidColorBrush x:Key="LogTextBrush"           Color="#C8C8D4"/>
+                    <SolidColorBrush x:Key="LogSkippedBrush"        Color="#FFD866"/>
+                    <SolidColorBrush x:Key="LogErrorBrush"          Color="#FF6B6B"/>
+                    <SolidColorBrush x:Key="LogInfoBrush"           Color="#5DD9D9"/>
 
                     <!-- Accent -->
                     <SolidColorBrush x:Key="AccentBrush"            Color="#4EA0FF"/>

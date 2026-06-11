@@ -52,6 +52,7 @@ Inputs are resolved as follows:
 | `--lossless` | `-l` | Enable lossless encoding. Supported for WebP and JXL. Takes precedence over `--quality`. |
 | `--method <0–6>` | | WebP compression method. 0 is fastest, 6 is slowest and best. Default: 6. |
 | `--effort <1–9>` | `-e` | JXL effort level. 1 is fastest, 9 produces the smallest file. Default: 7. |
+| `--distance <0–2>` | `-d` | JXL distance. 0 is lossless, 0.1–1.0 is visually lossless, and 1.1–2 is lossy. Overrides `--quality` for JXL output. |
 
 #### Filtering
 
@@ -98,6 +99,9 @@ transmute convert . --format webp
 
 # Specific folder, recursive
 transmute convert "C:\Photos\Holiday" --format jxl --recursive
+
+# JXL with explicit visually lossless distance
+transmute convert "C:\Photos\Holiday" --format jxl --distance 0.8 --recursive
 
 # Multiple inputs at once
 transmute convert a.jpg b.png ./subfolder --format avif
@@ -169,6 +173,7 @@ Press **Ctrl+C** to stop watching gracefully.
 | `--profile <name>` | `-p` | Apply a named profile. |
 | `--stable-time <ms>` | | Milliseconds a file's last-write time must be unchanged before Transmute processes it. Minimum: 50. Default: 500. |
 | `--quality <0–100>` | `-q` | Lossy quality. |
+| `--distance <0–2>` | `-d` | JXL distance. Overrides `--quality` for JXL output. |
 | `--lossless` | | Lossless encoding. |
 | `--overwrite` | | Overwrite existing output files. |
 | `--metadata <mode>` | | Metadata handling. |
@@ -333,6 +338,7 @@ transmute config path
 | `defaults.losslessDefault` | bool | `true` | Default lossless for JXL and WebP |
 | `defaults.webpMethod` | int | `6` | WebP method 0–6 |
 | `defaults.jxlEffort` | int | `7` | JXL effort 1–9 |
+| `defaults.jxlDistance` | double | `1.0` | JXL distance when lossy JXL is the default |
 | `defaults.defaultOutputDirectory` | string? | `null` | Output directory (null = beside input) |
 | `defaults.outputNamingPattern` | string | `{name}.{ext}` | Filename template |
 | `processing.maxParallelJobs` | int | `0` | Parallel jobs (0 = CPU count) |

@@ -43,6 +43,10 @@ public static class WatchCommand
         var qualityOpt = new Option<int?>("--quality", "Quality 0-100 for lossy formats");
         qualityOpt.AddAlias("-q");
 
+        var distanceOpt = new Option<double?>("--distance",
+            "JXL distance 0-2 (0 = lossless, 0.1-1.0 = visually lossless, 1.1-2 = lossy). Overrides --quality for JXL output.");
+        distanceOpt.AddAlias("-d");
+
         var losslessOpt  = new Option<bool>("--lossless", "Lossless encoding (JXL and WebP only)");
         var overwriteOpt = new Option<bool>("--overwrite", "Overwrite existing output files");
 
@@ -60,7 +64,7 @@ public static class WatchCommand
             "Watch a folder and automatically convert new images as they appear")
         {
             folderArg, formatOpt, outputDirOpt, recursiveOpt, profileOpt,
-            stableTimeOpt, qualityOpt, losslessOpt, overwriteOpt, metadataOpt,
+            stableTimeOpt, qualityOpt, distanceOpt, losslessOpt, overwriteOpt, metadataOpt,
             jobsOpt, verboseOpt,
         };
 
@@ -73,6 +77,7 @@ public static class WatchCommand
             var profileName = ctx.ParseResult.GetValueForOption(profileOpt);
             var stableMs    = Math.Max(50, ctx.ParseResult.GetValueForOption(stableTimeOpt));
             var quality     = ctx.ParseResult.GetValueForOption(qualityOpt);
+            var distance    = ctx.ParseResult.GetValueForOption(distanceOpt);
             var lossless    = ctx.ParseResult.GetValueForOption(losslessOpt);
             var overwrite   = ctx.ParseResult.GetValueForOption(overwriteOpt);
             var metaMode    = ctx.ParseResult.GetValueForOption(metadataOpt);
@@ -95,7 +100,21 @@ public static class WatchCommand
             if (jobs == 0) jobs = config.Processing.MaxParallelJobs;
 
             var fmt = format.ToLowerInvariant();
-            bool effectiveLossless = lossless || (fmt is "jxl" or "webp" && defaults.LosslessDefault);
+            bool jxlDistanceOverride = distance.HasValue && fmt == "jxl";
+            bool effectiveLossless = lossless ||
+                (fmt is "jxl" or "webp" && defaults.LosslessDefault && quality is null && !jxlDistanceOverride);
+
+            double? jxlDistance = null;
+            if (fmt == "jxl")
+            {
+                if (distance.HasValue)
+                    jxlDistance = distance.Value;
+                else if (!effectiveLossless && quality is null)
+                    jxlDistance = defaults.JxlDistance;
+
+                if (jxlDistance == 0)
+                    effectiveLossless = true;
+            }
 
             var options = new ConversionOptions
             {
@@ -103,6 +122,7 @@ public static class WatchCommand
                 Lossless            = effectiveLossless,
                 WebpMethod          = defaults.WebpMethod,
                 JxlEffort           = defaults.JxlEffort,
+                JxlDistance         = jxlDistance,
                 Metadata            = metaMode ?? defaults.MetadataMode,
                 Overwrite           = overwrite || defaults.OverwriteExisting,
                 OutputDirectory     = outputDir?.FullName ?? defaults.DefaultOutputDirectory,

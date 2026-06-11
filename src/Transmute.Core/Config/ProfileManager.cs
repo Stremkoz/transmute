@@ -195,6 +195,7 @@ public class ProfileManager
             ("defaults", "losslessdefault")       => Inherited(profile.LosslessDefault,       globalDefaults.LosslessDefault),
             ("defaults", "webpmethod")            => Inherited(profile.WebpMethod,            globalDefaults.WebpMethod),
             ("defaults", "jxleffort")             => Inherited(profile.JxlEffort,             globalDefaults.JxlEffort),
+            ("defaults", "jxldistance")           => Inherited(profile.JxlDistance,           globalDefaults.JxlDistance),
             ("defaults", "outputnamingpattern")   => Inherited(profile.OutputNamingPattern,   globalDefaults.OutputNamingPattern),
             ("defaults", "defaultoutputdirectory")=> Inherited(profile.DefaultOutputDirectory, globalDefaults.DefaultOutputDirectory),
             ("filter", "skip")                    => profile.SkipFormats.Count > 0 ? string.Join(", ", profile.SkipFormats) : "(none)",
@@ -228,6 +229,7 @@ public class ProfileManager
             case ("defaults", "losslessdefault"):        profile.LosslessDefault       = NullableBool(value);  break;
             case ("defaults", "webpmethod"):             profile.WebpMethod            = NullableInt(value);   break;
             case ("defaults", "jxleffort"):              profile.JxlEffort             = NullableInt(value);   break;
+            case ("defaults", "jxldistance"):            profile.JxlDistance           = NullableDouble(value); break;
             case ("defaults", "outputnamingpattern"):    profile.OutputNamingPattern   = value == "null" ? null : value; break;
             case ("defaults", "defaultoutputdirectory"): profile.DefaultOutputDirectory = value == "null" ? null : value; break;
             case ("filter", "skip"):
@@ -253,6 +255,9 @@ public class ProfileManager
 
     private static int? NullableInt(string value) =>
         value == "null" ? null : int.Parse(value);
+
+    private static double? NullableDouble(string value) =>
+        value == "null" ? null : double.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
 
     private static bool? NullableBool(string value) =>
         value == "null" ? null : bool.Parse(value);

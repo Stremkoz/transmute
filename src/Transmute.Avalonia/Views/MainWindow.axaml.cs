@@ -30,7 +30,11 @@ public partial class MainWindow : Window
         DataContext = vm;
 
         vm.LogLines.CollectionChanged += (_, _) =>
-            Dispatcher.UIThread.Post(() => LogScrollViewer.ScrollToEnd(), DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_vm.LogLines.Count > 0)
+                    LogList.ScrollIntoView(_vm.LogLines[^1]);
+            }, DispatcherPriority.Background);
 
         // External file/folder drops anywhere on the window or onto the queue
         AddHandler(DragDrop.DragOverEvent, Window_DragOver);
@@ -206,6 +210,62 @@ public partial class MainWindow : Window
 
     private void QueueCtxSelectAll_Click(object? sender, RoutedEventArgs e) =>
         QueueList.SelectAll();
+
+    // ── Clear split button ──────────────────────────────────────────────────────
+
+    /// <summary>Right-clicking either half of the split Clear button opens the "more options" menu.</summary>
+    private void ClearSplitButton_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(ClearChevronButton).Properties.IsRightButtonPressed) return;
+        ClearChevronButton.Flyout?.ShowAt(ClearChevronButton);
+        e.Handled = true;
+    }
+
+    // ── Log context menu ──────────────────────────────────────────────────────
+
+    /// <summary>Right-clicking a log row selects it, so the context menu acts on the row under the cursor.</summary>
+    private void LogList_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(LogList).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Visual visual) return;
+
+        var item = visual.FindAncestorOfType<ListBoxItem>(includeSelf: true);
+        if (item?.DataContext is LogEntryViewModel entry)
+            LogList.SelectedItem = entry;
+    }
+
+    private void LogContextMenu_Opened(object? sender, RoutedEventArgs e)
+    {
+        var hasPath = LogList.SelectedItem is LogEntryViewModel { FilePath: not null };
+        LogCtxOpenFolder.IsEnabled = hasPath;
+        LogCtxCopyPath.IsEnabled = hasPath;
+    }
+
+    private void LogCtxOpenFolder_Click(object? sender, RoutedEventArgs e)
+    {
+        if (LogList.SelectedItem is LogEntryViewModel { FilePath: { } path } &&
+            Path.GetDirectoryName(path) is { } dir)
+            Platform.OpenFolder(dir);
+    }
+
+    private async void LogCtxCopyPath_Click(object? sender, RoutedEventArgs e)
+    {
+        if (LogList.SelectedItem is LogEntryViewModel { FilePath: { } path })
+            await CopyToClipboardAsync(path);
+    }
+
+    private async void LogCtxCopyLine_Click(object? sender, RoutedEventArgs e)
+    {
+        if (LogList.SelectedItem is LogEntryViewModel entry)
+            await CopyToClipboardAsync(entry.Text);
+    }
+
+    private async Task CopyToClipboardAsync(string text)
+    {
+        var clipboard = GetTopLevel(this)?.Clipboard;
+        if (clipboard is not null)
+            await clipboard.SetTextAsync(text);
+    }
 
     // ── Toolbar / pickers ─────────────────────────────────────────────────────
 

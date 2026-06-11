@@ -64,5 +64,9 @@ public class DefaultsConfig
     public bool LosslessDefault { get; set; } = true;
     public int WebpMethod { get; set; } = 6;   // cwebp -m 0-6, 6 = slowest/best
     public int JxlEffort { get; set; } = 7;    // cjxl -e 1-9, 7 = default
+
+    // cjxl -d distance: 0 = lossless, 0.1-1.0 = visually lossless, 1.1-2 = lossy.
+    // Only used when LosslessDefault is false and the user hasn't given --quality/--distance.
+    public double JxlDistance { get; set; } = 1.0;
     public string? DefaultOutputDirectory { get; set; }
 }

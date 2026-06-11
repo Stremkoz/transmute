@@ -51,23 +51,34 @@ public class JxlBackend : BackendBase
 
     private async Task<ConversionResult> EncodeAsync(ConversionJob job, Stopwatch sw, CancellationToken ct)
     {
-        // cjxl: -d 0 = lossless, -d <float> = lossy (0.5–1.0 visually lossless, higher = worse)
+        // cjxl: -d 0 = lossless, -d <float> = lossy (0.1-1.0 visually lossless, 1.1-2 lossy, higher = worse)
         // --quality maps 0–100 like libjpeg and is mutually exclusive with -d
         var args = new List<string> { job.InputPath, job.OutputPath };
 
+        double distance;
         if (job.Options.Lossless)
         {
-            args.AddRange(["-d", "0"]);
+            distance = 0;
+        }
+        else if (job.Options.JxlDistance.HasValue)
+        {
+            // Explicit distance takes priority over the quality-derived formula.
+            distance = job.Options.JxlDistance.Value;
         }
         else
         {
-            // -d is the primary, universally supported distance flag.
             // Formula from libjxl source for quality 30-100: distance = 0.1 + (100 - q) * 0.09
             //   q=100 → 0.1 (near-lossless), q=90 → 1.0 (visually lossless), q=75 → 2.35, q=50 → 4.6
             var quality = job.Options.Quality ?? 90;
-            var distance = Math.Round(0.1 + (100 - quality) * 0.09, 2);
-            args.AddRange(["-d", distance.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)]);
+            distance = Math.Round(0.1 + (100 - quality) * 0.09, 2);
+        }
 
+        args.AddRange(["-d", distance.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)]);
+
+        var isLossless = distance <= 0;
+
+        if (!isLossless)
+        {
             // cjxl defaults to --lossless_jpeg=1 for JPEG inputs (just wraps the bitstream).
             // A non-zero distance conflicts with that default, so force re-encoding for lossy.
             var inputExt = Normalize(Path.GetExtension(job.InputPath));
@@ -81,7 +92,7 @@ public class JxlBackend : BackendBase
         // cjxl preserves all metadata by default; there is no CLI flag to strip it.
         // All MetadataMode values degrade to PreserveAll here (safe — no data loss).
         // Keep invisible pixels (alpha=0) in lossy mode; lossless always keeps them.
-        if (!job.Options.Lossless)
+        if (!isLossless)
             args.Add("--keep_invisible=1");
 
         var (code, _, stderr) = await RunProcessAsync(_cjxlPath!, args, ct);
