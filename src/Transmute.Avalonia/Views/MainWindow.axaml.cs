@@ -14,7 +14,7 @@ namespace Transmute.Avalonia.Views;
 public partial class MainWindow : Window
 {
     private static readonly DataFormat<string> QueueDragFormat =
-        DataFormat.CreateStringApplicationFormat("transmute/queue-entry");
+        DataFormat.CreateStringApplicationFormat("transmute.queue-entry");
 
     private readonly MainViewModel _vm;
 

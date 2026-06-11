@@ -321,6 +321,42 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
+        <!-- ── Segmented radio (mutually-exclusive pairs: Lossless/Lossy, Skip/Only) ── -->
+        <!-- Custom flat template avoids the Fluent radio-dot glyph entirely, so the
+             control renders as the same pill as ToggleButton.segment. -->
+        <Style Selector="RadioButton.segment">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Padding" Value="11,5"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="RadioButton">
+                    <ContentPresenter x:Name="PART_ContentPresenter"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Content="{TemplateBinding Content}"
+                                      Padding="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.segment:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SegmentHoverBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="RadioButton.segment:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SegmentCheckedBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SegmentCheckedBrush}"/>
+        </Style>
+        <Style Selector="RadioButton.segment:checked">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
         <!-- ── Format skip chip ── -->
         <Style Selector="ToggleButton.chip">
             <Setter Property="FontSize" Value="11"/>

@@ -203,10 +203,10 @@
                                 BorderBrush="{DynamicResource SecondaryButtonBorderBrush}"
                                 BorderThickness="1" CornerRadius="5" ClipToBounds="True">
                             <StackPanel Orientation="Horizontal">
-                                <ToggleButton Content="Lossless" Classes="segment"
+                                <RadioButton Content="Lossless" Classes="segment" GroupName="LosslessMode"
                                               IsChecked="{Binding Lossless}"/>
                                 <Rectangle Width="1" Fill="{DynamicResource SecondaryButtonBorderBrush}"/>
-                                <ToggleButton Content="Lossy" Classes="segment"
+                                <RadioButton Content="Lossy" Classes="segment" GroupName="LosslessMode"
                                               IsChecked="{Binding Lossless, Converter={x:Static local:Converters.InverseBool}}"/>
                             </StackPanel>
                         </Border>
@@ -324,10 +324,12 @@
                         <Border BorderBrush="{DynamicResource AdvancedPanelBorderBrush}" BorderThickness="1"
                                 CornerRadius="4" VerticalAlignment="Center" ClipToBounds="True">
                             <StackPanel Orientation="Horizontal">
-                                <ToggleButton Content="Skip" Classes="segment" FontSize="10.5" Padding="7,3"
+                                <RadioButton Content="Skip" Classes="segment" FontSize="10.5" Padding="7,3"
+                                              GroupName="SkipOnlyMode"
                                               IsChecked="{Binding SessionOnlyMode, Converter={x:Static local:Converters.InverseBool}}"/>
                                 <Rectangle Width="1" Fill="{DynamicResource AdvancedPanelBorderBrush}"/>
-                                <ToggleButton Content="Only" Classes="segment" FontSize="10.5" Padding="7,3"
+                                <RadioButton Content="Only" Classes="segment" FontSize="10.5" Padding="7,3"
+                                              GroupName="SkipOnlyMode"
                                               IsChecked="{Binding SessionOnlyMode}"/>
                             </StackPanel>
                         </Border>

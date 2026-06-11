@@ -267,10 +267,12 @@
                                     <Border BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1"
                                             CornerRadius="4" VerticalAlignment="Center" ClipToBounds="True">
                                         <StackPanel Orientation="Horizontal">
-                                            <ToggleButton Content="Skip" Classes="segment" FontSize="11" Padding="9,3"
+                                            <RadioButton Content="Skip" Classes="segment" FontSize="11" Padding="9,3"
+                                                          GroupName="ProfileSkipOnlyMode"
                                                           IsChecked="{Binding ProfileFilterIsOnly, Converter={x:Static local:Converters.InverseBool}}"/>
                                             <Rectangle Width="1" Fill="{DynamicResource InputBorderBrush}"/>
-                                            <ToggleButton Content="Only" Classes="segment" FontSize="11" Padding="9,3"
+                                            <RadioButton Content="Only" Classes="segment" FontSize="11" Padding="9,3"
+                                                          GroupName="ProfileSkipOnlyMode"
                                                           IsChecked="{Binding ProfileFilterIsOnly}"/>
                                         </StackPanel>
                                     </Border>
