@@ -1,6 +1,6 @@
 # GUI Guide
 
-The Transmute GUI (`transmute-avalonia.exe`) provides a drag-and-drop interface for interactive image conversion. This guide walks through every part of the interface.
+The Transmute GUI (`Transmute-GUI.exe`) provides a drag-and-drop interface for interactive image conversion. This guide walks through every part of the interface.
 
 > The original WPF GUI (`Transmute.GUI.exe`) is archived and retired. The Avalonia GUI is
 > the actively developed, cross-platform replacement.

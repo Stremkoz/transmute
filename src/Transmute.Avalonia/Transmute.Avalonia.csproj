@@ -3,7 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
-    <AssemblyName>transmute-avalonia</AssemblyName>
+    <AssemblyName>Transmute-GUI</AssemblyName>
+    <Version>1.1.0</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Assets\Transmute.ico</ApplicationIcon>

@@ -97,7 +97,7 @@ JPEG, PNG, WebP, AVIF, HEIF/HEIC, TIFF, GIF (animated), APNG (animated), BMP, JP
 
 **Runtime:** .NET 9.0
 
-Download the latest release from the [Releases page](../../releases). Extract the zip and run `transmute-avalonia.exe` for the GUI or `transmute.exe` for the CLI.
+Download the latest release from the [Releases page](../../releases). Extract the zip and run `Transmute-GUI.exe` for the GUI or `transmute.exe` for the CLI.
 
 Transmute itself has no mandatory dependencies beyond .NET 9, but it needs at least one backend installed to do anything useful. libvips covers the most ground and is the recommended starting point.
 
@@ -137,7 +137,7 @@ transmute config set binaries.cjxl  "C:\path\to\cjxl.exe"
 
 ### GUI Quick Start
 
-1. Launch `transmute-avalonia.exe`
+1. Launch `Transmute-GUI.exe`
 2. Drag images or folders onto the window (or use **Ctrl+O** to browse)
 3. Pick a target format from the dropdown
 4. Adjust quality, or JPEG XL distance, if needed
