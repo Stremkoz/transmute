@@ -523,6 +523,91 @@ fn arb_target() -> impl Strategy<Value = ResolvedTarget> {
     })
 }
 
+fn with_policy(format: Format, policy: MetadataPolicy) -> ResolvedTarget {
+    ResolvedTarget {
+        metadata: policy,
+        ..target(format)
+    }
+}
+
+#[test]
+fn rewritable_outputs_are_encoded_keeping_everything_then_fixed() {
+    let inventory = folder("/in", &[("a.jpg", Format::Jpeg)]);
+    let plan = run(
+        &inventory,
+        &config(
+            vec![
+                with_policy(Format::Webp, MetadataPolicy::StripAll),
+                with_policy(Format::Avif, MetadataPolicy::StripAll),
+            ],
+            CollisionPolicy::Skip,
+        ),
+        &[],
+    );
+    let webp = plan.jobs[0].metadata;
+    assert_eq!(webp.tool_policy, MetadataPolicy::PreserveAll);
+    assert!(webp.fix_output);
+    assert!(!webp.auto_orient, "the orientation survives in the EXIF");
+
+    // AVIF can't be rewritten: the tool applies the policy, and the
+    // pixels are rotated because the orientation tag won't survive.
+    let avif = plan.jobs[1].metadata;
+    assert_eq!(avif.tool_policy, MetadataPolicy::StripAll);
+    assert!(!avif.fix_output);
+    assert!(avif.auto_orient);
+}
+
+#[test]
+fn lossless_jpeg_recompression_cleans_the_source_first() {
+    let mut tools = tools();
+    let cjxl = Capabilities {
+        reads: [Format::Jpeg].into(),
+        writes: [Format::Jxl].into(),
+        metadata: Some(MetadataSupport {
+            preserves: MetadataKinds::ALL,
+            can_strip: false,
+            selective: false,
+        }),
+        ..Capabilities::default()
+    };
+    tools = Toolbox::new([
+        (ToolId::Cjxl, cjxl),
+        (ToolId::Vips, tools.get(ToolId::Vips).unwrap().clone()),
+    ]);
+    let lossless = |policy| ResolvedTarget {
+        settings: CodecSettings::Jxl(crate::codec::JxlSettings {
+            lossless: true,
+            ..crate::codec::JxlSettings::factory()
+        }),
+        ..with_policy(Format::Jxl, policy)
+    };
+    let inventory = folder("/in", &[("a.jpg", Format::Jpeg)]);
+    let exists = |_: &Path| false;
+    let plan_for = |policy| {
+        plan(
+            &inventory,
+            &config(vec![lossless(policy)], CollisionPolicy::Skip),
+            &tools,
+            &PlanContext {
+                batch_date: NaiveDate::from_ymd_opt(2026, 10, 15).unwrap(),
+                output_exists: &exists,
+            },
+        )
+    };
+
+    let stripped = plan_for(MetadataPolicy::StripAll);
+    let job = &stripped.jobs[0];
+    assert_eq!(job.route.as_ref().unwrap().steps[0].tool, ToolId::Cjxl);
+    assert!(job.metadata.clean_source);
+    assert!(
+        !job.metadata.fix_output,
+        "the cleaned source needs no fixing after"
+    );
+
+    let preserved = plan_for(MetadataPolicy::PreserveAll);
+    assert!(!preserved.jobs[0].metadata.clean_source);
+}
+
 proptest! {
     #[test]
     fn ready_jobs_never_share_or_overwrite(

@@ -32,7 +32,11 @@ pub struct StepRequest<'a> {
     /// The target's settings, for the step that writes the final format.
     /// `None` for intermediate steps, which write lossless PNG.
     pub settings: Option<&'a CodecSettings>,
+    /// The metadata policy for the tool to apply (see `MetadataHandling`).
     pub metadata: MetadataPolicy,
+    /// Rotate the pixels by the source's EXIF orientation, where the tool
+    /// can.
+    pub auto_orient: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -304,9 +308,12 @@ fn vips(
     request: &StepRequest<'_>,
     settings: &CodecSettings,
 ) -> Result<(), String> {
-    // vips loads only the first frame unless asked for all of them.
+    // vips loads only the first frame unless asked for all of them. Only
+    // its JPEG loader takes `autorotate`; HEIF applies its own rotation.
     let load = if request.step.animated {
         "[n=-1]"
+    } else if request.auto_orient && request.step.from == Format::Jpeg {
+        "[autorotate=true]"
     } else {
         "[]"
     };
@@ -411,6 +418,9 @@ fn magick(
         if step.animated { "" } else { "[0]" },
     ));
     args.add(input);
+    if request.auto_orient {
+        args.add("-auto-orient");
+    }
 
     match settings {
         CodecSettings::Jpeg(JpegSettings {
@@ -610,6 +620,7 @@ mod tests {
             output: Path::new("out"),
             settings,
             metadata,
+            auto_orient: false,
         };
         invoker()
             .invocation(&request)
@@ -907,6 +918,30 @@ mod tests {
     }
 
     #[test]
+    fn auto_orient_rotates_pixels_where_the_tool_can() {
+        let s = step(ToolId::Vips, Format::Jpeg, Format::Avif);
+        let settings = CodecSettings::factory(Format::Avif);
+        let request = StepRequest {
+            step: &s,
+            input: Path::new("in"),
+            output: Path::new("out"),
+            settings: Some(&settings),
+            metadata: MetadataPolicy::StripAll,
+            auto_orient: true,
+        };
+        let args = invoker().invocation(&request).unwrap().args;
+        assert_eq!(args[1], "in[autorotate=true]");
+
+        let s = step(ToolId::Magick, Format::Jpeg, Format::Avif);
+        let request = StepRequest {
+            step: &s,
+            ..request
+        };
+        let args = invoker().invocation(&request).unwrap().args;
+        assert_eq!(args[1], "-auto-orient");
+    }
+
+    #[test]
     fn option_like_paths_are_made_safe() {
         let s = step(ToolId::Cwebp, Format::Png, Format::Webp);
         let request = StepRequest {
@@ -915,6 +950,7 @@ mod tests {
             output: Path::new("out.webp"),
             settings: None,
             metadata: MetadataPolicy::PreserveAll,
+            auto_orient: false,
         };
         let args = invoker().invocation(&request).unwrap().args;
         assert!(args.contains(&Path::new(".").join("-rf.png").into_os_string()));
@@ -939,6 +975,7 @@ mod tests {
             output: Path::new("out"),
             settings: Some(&CodecSettings::factory(Format::Jpeg)),
             metadata: MetadataPolicy::PreserveAll,
+            auto_orient: false,
         };
         assert!(invoker().invocation(&request).is_err());
     }
@@ -960,6 +997,7 @@ mod tests {
                     output: Path::new("out"),
                     settings: Some(&CodecSettings::factory(to)),
                     metadata: MetadataPolicy::PreserveAll,
+                    auto_orient: false,
                 };
                 assert!(invoker().invocation(&request).is_ok(), "{tool:?} → {to:?}");
             }

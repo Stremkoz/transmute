@@ -159,14 +159,18 @@ Write `{{` and `}}` for literal braces. Characters Windows forbids in file names
 
 ## Metadata
 
-| Value | Keeps |
-|---|---|
-| `preserveAll` | Everything (default) |
-| `stripAll` | Nothing |
-| `colorProfileOnly` | The ICC colour profile only |
-| `copyrightOnly` | Author, copyright and rights fields plus the colour profile. Drops location and device data |
+| Value | EXIF | XMP | ICC colour profile |
+|---|---|---|---|
+| `preserveAll` (default) | Kept, as in the source | Kept | Kept |
+| `stripAll` | Removed (see orientation below) | Removed | Removed |
+| `colorProfileOnly` | Removed (see orientation below) | Removed | Kept |
+| `copyrightOnly` | Only the copyright and artist fields. Location, device and dates are removed | Removed | Kept |
 
-Not every encoder can honour every mode. Transmute checks this against the installed tools and warns before a run instead of silently ignoring the setting.
+Every mode except `preserveAll` also removes comments, text chunks, IPTC data and embedded previews.
+
+**Orientation.** A photo taken with a rotated camera only displays upright because of its EXIF orientation field. Modes that remove EXIF keep a minimal EXIF block holding just that field, so nothing about the photo or camera survives. Where the output format can't carry it that way, the pixels are rotated instead when the encoder supports it (libvips for JPEG sources, ImageMagick).
+
+Not every mode can be honoured for every output. GIF and BMP files have no place for metadata, for example, and copyright filtering isn't available inside AVIF, HEIF or TIFF files. Transmute works this out when planning, against the installed tools, and reports it before the run instead of silently ignoring the setting.
 
 ## Collision
 

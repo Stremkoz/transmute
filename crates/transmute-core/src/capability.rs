@@ -36,6 +36,10 @@ pub struct Capabilities {
     /// (10- or 12-bit AVIF, say) go to another tool.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub shallow_reads: BTreeSet<Format>,
+    /// Metadata the tool never writes into a format, even when told to keep
+    /// everything (no EXIF in TIFF output, say). Narrows `metadata`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub metadata_drops: BTreeMap<Format, MetadataKinds>,
     /// How the tool handles metadata on the files it writes. `None` means the
     /// tool isn't characterised for this, e.g. a decoder whose output only
     /// feeds another step, with metadata handled from the original source.
@@ -48,6 +52,23 @@ impl Capabilities {
     /// True if the tool converts `from` to `to` in one step.
     pub fn converts(&self, from: Format, to: Format) -> bool {
         self.reads.contains(&from) && self.writes.contains(&to)
+    }
+
+    /// The metadata this tool carries into a file of `format`.
+    pub fn carries(&self, format: Format) -> MetadataKinds {
+        let Some(support) = self.metadata else {
+            return MetadataKinds::NONE;
+        };
+        let dropped = self
+            .metadata_drops
+            .get(&format)
+            .copied()
+            .unwrap_or_default();
+        MetadataKinds {
+            exif: support.preserves.exif && !dropped.exif,
+            xmp: support.preserves.xmp && !dropped.xmp,
+            icc: support.preserves.icc && !dropped.icc,
+        }
     }
 
     /// Settings among `relevant` that this tool can't apply when writing `to`.

@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 use transmute_backends::invoke::{Invoker, StepRequest};
 use transmute_core::inventory::Inventory;
+use transmute_core::metadata;
 use transmute_core::plan::{JobStatus, Plan};
 use transmute_core::preset::JobConfig;
 
@@ -279,10 +280,48 @@ async fn execute_job(
         return failed(format!("could not create {}: {err}", dir.display()));
     }
 
+    let Some(source_format) = route.steps.first().map(|step| step.from) else {
+        return failed("the route has no steps".into());
+    };
+    let to = target.settings.format();
+
     // Each step's result is the next step's input. Every temp file deletes
     // itself when dropped, unless the last one is moved into place.
     let mut temps: Vec<TempPath> = Vec::new();
     let mut input: PathBuf = entry.path.clone();
+
+    if job.metadata.clean_source {
+        // Numbered after the steps, so it never shares a step's name.
+        let copy = temp_path(
+            dir,
+            journal.tag(),
+            index,
+            route.steps.len(),
+            source_format.output_extension(),
+        );
+        if let Err(err) = journal.record(&copy) {
+            return failed(format!("could not record a temporary file: {err}"));
+        }
+        match TempPath::try_from_path(&copy) {
+            Ok(temp) => temps.push(temp),
+            Err(err) => return failed(format!("could not prepare a temporary file: {err}")),
+        }
+        let (source, dest, policy) = (entry.path.clone(), copy.clone(), target.metadata);
+        let cleaned = tokio::task::spawn_blocking(move || {
+            metadata::clean_copy(&source, source_format, policy, &dest)
+        })
+        .await;
+        match cleaned {
+            Ok(Ok(())) => input = copy,
+            Ok(Err(err)) => {
+                return failed(format!(
+                    "could not remove the source's metadata before converting: {err}"
+                ));
+            }
+            Err(err) => return failed(format!("the metadata clean-up stopped: {err}")),
+        }
+    }
+
     for (step_index, step) in route.steps.iter().enumerate() {
         let is_last = step_index + 1 == route.steps.len();
         let output = temp_path(
@@ -305,7 +344,8 @@ async fn execute_job(
             input: &input,
             output: &output,
             settings: is_last.then_some(&target.settings),
-            metadata: target.metadata,
+            metadata: job.metadata.tool_policy,
+            auto_orient: job.metadata.auto_orient,
         };
         let invocation = match invoker.invocation(&request) {
             Ok(invocation) => invocation,
@@ -336,6 +376,22 @@ async fn execute_job(
     let Some(final_temp) = temps.pop() else {
         return failed("the route has no steps".into());
     };
+    if job.metadata.fix_output {
+        let (output, policy, source) = (
+            final_temp.to_path_buf(),
+            target.metadata,
+            entry.path.clone(),
+        );
+        let fixed = tokio::task::spawn_blocking(move || {
+            metadata::fix_output(&output, to, policy, &source, source_format)
+        })
+        .await;
+        match fixed {
+            Ok(Ok(_)) => {}
+            Ok(Err(err)) => return failed(format!("could not set the output's metadata: {err}")),
+            Err(err) => return failed(format!("setting the output's metadata stopped: {err}")),
+        }
+    }
     match finalise(final_temp, &job.output, job.replaces_existing) {
         Ok(output_bytes) => JobOutcome::Converted {
             input_bytes: entry.size,

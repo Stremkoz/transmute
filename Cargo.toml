@@ -15,9 +15,11 @@ transmute-core = { path = "crates/transmute-core" }
 transmute-backends = { path = "crates/transmute-backends" }
 transmute-engine = { path = "crates/transmute-engine" }
 
+brotli-decompressor = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive"] }
 process-wrap = { version = "8", features = ["tokio1", "creation-flags", "job-object", "process-group", "kill-on-drop"] }
+miniz_oxide = "0.8"
 proptest = "1"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }

@@ -20,10 +20,11 @@ use chrono::NaiveDate;
 pub use paths::collision_key;
 pub use route::{Route, Step, can_animate};
 
-use crate::capability::Toolbox;
+use crate::capability::{MetadataKinds, Toolbox};
 use crate::format::Format;
 use crate::inspect::Content;
 use crate::inventory::Inventory;
+use crate::metadata;
 use crate::output::{CollisionPolicy, Destination, MetadataPolicy};
 use crate::preset::{JobConfig, ResolvedTarget};
 use crate::tool::ToolId;
@@ -66,7 +67,39 @@ pub struct PlannedJob {
     pub status: JobStatus,
     /// The output already exists and will be replaced (overwrite policy).
     pub replaces_existing: bool,
+    pub metadata: MetadataHandling,
     pub notes: Vec<PlanNote>,
+}
+
+/// How a job's metadata policy is carried out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MetadataHandling {
+    /// The policy the encoders are asked to apply. Outputs Transmute
+    /// rewrites itself are encoded keeping everything, so nothing is lost
+    /// before the rewrite decides.
+    pub tool_policy: MetadataPolicy,
+    /// Rotate the pixels by the EXIF orientation while encoding: the
+    /// output's own metadata won't carry the orientation.
+    pub auto_orient: bool,
+    /// Convert a copy of the source whose metadata was already reduced, for
+    /// encoders that store the source's metadata irreversibly (JPEG
+    /// recompression into JPEG XL).
+    pub clean_source: bool,
+    /// After encoding, set the output's metadata blocks from the source
+    /// (`crate::metadata::fix_output`).
+    pub fix_output: bool,
+}
+
+impl MetadataHandling {
+    /// For jobs without a route: the tools would be told the policy as is.
+    fn unrouted(policy: MetadataPolicy) -> Self {
+        Self {
+            tool_policy: policy,
+            auto_orient: false,
+            clean_source: false,
+            fix_output: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,9 +143,17 @@ pub enum PlanNote {
         preferred: ToolId,
         used: ToolId,
     },
+    /// Neither the tools nor Transmute can treat these kinds as the policy
+    /// asks.
     MetadataNotHonoured {
         policy: MetadataPolicy,
         tool: ToolId,
+        kinds: MetadataKinds,
+    },
+    /// The output format can't hold these kinds of the source's metadata.
+    MetadataLost {
+        format: Format,
+        kinds: MetadataKinds,
     },
     CopyrightFilteringUnavailable,
     Renamed {
@@ -151,15 +192,37 @@ impl fmt::Display for PlanNote {
                 preferred.program_name(),
                 used.program_name()
             ),
-            PlanNote::MetadataNotHonoured { policy, tool } => write!(
+            PlanNote::MetadataNotHonoured {
+                policy,
+                tool,
+                kinds,
+            } => write!(
                 f,
-                "{} can't apply the \"{}\" metadata setting to this file",
-                tool.program_name(),
-                policy_name(*policy)
+                "the \"{}\" metadata setting can't be applied to the {} with {}",
+                policy_name(*policy),
+                kinds_name(*kinds),
+                tool.program_name()
+            ),
+            PlanNote::MetadataLost { format, kinds } => write!(
+                f,
+                "the source's {} can't be kept: {} files have no place for {}",
+                kinds_name(*kinds),
+                format.display_name(),
+                if [kinds.exif, kinds.xmp, kinds.icc]
+                    .iter()
+                    .filter(|k| **k)
+                    .count()
+                    > 1
+                {
+                    "them"
+                } else {
+                    "it"
+                }
             ),
             PlanNote::CopyrightFilteringUnavailable => write!(
                 f,
-                "keeping only copyright fields isn't possible yet, so EXIF and XMP will be removed and only the colour profile kept"
+                "the copyright fields can't be separated from the rest of the EXIF for this file, \
+                 so EXIF and XMP will be removed and only the colour profile kept"
             ),
             PlanNote::Renamed { original } => write!(
                 f,
@@ -225,6 +288,23 @@ impl fmt::Display for SkipReason {
                 "it is already in this format (the output would be the file itself)"
             }
         })
+    }
+}
+
+/// "EXIF", "EXIF and XMP", "EXIF, XMP and colour profile".
+fn kinds_name(kinds: MetadataKinds) -> String {
+    let names: Vec<&str> = [
+        (kinds.exif, "EXIF"),
+        (kinds.xmp, "XMP"),
+        (kinds.icc, "colour profile"),
+    ]
+    .into_iter()
+    .filter_map(|(present, name)| present.then_some(name))
+    .collect();
+    match names.as_slice() {
+        [] => "metadata".into(),
+        [only] => (*only).into(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     }
 }
 
@@ -335,6 +415,11 @@ pub fn plan(
                 }
                 Err(reason) => (None, JobStatus::Blocked(BlockReason::NoRoute(reason))),
             };
+            let metadata = route
+                .as_ref()
+                .map_or(MetadataHandling::unrouted(target.metadata), |route| {
+                    metadata_handling(route, target, tools)
+                });
             let status = if name.len() > MAX_FILE_NAME_BYTES {
                 JobStatus::Blocked(BlockReason::NameTooLong)
             } else {
@@ -347,6 +432,7 @@ pub fn plan(
                 route,
                 status,
                 replaces_existing: false,
+                metadata,
                 notes,
             });
         }
@@ -366,6 +452,35 @@ pub fn plan(
         unsupported,
         filtered_out,
         previous_outputs,
+    }
+}
+
+/// How the metadata policy is carried out along `route`.
+fn metadata_handling(route: &Route, target: &ResolvedTarget, tools: &Toolbox) -> MetadataHandling {
+    let policy = target.metadata;
+    let preserve = policy == MetadataPolicy::PreserveAll;
+    let rewritable = metadata::rewrites(target.settings.format()) != MetadataKinds::NONE;
+    let (Some(first), Some(last)) = (route.steps.first(), route.steps.last()) else {
+        return MetadataHandling::unrouted(policy);
+    };
+    // A JPEG recompressed losslessly into JPEG XL keeps its metadata as
+    // part of the reconstruction data, so it must be removed beforehand.
+    let recompresses_jpeg = route.steps.len() == 1
+        && tools.get(first.tool).is_some_and(|caps| {
+            route::recompresses_jpeg(caps, &target.settings, first.from, first.to)
+        });
+    let clean_source = recompresses_jpeg && !preserve;
+    // A restored JPEG already is the original, metadata included.
+    let restored = last.restore_jpeg && preserve;
+    MetadataHandling {
+        tool_policy: if rewritable {
+            MetadataPolicy::PreserveAll
+        } else {
+            policy
+        },
+        auto_orient: !rewritable && !preserve,
+        clean_source,
+        fix_output: rewritable && !clean_source && !restored,
     }
 }
 

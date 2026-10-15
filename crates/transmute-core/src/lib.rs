@@ -10,6 +10,7 @@ pub mod extension;
 pub mod format;
 pub mod inspect;
 pub mod inventory;
+pub mod metadata;
 pub mod naming;
 pub mod output;
 pub mod plan;

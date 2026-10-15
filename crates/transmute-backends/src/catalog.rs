@@ -88,6 +88,20 @@ pub fn apply_probe(caps: &mut Capabilities, probe: Probe, works: bool) {
     }
 }
 
+/// tiffsave (vips) and ImageMagick's TIFF writer keep XMP and the ICC
+/// profile but write no EXIF, even when keeping everything (checked against
+/// a GPS-tagged JPEG in M7).
+fn no_exif_in_tiff() -> BTreeMap<Format, MetadataKinds> {
+    BTreeMap::from([(
+        Format::Tiff,
+        MetadataKinds {
+            exif: true,
+            xmp: false,
+            icc: false,
+        },
+    )])
+}
+
 /// `ignored_settings` entries, from (format, field names) pairs.
 fn ignoring(entries: &[(Format, &[&str])]) -> BTreeMap<Format, BTreeSet<String>> {
     entries
@@ -202,6 +216,12 @@ fn dwebp() -> Capabilities {
     Capabilities {
         reads: [Format::Webp].into(),
         writes: [Format::Png, Format::Tiff, Format::Bmp].into(),
+        // It writes decoded pixels only, never metadata.
+        metadata: Some(MetadataSupport {
+            preserves: MetadataKinds::NONE,
+            can_strip: true,
+            selective: true,
+        }),
         // PNG at its own fixed level; TIFF always uncompressed.
         ignored_settings: ignoring(&[
             (Format::Png, &["compression"]),
@@ -277,6 +297,7 @@ fn vips(listing: &str, version: Option<Version>) -> Capabilities {
     }
     // jxlsave encodes pixels; it can't recompress a JPEG losslessly.
     caps.ignored_settings = ignoring(&[(Format::Jxl, &["reconstructJpeg"])]);
+    caps.metadata_drops = no_exif_in_tiff();
 
     // The `keep` option for choosing which metadata survives arrived in 8.15;
     // older versions can only keep everything or strip everything.
@@ -327,6 +348,7 @@ fn magick(listing: &str) -> Capabilities {
     }
     // `file[0]` reads just the first frame of anything it reads animated.
     caps.first_frame_reads = caps.animated_reads.clone();
+    caps.metadata_drops = no_exif_in_tiff();
     caps.ignored_settings = ignoring(&[
         (Format::Jxl, &["reconstructJpeg"]),
         // Its HEIF coder has no lossless switch.

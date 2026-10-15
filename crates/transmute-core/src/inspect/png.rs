@@ -8,6 +8,10 @@ use super::bytes::{Source, invalid};
 use super::{Animation, Details, MetadataPresence};
 
 const XMP_KEYWORD: &[u8] = b"XML:com.adobe.xmp\0";
+/// ImageMagick's hex-encoded profiles in text chunks.
+const RAW_PROFILE: &[u8] = b"Raw profile type ";
+/// Long enough for any keyword checked here.
+const KEYWORD_PREFIX: u64 = 22;
 
 pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
     s.skip(8)?; // signature, checked by the sniffer
@@ -24,9 +28,15 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
             b"acTL" => animation_frames = Some(s.u32_be()?),
             b"eXIf" => exif = true,
             b"iCCP" => icc = true,
-            b"iTXt" => {
-                let keyword = s.bytes(length.min(XMP_KEYWORD.len() as u64) as usize)?;
-                xmp |= keyword == XMP_KEYWORD;
+            // XMP belongs in iTXt, but libvips writes zTXt.
+            b"tEXt" | b"zTXt" | b"iTXt" => {
+                let keyword = s.bytes(length.min(KEYWORD_PREFIX) as usize)?;
+                xmp |= keyword.starts_with(XMP_KEYWORD);
+                if let Some(profile) = keyword.strip_prefix(RAW_PROFILE) {
+                    exif |= profile.starts_with(b"exif\0") || profile.starts_with(b"APP1\0");
+                    xmp |= profile.starts_with(b"xmp\0");
+                    icc |= profile.starts_with(b"icc\0") || profile.starts_with(b"icm\0");
+                }
             }
             b"IEND" => break,
             _ => {}
@@ -100,5 +110,26 @@ mod tests {
         let file = png(8, 8, &[(b"iTXt", b"Comment\0\0\0\0\0hello".to_vec())]);
         let details = parse(&mut source(file)).unwrap();
         assert_eq!(details.metadata.xmp, Presence::Absent);
+    }
+
+    #[test]
+    fn finds_xmp_and_profiles_in_other_text_chunks() {
+        let mut ztxt = XMP_KEYWORD.to_vec();
+        ztxt.extend_from_slice(&[0, 0x78, 0x9c]);
+        let mut raw_exif = RAW_PROFILE.to_vec();
+        raw_exif.extend_from_slice(b"exif\0\nexif\n 4\n00000000\n");
+        let file = png(8, 8, &[(b"zTXt", ztxt), (b"tEXt", raw_exif)]);
+        let details = parse(&mut source(file)).unwrap();
+        assert_eq!(
+            details.metadata.xmp,
+            Presence::Present,
+            "libvips-style zTXt"
+        );
+        assert_eq!(
+            details.metadata.exif,
+            Presence::Present,
+            "ImageMagick raw profile"
+        );
+        assert_eq!(details.metadata.icc, Presence::Absent);
     }
 }

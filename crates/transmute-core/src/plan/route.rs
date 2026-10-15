@@ -8,10 +8,11 @@
 //!
 //! Every choice records why, and every compromise becomes a [`PlanNote`].
 
-use crate::capability::{Capabilities, MetadataSupport, Toolbox};
+use crate::capability::{Capabilities, MetadataKinds, Toolbox};
 use crate::codec::CodecSettings;
 use crate::format::Format;
 use crate::inspect::{Animation, MetadataPresence, Presence};
+use crate::metadata;
 use crate::output::MetadataPolicy;
 use crate::tool::ToolId;
 
@@ -102,8 +103,8 @@ const INTERMEDIATE: Format = Format::Png;
 /// One possible route, with how well it serves the job.
 struct Choice {
     steps: Vec<Step>,
-    /// The final writer applies the metadata policy by itself.
-    metadata_honoured: bool,
+    /// Metadata the route can't treat as the policy asks.
+    metadata_gaps: MetadataGaps,
     /// Relevant settings the final writer can't apply.
     ignored_settings: Vec<String>,
 }
@@ -112,7 +113,10 @@ impl Choice {
     /// Privacy first: honouring the metadata policy outranks applying every
     /// setting.
     fn rank(&self) -> (bool, bool) {
-        (self.metadata_honoured, self.ignored_settings.is_empty())
+        (
+            self.metadata_gaps.is_empty(),
+            self.ignored_settings.is_empty(),
+        )
     }
 }
 
@@ -173,9 +177,7 @@ pub fn find_route(tools: &Toolbox, req: &Requirements<'_>) -> Result<Routed, Str
     };
 
     let writer = *choice.steps.last().expect("a route has at least one step");
-    if !choice.metadata_honoured {
-        notes.push(metadata_note(req, writer.tool));
-    }
+    notes.extend(choice.metadata_gaps.notes(req, writer.tool));
     if writer.restore_jpeg {
         notes.push(PlanNote::JpegRestored);
     }
@@ -231,10 +233,35 @@ fn one_step(
             restore_jpeg,
         }],
         // The restored file is the original JPEG, metadata included.
-        metadata_honoured: (restore_jpeg && req.policy == MetadataPolicy::PreserveAll)
-            || honours(caps.metadata, req, false),
+        metadata_gaps: if restore_jpeg && req.policy == MetadataPolicy::PreserveAll {
+            MetadataGaps::default()
+        } else if req.policy != MetadataPolicy::PreserveAll
+            && recompresses_jpeg(caps, req.settings, req.from, req.to)
+        {
+            // The JPEG's metadata is reduced before recompression
+            // (`MetadataHandling::clean_source`), and JPEG is rewritable.
+            MetadataGaps::default()
+        } else {
+            metadata_gaps(caps, req, false)
+        },
         ignored_settings,
     }
+}
+
+/// True when this tool would store a JPEG losslessly inside a JPEG XL, its
+/// metadata included in the reconstruction data.
+pub(crate) fn recompresses_jpeg(
+    caps: &Capabilities,
+    settings: &CodecSettings,
+    from: Format,
+    to: Format,
+) -> bool {
+    from == Format::Jpeg
+        && to == Format::Jxl
+        && settings
+            .relevant_settings(from)
+            .contains(&"reconstructJpeg")
+        && caps.ignores(to, &["reconstructJpeg"]).is_empty()
 }
 
 /// Every decoder-to-PNG, PNG-to-encoder pairing, in preference order.
@@ -267,7 +294,7 @@ fn two_steps(tools: &Toolbox, req: &Requirements<'_>, first_frame: bool) -> Vec<
                     still(decoder, req.from, INTERMEDIATE, first_frame),
                     still(encoder, INTERMEDIATE, req.to, false),
                 ],
-                metadata_honoured: honours(caps.metadata, req, true),
+                metadata_gaps: metadata_gaps(caps, req, true),
                 ignored_settings: caps.ignores(req.to, &relevant),
             });
         }
@@ -297,51 +324,141 @@ fn converts(
     }
 }
 
-/// Whether the final writer can apply the metadata policy to this source by
-/// itself. Through an intermediate PNG nothing can be carried (decoders
-/// aren't characterised), so only removing metadata is possible.
-fn honours(
-    support: Option<MetadataSupport>,
-    req: &Requirements<'_>,
-    via_intermediate: bool,
-) -> bool {
-    let m = req.metadata;
-    let has = |p: Presence| p != Presence::Absent;
-    let (exif, xmp, icc) = (has(m.exif), has(m.xmp), has(m.icc));
-    if !exif && !xmp && !icc {
-        return true; // nothing to keep or remove
+/// Metadata a route can't treat as the policy asks, and why.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct MetadataGaps {
+    /// Kinds the tools and Transmute's own rewriting can't handle.
+    tool: MetadataKinds,
+    /// Kinds to keep that the output format can't hold.
+    format: MetadataKinds,
+    /// Copyright fields can't be separated from the rest of the EXIF.
+    copyright: bool,
+}
+
+impl MetadataGaps {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
     }
-    let Some(support) = support else {
-        return false;
-    };
-    let keeps = support.preserves;
-    match req.policy {
-        MetadataPolicy::PreserveAll => {
-            !via_intermediate && (!exif || keeps.exif) && (!xmp || keeps.xmp) && (!icc || keeps.icc)
+
+    fn notes(&self, req: &Requirements<'_>, writer: ToolId) -> Vec<PlanNote> {
+        let mut notes = Vec::new();
+        if self.format != MetadataKinds::NONE {
+            notes.push(PlanNote::MetadataLost {
+                format: req.to,
+                kinds: self.format,
+            });
         }
-        MetadataPolicy::StripAll => support.can_strip,
-        MetadataPolicy::ColorProfileOnly => {
-            if icc {
-                !via_intermediate && keeps.icc && (support.selective || (!exif && !xmp))
-            } else {
-                support.can_strip
-            }
+        if self.tool != MetadataKinds::NONE {
+            notes.push(PlanNote::MetadataNotHonoured {
+                policy: req.policy,
+                tool: writer,
+                kinds: self.tool,
+            });
         }
-        // Keeping copyright fields while dropping location and device data
-        // means editing EXIF/XMP tags, which no tool does on its own.
-        MetadataPolicy::CopyrightOnly => !exif && !xmp && (!via_intermediate && keeps.icc),
+        if self.copyright {
+            notes.push(PlanNote::CopyrightFilteringUnavailable);
+        }
+        notes
     }
 }
 
-fn metadata_note(req: &Requirements<'_>, writer: ToolId) -> PlanNote {
-    if req.policy == MetadataPolicy::CopyrightOnly {
-        PlanNote::CopyrightFilteringUnavailable
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Exif,
+    Xmp,
+    Icc,
+}
+
+fn has(kinds: MetadataKinds, kind: Kind) -> bool {
+    match kind {
+        Kind::Exif => kinds.exif,
+        Kind::Xmp => kinds.xmp,
+        Kind::Icc => kinds.icc,
+    }
+}
+
+fn with(mut kinds: MetadataKinds, kind: Kind) -> MetadataKinds {
+    match kind {
+        Kind::Exif => kinds.exif = true,
+        Kind::Xmp => kinds.xmp = true,
+        Kind::Icc => kinds.icc = true,
+    }
+    kinds
+}
+
+/// What a policy asks for one kind (see the table in `crate::metadata`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Want {
+    Keep,
+    Remove,
+    /// EXIF reduced to copyright fields (and orientation).
+    Copyright,
+}
+
+fn want(policy: MetadataPolicy, kind: Kind) -> Want {
+    match (policy, kind) {
+        (MetadataPolicy::PreserveAll, _) => Want::Keep,
+        (MetadataPolicy::StripAll, _) => Want::Remove,
+        (_, Kind::Icc) => Want::Keep,
+        (MetadataPolicy::CopyrightOnly, Kind::Exif) => Want::Copyright,
+        _ => Want::Remove,
+    }
+}
+
+/// What can't be honoured for this source, given the final writer's own
+/// metadata support and Transmute's container rewriting
+/// (`crate::metadata`), which works from the original source. Through an
+/// intermediate PNG the writer carries nothing of the source's.
+fn metadata_gaps(
+    caps: &Capabilities,
+    req: &Requirements<'_>,
+    via_intermediate: bool,
+) -> MetadataGaps {
+    let support = caps.metadata;
+    let ours = metadata::rewrites(req.to);
+    let readable = metadata::extracts(req.from);
+    let holds = metadata::holds(req.to);
+    let carried = if via_intermediate {
+        MetadataKinds::NONE
     } else {
-        PlanNote::MetadataNotHonoured {
-            policy: req.policy,
-            tool: writer,
+        caps.carries(req.to)
+    };
+    // Outputs we rewrite are encoded keeping everything; others are told
+    // the policy, which they can only apply partially if not selective.
+    let tool_removes = support
+        .is_some_and(|s| s.can_strip && (req.policy == MetadataPolicy::StripAll || s.selective));
+    // Our copy comes from the source if we can read it, else from what the
+    // writer carried.
+    let available = |kind| has(readable, kind) || has(carried, kind);
+
+    let mut gaps = MetadataGaps::default();
+    for (kind, presence) in [
+        (Kind::Exif, req.metadata.exif),
+        (Kind::Xmp, req.metadata.xmp),
+        (Kind::Icc, req.metadata.icc),
+    ] {
+        if presence == Presence::Absent {
+            continue;
+        }
+        let ok = match want(req.policy, kind) {
+            Want::Keep if !has(holds, kind) => {
+                gaps.format = with(gaps.format, kind);
+                continue;
+            }
+            Want::Keep => has(carried, kind) || (has(ours, kind) && has(readable, kind)),
+            Want::Remove => has(ours, kind) || tool_removes,
+            Want::Copyright => {
+                if !(has(ours, kind) && available(kind)) {
+                    gaps.copyright = true;
+                }
+                continue;
+            }
+        };
+        if !ok {
+            gaps.tool = with(gaps.tool, kind);
         }
     }
+    gaps
 }
 
 fn explain(steps: &[Step]) -> String {
@@ -371,7 +488,7 @@ fn explain(steps: &[Step]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::MetadataKinds;
+    use crate::capability::MetadataSupport;
 
     fn caps(reads: &[Format], writes: &[Format]) -> Capabilities {
         Capabilities {
@@ -411,6 +528,21 @@ mod tests {
             xmp: Presence::Absent,
             icc: Presence::Absent,
         }
+    }
+
+    fn metadata_notes(routed: &Routed) -> usize {
+        routed
+            .notes
+            .iter()
+            .filter(|n| {
+                matches!(
+                    n,
+                    PlanNote::MetadataNotHonoured { .. }
+                        | PlanNote::MetadataLost { .. }
+                        | PlanNote::CopyrightFilteringUnavailable
+                )
+            })
+            .count()
     }
 
     fn tools_used(routed: &Routed) -> Vec<ToolId> {
@@ -460,23 +592,24 @@ mod tests {
 
     #[test]
     fn prefers_a_writer_that_keeps_the_metadata() {
-        let mut cwebp = caps(&[Format::Png], &[Format::Webp]);
-        cwebp.metadata = Some(MetadataSupport {
+        // TIFF output isn't rewritten by Transmute, so the tool decides.
+        let mut vips = caps(&[Format::Png], &[Format::Tiff]);
+        vips.metadata = Some(MetadataSupport {
             preserves: MetadataKinds::ICC_ONLY,
             can_strip: true,
             selective: true,
         });
         let tools = Toolbox::new([
-            (ToolId::Cwebp, cwebp),
-            (ToolId::Vips, caps(&[Format::Png], &[Format::Webp])),
+            (ToolId::Vips, vips),
+            (ToolId::Magick, caps(&[Format::Png], &[Format::Tiff])),
         ]);
-        let mut r = req(Format::Png, Format::Webp);
+        let mut r = req(Format::Png, Format::Tiff);
         r.metadata.exif = Presence::Present;
         let routed = find_route(&tools, &r).unwrap();
         assert_eq!(
             tools_used(&routed),
-            [ToolId::Vips],
-            "cwebp would drop the EXIF"
+            [ToolId::Magick],
+            "this vips would drop the EXIF"
         );
     }
 
@@ -490,16 +623,73 @@ mod tests {
         });
         let tools = Toolbox::new([(ToolId::Cjxl, cjxl)]);
         let mut r = req(Format::Jpeg, Format::Jxl);
-        r.metadata.exif = Presence::Present;
+        r.metadata = no_metadata();
         r.policy = MetadataPolicy::StripAll;
+        // EXIF in a JPEG XL is a container box Transmute removes itself…
+        r.metadata.exif = Presence::Present;
+        assert!(find_route(&tools, &r).unwrap().notes.is_empty());
+        // …but the colour profile is inside the codestream.
+        r.metadata.icc = Presence::Present;
         let routed = find_route(&tools, &r).unwrap();
         assert_eq!(
             routed.notes,
             [PlanNote::MetadataNotHonoured {
                 policy: MetadataPolicy::StripAll,
-                tool: ToolId::Cjxl
+                tool: ToolId::Cjxl,
+                kinds: MetadataKinds::ICC_ONLY,
             }]
         );
+    }
+
+    #[test]
+    fn rewritable_outputs_get_metadata_from_the_source() {
+        // ffmpeg keeps nothing, but a WebP's blocks are set from the JPEG.
+        let mut ffmpeg = caps(&[Format::Jpeg, Format::Tiff], &[Format::Webp]);
+        ffmpeg.metadata = Some(MetadataSupport {
+            preserves: MetadataKinds::NONE,
+            can_strip: true,
+            selective: false,
+        });
+        let tools = Toolbox::new([(ToolId::Ffmpeg, ffmpeg)]);
+        let mut r = req(Format::Jpeg, Format::Webp);
+        r.metadata.exif = Presence::Present;
+        for policy in [
+            MetadataPolicy::PreserveAll,
+            MetadataPolicy::CopyrightOnly,
+            MetadataPolicy::ColorProfileOnly,
+        ] {
+            r.policy = policy;
+            assert_eq!(
+                metadata_notes(&find_route(&tools, &r).unwrap()),
+                0,
+                "{policy:?}"
+            );
+        }
+        // A TIFF's EXIF can't be read, and ffmpeg didn't carry it.
+        r.from = Format::Tiff;
+        r.policy = MetadataPolicy::PreserveAll;
+        assert_eq!(metadata_notes(&find_route(&tools, &r).unwrap()), 1);
+    }
+
+    #[test]
+    fn formats_without_room_for_metadata_say_so() {
+        let tools = Toolbox::new([(ToolId::Vips, caps(&[Format::Jpeg], &[Format::Gif]))]);
+        let mut r = req(Format::Jpeg, Format::Gif);
+        r.metadata = no_metadata();
+        r.metadata.exif = Presence::Present;
+        assert_eq!(
+            find_route(&tools, &r).unwrap().notes,
+            [PlanNote::MetadataLost {
+                format: Format::Gif,
+                kinds: MetadataKinds {
+                    exif: true,
+                    xmp: false,
+                    icc: false
+                }
+            }]
+        );
+        r.policy = MetadataPolicy::StripAll;
+        assert!(find_route(&tools, &r).unwrap().notes.is_empty());
     }
 
     #[test]
@@ -617,26 +807,26 @@ mod tests {
     #[test]
     fn metadata_outranks_settings() {
         let mut keeps_metadata = ignoring(
-            caps(&[Format::Png], &[Format::Webp]),
-            Format::Webp,
-            &["quality"],
+            caps(&[Format::Png], &[Format::Tiff]),
+            Format::Tiff,
+            &["compression"],
         );
         keeps_metadata.metadata = Some(MetadataSupport {
             preserves: MetadataKinds::ALL,
             can_strip: true,
             selective: true,
         });
-        let mut drops_exif = caps(&[Format::Png], &[Format::Webp]);
+        let mut drops_exif = caps(&[Format::Png], &[Format::Tiff]);
         drops_exif.metadata = Some(MetadataSupport {
             preserves: MetadataKinds::ICC_ONLY,
             can_strip: true,
             selective: true,
         });
-        let tools = Toolbox::new([(ToolId::Cwebp, drops_exif), (ToolId::Vips, keeps_metadata)]);
-        let mut r = req(Format::Png, Format::Webp);
+        let tools = Toolbox::new([(ToolId::Vips, drops_exif), (ToolId::Magick, keeps_metadata)]);
+        let mut r = req(Format::Png, Format::Tiff);
         r.metadata.exif = Presence::Present;
         let routed = find_route(&tools, &r).unwrap();
-        assert_eq!(tools_used(&routed), [ToolId::Vips]);
+        assert_eq!(tools_used(&routed), [ToolId::Magick]);
     }
 
     #[test]
@@ -676,10 +866,16 @@ mod tests {
         let routed = find_route(&tools, &r).unwrap();
         assert_eq!(tools_used(&routed), [ToolId::Djxl]);
 
-        // Stripping is another matter: re-encode with a tool that can.
+        // Stripping still restores, then Transmute strips the JPEG.
         r.policy = MetadataPolicy::StripAll;
         let routed = find_route(&tools, &r).unwrap();
-        assert_eq!(tools_used(&routed), [ToolId::Vips]);
+        assert_eq!(tools_used(&routed), [ToolId::Djxl]);
+        assert!(
+            !routed
+                .notes
+                .iter()
+                .any(|n| matches!(n, PlanNote::MetadataNotHonoured { .. }))
+        );
     }
 
     #[test]
