@@ -8,6 +8,8 @@ pub mod capability;
 pub mod codec;
 pub mod extension;
 pub mod format;
+pub mod inspect;
+pub mod inventory;
 pub mod naming;
 pub mod output;
 pub mod preset;

@@ -1,6 +1,7 @@
 //! `transmute-dev`: an internal tool for exercising the backend before the GUI
 //! exists. Not a product surface, but kept tidy so promoting it later is cheap.
 
+mod inspect;
 mod preset;
 mod tools;
 
@@ -28,6 +29,25 @@ enum Command {
     Env,
     /// List external tools, their versions, and what each can read and write.
     Tools,
+    /// Scan files and folders and report what they contain.
+    Inspect {
+        /// Files and/or folders.
+        #[arg(required = true)]
+        paths: Vec<std::path::PathBuf>,
+        /// Don't descend into subfolders.
+        #[arg(long)]
+        flat: bool,
+        /// Print every file, not just the summary.
+        #[arg(long)]
+        list: bool,
+    },
+    /// Time a scan of a synthetic tree of small files.
+    BenchScan {
+        #[arg(long, default_value_t = 50_000)]
+        files: usize,
+        #[arg(long, default_value_t = 1_000)]
+        per_folder: usize,
+    },
     /// Work with preset files.
     #[command(subcommand)]
     Preset(preset::PresetCommand),
@@ -46,6 +66,8 @@ fn main() -> ExitCode {
             tools::run();
             Ok(())
         }
+        Command::Inspect { paths, flat, list } => inspect::run_inspect(&paths, !flat, list),
+        Command::BenchScan { files, per_folder } => inspect::run_bench(files, per_folder),
         Command::Preset(command) => preset::run(command),
     };
     match result {
