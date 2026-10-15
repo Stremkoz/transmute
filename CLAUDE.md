@@ -32,6 +32,8 @@ cargo dev run <paths> --preset <file|id>    # plan, then convert for real (Ctrl+
 cargo dev preset list|import|export|delete  # stored presets; `defaults` and `settings` show/import the other documents
 cargo dev env                               # includes where settings live; a `portable` file beside the exe switches to <exe>/data
 cargo run --release -p transmute-cli -- bench-scan   # time a 50k-file scan (budget: ≤ 2 s)
+python scripts/bench_corpus.py                       # fetch/generate the codec benchmark corpus into bench-data/ (gitignored)
+cargo run --release -p transmute-cli -- bench        # codec grid: size, speed, SSIMULACRA2 (≈ 30 min); then scripts/bench_report.py <csvs>
 ```
 
 The toolchain is pinned in `rust-toolchain.toml`. CI runs fmt --check, clippy -D warnings and tests, all with `--locked`, on Windows and Ubuntu.
@@ -52,6 +54,7 @@ The crates follow the dependency direction `core ← backends ← engine ← cli
 - Metadata policy is carried out by `transmute-core::metadata` for the containers it can rewrite (JPEG, PNG, WebP, JPEG XL): encoders keep everything, then the engine sets the output's blocks from the original source. The planner records how in each job's `MetadataHandling`. The opt-in R5/R6 test (`TRANSMUTE_REAL_TOOLS=1 cargo test -p transmute-engine --test metadata`) must keep passing; a privacy failure there is a release blocker.
 - The engine (`transmute-engine`) never lets a tool write a final path. It uses a `.transmute-part-*` temp file plus a no-clobber move, journals temp files for crash recovery, and kills whole process trees on cancel. Adapters in `transmute-backends/src/invoke.rs` only build command lines; keep process handling out of them.
 - Tests that need executables use the stub scripts in `transmute-backends/src/process.rs` (`test_support`), not the real tools.
+- Factory defaults in `codec.rs` are backed by the M9 benchmark data (`docs/internal/m9-defaults.md`). Change them only with new measurements from `cargo dev bench`.
 - New codec settings go through the `codec_settings!` macro in `transmute-core/src/codec.rs`, which generates the patch twin. Validation lives in that codec's `ValidateSettings` impl.
 - Workspace lints deny `unsafe_code` and warn on `unwrap_used` outside tests. Prefer typed errors (`thiserror`) at crate boundaries.
 

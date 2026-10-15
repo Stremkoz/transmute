@@ -402,3 +402,74 @@ fn r14_jpeg_round_trips_through_lossless_jxl() {
         "the restored JPEG differs from the original"
     );
 }
+
+/// JPEG can't hold transparency. Every tool that writes JPEG must flatten
+/// it onto white: dropping the alpha channel shows the (usually black)
+/// colour underneath, which turns a logo's background black.
+#[test]
+fn transparency_becomes_white_in_jpeg() {
+    if !enabled() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("src");
+    fs::create_dir_all(&input).unwrap();
+    // Transparent everywhere except a red square in the middle.
+    let png = input.join("logo.png");
+    tool(
+        "magick",
+        &[
+            &"-size",
+            &"64x64",
+            &"xc:none",
+            &"-fill",
+            &"red",
+            &"-draw",
+            &"rectangle 16,16 47,47",
+            &format!("PNG32:{}", png.display()),
+        ],
+    );
+    let reports = installed();
+    let mut problems = Vec::new();
+    let mut tried = 0;
+    for report in &reports {
+        let Some(info) = report.info() else { continue };
+        if !info.capabilities.converts(Format::Png, Format::Jpeg) {
+            continue;
+        }
+        tried += 1;
+        let only = Toolbox::new([(report.tool, info.capabilities.clone())]);
+        let name = report.tool.program_name();
+        let out = dir.path().join(format!("out-{name}"));
+        let preset = format!(
+            r#"{{"schemaVersion":1,"name":"jpeg","destination":{{"mode":"custom","root":{}}},"outputs":[{{"codec":{{"format":"jpeg"}}}}]}}"#,
+            serde_json::to_string(&out).unwrap()
+        );
+        let work = Arc::new(work_for(&input, &preset, &only));
+        let finished = execute(work.clone(), &reports, &dir.path().join("state"));
+        if !matches!(finished[..], [(_, JobOutcome::Converted { .. })]) {
+            problems.push(format!("{name}: {finished:?}"));
+            continue;
+        }
+        // Mean brightness of the transparent corner, 0–255.
+        let output = Command::new("magick")
+            .arg(&work.plan.jobs[0].output)
+            .args([
+                "-crop",
+                "8x8+0+0",
+                "-format",
+                "%[fx:int(255*mean)]",
+                "info:",
+            ])
+            .output()
+            .unwrap();
+        let corner = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        if corner.parse::<u32>().map_or(true, |v| v < 250) {
+            problems.push(format!(
+                "{name}: the transparent corner became {corner}/255"
+            ));
+        }
+    }
+    assert!(tried >= 2, "expected several JPEG-capable tools");
+    assert!(problems.is_empty(), "\n{}", problems.join("\n"));
+}

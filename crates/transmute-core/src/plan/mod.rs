@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use chrono::NaiveDate;
 
 pub use paths::collision_key;
-pub use route::{Route, Step, can_animate};
+pub use route::{Requirements, Route, Routed, Step, can_animate, find_route};
 
 use crate::capability::{MetadataKinds, Toolbox};
 use crate::format::Format;
@@ -29,7 +29,6 @@ use crate::output::{CollisionPolicy, Destination, MetadataPolicy};
 use crate::preset::{JobConfig, ResolvedTarget};
 use crate::tool::ToolId;
 use paths::{NameContext, digits, numbered, output_dir, output_file_name};
-use route::{Requirements, find_route};
 
 /// Longest file name (one path component) most file systems allow.
 const MAX_FILE_NAME_BYTES: usize = 255;

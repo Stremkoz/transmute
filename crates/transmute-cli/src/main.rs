@@ -1,6 +1,7 @@
 //! `transmute-dev`: an internal tool for exercising the backend before the GUI
 //! exists. Not a product surface, but kept tidy so promoting it later is cheap.
 
+mod bench;
 mod config;
 mod inspect;
 mod plan;
@@ -80,6 +81,27 @@ enum Command {
         #[arg(long, short = 'j')]
         jobs: Option<std::num::NonZeroUsize>,
     },
+    /// Measure codec settings on an image corpus: size, speed and
+    /// SSIMULACRA2 fidelity (build the corpus with scripts/bench_corpus.py).
+    /// Run it in release mode: `cargo run --release -p transmute-cli -- bench`.
+    Bench {
+        #[arg(long, default_value = "bench-data/corpus")]
+        corpus: std::path::PathBuf,
+        #[arg(long, default_value = "bench-data/results")]
+        out: std::path::PathBuf,
+        /// Only these output formats (e.g. --format webp --format jxl).
+        #[arg(long = "format", value_parser = parse_format)]
+        formats: Vec<transmute_core::format::Format>,
+        /// Only these corpus classes (subfolder names).
+        #[arg(long = "class")]
+        classes: Vec<String>,
+        /// A small grid, to check the harness quickly.
+        #[arg(long)]
+        quick: bool,
+        /// Threads for decoding and scoring (encoding is always one at a time).
+        #[arg(long, short = 'j')]
+        jobs: Option<usize>,
+    },
     /// Time a scan of a synthetic tree of small files.
     BenchScan {
         #[arg(long, default_value_t = 50_000)]
@@ -136,6 +158,21 @@ fn main() -> ExitCode {
             jobs,
         ),
         Command::BenchScan { files, per_folder } => inspect::run_bench(files, per_folder),
+        Command::Bench {
+            corpus,
+            out,
+            formats,
+            classes,
+            quick,
+            jobs,
+        } => bench::run(bench::BenchArgs {
+            corpus,
+            out,
+            formats,
+            classes,
+            quick,
+            jobs: jobs.unwrap_or_else(|| resolve_worker_count(None).get()),
+        }),
         Command::Preset(command) => preset::run(command),
         Command::Defaults(command) => config::run_defaults(command),
         Command::Settings(command) => config::run_settings(command),
@@ -147,6 +184,11 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn parse_format(text: &str) -> Result<transmute_core::format::Format, String> {
+    transmute_core::format::Format::from_extension(text)
+        .ok_or_else(|| format!("unknown format \"{text}\" (try jpeg, png, webp, jxl, avif)"))
 }
 
 fn init_logging(verbosity: u8) {

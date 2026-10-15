@@ -5,7 +5,10 @@
 //! fields are all optional. Patches are what user defaults and presets store,
 //! and they layer over the factory defaults (null means "inherit").
 //!
-//! Factory defaults are provisional until the M9 benchmarks.
+//! Factory defaults come from the M9 benchmarks (`cargo dev bench`): lossy
+//! codecs aim for high quality on photos (SSIMULACRA2 ≈ 80), JPEG XL for
+//! visually lossless (≈ 86), at the effort where size stops improving.
+//! HEIF couldn't be measured (no HEVC encoder on the benchmark machine).
 
 use serde::{Deserialize, Serialize};
 
@@ -63,7 +66,8 @@ codec_settings! {
 codec_settings! {
     PngSettings / PngPatch {
         /// zlib compression level, 0 (fastest) – 9 (smallest). Always lossless.
-        compression: u8 = 6,
+        /// 9 is 10–14% smaller than 6 and still fast.
+        compression: u8 = 9,
     }
 }
 
@@ -73,7 +77,8 @@ codec_settings! {
         lossless: bool = false,
         /// cwebp quality, 0–100.
         quality: u8 = 85,
-        /// cwebp method, 0 (fastest) – 6 (smallest).
+        /// cwebp method, 0 (fastest) – 6 (smallest). 6 saves ~5% at up to
+        /// 14× the time on graphics.
         method: u8 = 4,
     }
 }
@@ -96,9 +101,11 @@ codec_settings! {
     AvifSettings / AvifPatch {
         /// Lossless mode ignores `quality`.
         lossless: bool = false,
-        /// Quality, 1–100.
-        quality: u8 = 60,
-        /// Encoder effort, 0 (fastest) – 9 (smallest).
+        /// Quality, 1–100. 70 matches the other lossy defaults on photos;
+        /// 60 scored noticeably lower.
+        quality: u8 = 70,
+        /// Encoder effort, 0 (fastest) – 9 (smallest). Beyond 4 the files
+        /// barely shrink while encoding gets 2–3× slower.
         effort: u8 = 4,
     }
 }

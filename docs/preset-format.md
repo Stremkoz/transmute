@@ -110,25 +110,25 @@ How Transmute runs, rather than what it produces:
 
 Each codec has its own real settings; there is no shared quality scale. Any field left out inherits.
 
-**The factory defaults are provisional** until the encoder benchmarks (milestone M9) are done.
+The factory defaults were chosen by measuring size, speed and visual fidelity (SSIMULACRA2) on photos, high-resolution photos, illustrations and transparent graphics. Lossy formats default to high quality; JPEG XL defaults to visually lossless.
 
 | `format` | Field | Range | Factory | Notes |
 |---|---|---|---|---|
 | `jpeg` (alias `jpg`) | `quality` | 1–100 | 85 | |
 | | `progressive` | bool | true | |
-| `png` | `compression` | 0–9 | 6 | Always lossless |
+| `png` | `compression` | 0–9 | 9 | Always lossless |
 | `webp` | `lossless` | bool | false | When true, `quality` is ignored |
 | | `quality` | 0–100 | 85 | |
 | | `method` | 0–6 | 4 | Higher is slower and smaller |
 | `jxl` | `lossless` | bool | false | When true, `distance` is ignored |
 | | `distance` | 0.01–25 | 1.0 | ~1.0 is visually lossless. Use `lossless` rather than distance 0 |
-| | `effort` | 1–10 | 7 | |
+| | `effort` | 1–10 | 7 | 5 is ~1.5–5× faster for lossy output at the same size; lossless files grow ~8% |
 | | `reconstructJpeg` | bool | true | Lossless + JPEG input: store a reversible recompression of the original JPEG |
 | `avif` | `lossless` | bool | false | |
-| | `quality` | 1–100 | 60 | |
-| | `effort` | 0–9 | 4 | |
+| | `quality` | 1–100 | 70 | |
+| | `effort` | 0–9 | 4 | Higher is much slower for little gain |
 | `heif` (alias `heic`) | `lossless` | bool | false | |
-| | `quality` | 1–100 | 60 | |
+| | `quality` | 1–100 | 60 | Not yet benchmarked |
 | `tiff` (alias `tif`) | `compression` | `none` `lzw` `deflate` `zstd` | `lzw` | |
 | `gif` | — | | | Palette is generated automatically |
 | `bmp` | — | | | |

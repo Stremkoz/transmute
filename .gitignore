@@ -45,3 +45,6 @@ desktop.ini
 ## Claude Code session notes
 CURRENT_SESSION.md
 .claude/settings.local.json
+
+# Benchmark corpus and results (scripts/bench_corpus.py, cargo dev bench)
+/bench-data/
