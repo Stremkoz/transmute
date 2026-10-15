@@ -9,14 +9,17 @@ This repo is the **overhaul** of Transmute, a Windows-first media converter. As 
 - `docs/sourcefiles/Transmute_Overhaul_Specification.md`: the working-draft product spec for the overhaul. Read it before starting design or implementation work. It is a proposed direction, not a final contract. Section 12 lists decisions that are still open. It is an **internal design document**: never commit it, quote it in release material, or move it out of the ignored folder.
 - `docs/sourcefiles/transmute/`: a full clone of the **existing** Transmute app (C#/.NET 9, upstream `github.com/Stremkoz/transmute-legacy` (archived), v1.1.0). It has its own `.git`. Treat it as **read-only reference**: audit it, but don't edit it. The goal is an overhaul, not a port. Keep what works and don't feel bound by its design.
 
-`docs/sourcefiles/` is gitignored, so it stays local only. The repo is hosted privately at `github.com/Stremkoz/transmute`. The old 1.x repo is archived as `Stremkoz/transmute-legacy`. `CURRENT_SESSION.md` (session-continuity notes required by the workspace rules) is also gitignored and must never be committed.
+- `docs/internal/backend-plan.md`: **the active plan.** Backend-first: Rust workspace milestones M0–M11, architecture decisions, testing strategy, open decisions and a decision log. GUI work waits for the M11 gate. Check which milestone is current before starting work, and record decisions in its log.
+- `docs/internal/legacy-audit.md`: the Phase 0 audit of 1.x, with confirmed defects, keep/change/drop recommendations, and the regression cases the overhaul's tests must cover. Read it before designing the job planner, file safety, metadata or routing.
+
+`docs/sourcefiles/` (user-provided reference) and `docs/internal/` (generated design notes) are both gitignored and stay local only. Put new internal design documents in `docs/internal/`. The repo is hosted privately at `github.com/Stremkoz/transmute`. The old 1.x repo is archived as `Stremkoz/transmute-legacy`. `CURRENT_SESSION.md` (session-continuity notes required by the workspace rules) is also gitignored and must never be committed.
 
 CI (`.github/workflows/ci.yml`, windows-latest) detects `Cargo.toml` / `src-tauri/Cargo.toml` and `package.json` and runs `cargo fmt --check`, `clippy -D warnings`, `cargo test`, and the `npm` lint/typecheck/test/build scripts. Until those files exist it is a no-op, so new projects should define scripts with those names.
 
 ## Overhaul direction (from the spec)
 
 - **Target stack:** Rust core + Tauri 2 shell + React/TypeScript (Vite) frontend; SQLite only if persistent jobs or history need it. The existing app is C#/Avalonia, so this is a rewrite/migration, not an incremental change.
-- **Phases:** 0 audit existing features → 1 schemas (job/output/preset, destination and collision rules) → 2 foundational UI → 3 hierarchical queue and review/compare → 4 presets, naming, codec panels → 5 optional CLI.
+- **Phases:** the spec's phases are superseded by the backend-first milestones in `docs/internal/backend-plan.md`. The Phase 0 audit is done.
 - **Core rules to respect in any design:**
   - Output targets are independent (format + codec settings + optional naming/destination). One source can produce several outputs in a single batch.
   - There is no universal quality slider. Each codec exposes its own real controls, e.g. WebP quality/method/lossless and JXL distance/effort/lossless.

@@ -1,5 +1,6 @@
-## Reference material (local only: legacy app clone and draft spec)
+## Reference material and internal design docs (local only)
 docs/sourcefiles/
+docs/internal/
 
 ## Rust / Tauri
 target/
