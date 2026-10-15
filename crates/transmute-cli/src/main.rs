@@ -2,6 +2,7 @@
 //! exists. Not a product surface, but kept tidy so promoting it later is cheap.
 
 mod inspect;
+mod plan;
 mod preset;
 mod tools;
 
@@ -41,6 +42,24 @@ enum Command {
         #[arg(long)]
         list: bool,
     },
+    /// Show what a preset would do to some files, without writing anything.
+    Plan {
+        /// Files and/or folders.
+        #[arg(required = true)]
+        inputs: Vec<std::path::PathBuf>,
+        /// Preset JSON file.
+        #[arg(long)]
+        preset: std::path::PathBuf,
+        /// User-defaults JSON file (factory defaults if omitted).
+        #[arg(long)]
+        defaults: Option<std::path::PathBuf>,
+        /// Don't descend into subfolders.
+        #[arg(long)]
+        flat: bool,
+        /// Show every job, not just the first few.
+        #[arg(long)]
+        list: bool,
+    },
     /// Time a scan of a synthetic tree of small files.
     BenchScan {
         #[arg(long, default_value_t = 50_000)]
@@ -67,6 +86,19 @@ fn main() -> ExitCode {
             Ok(())
         }
         Command::Inspect { paths, flat, list } => inspect::run_inspect(&paths, !flat, list),
+        Command::Plan {
+            inputs,
+            preset,
+            defaults,
+            flat,
+            list,
+        } => plan::run(plan::PlanArgs {
+            inputs,
+            preset,
+            defaults,
+            recursive: !flat,
+            list,
+        }),
         Command::BenchScan { files, per_folder } => inspect::run_bench(files, per_folder),
         Command::Preset(command) => preset::run(command),
     };

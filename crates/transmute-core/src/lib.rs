@@ -12,6 +12,7 @@ pub mod inspect;
 pub mod inventory;
 pub mod naming;
 pub mod output;
+pub mod plan;
 pub mod preset;
 pub mod schema;
 pub mod tool;

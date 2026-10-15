@@ -36,7 +36,7 @@ pub fn run(command: PresetCommand) -> Result<(), String> {
     }
 }
 
-fn read_document<D: Document>(path: &Path) -> Result<D, String> {
+pub fn read_document<D: Document>(path: &Path) -> Result<D, String> {
     let json = fs::read_to_string(path)
         .map_err(|err| format!("could not read {}: {err}", path.display()))?;
     load::<D>(&json).map_err(|err| format!("{}: {err}", path.display()))

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc afdea6ad83aefe1ffc8cd0467e6dd0082029d3f68c197da2d8a585605d6f9575 # shrinks to files = [("sub/b.jpg", Jpeg), ("sub/b.png", Png)], targets = [ResolvedTarget { settings: Jpeg(JpegSettings { quality: 85, progressive: true }), destination: BesideSource, naming: NamingRule { prefix: "", suffix: "", date_style: Compact, date_source: BatchStart }, metadata: PreserveAll }], policy = Overwrite, existing_mask = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]

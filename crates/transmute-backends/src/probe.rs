@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
-use transmute_core::capability::Capabilities;
+use transmute_core::capability::{Capabilities, Toolbox};
 use transmute_core::tool::ToolId;
 
 use crate::catalog;
@@ -50,6 +50,15 @@ impl ToolReport {
             _ => None,
         }
     }
+}
+
+/// The usable tools from a discovery run, as the planner sees them.
+pub fn toolbox(reports: &[ToolReport]) -> Toolbox {
+    Toolbox::new(reports.iter().filter_map(|report| {
+        report
+            .info()
+            .map(|info| (report.tool, info.capabilities.clone()))
+    }))
 }
 
 /// Discovers and probes every known tool, in parallel, using the real `PATH`.

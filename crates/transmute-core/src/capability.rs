@@ -4,11 +4,12 @@
 //! lists), so routing and the UI can rely on them instead of hardcoded
 //! assumptions. Both the planner and the UI read them.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
 use crate::format::Format;
+use crate::tool::ToolId;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +32,29 @@ impl Capabilities {
     /// True if the tool converts `from` to `to` in one step.
     pub fn converts(&self, from: Format, to: Format) -> bool {
         self.reads.contains(&from) && self.writes.contains(&to)
+    }
+}
+
+/// The tools available for a job, with what each can do. Tools that aren't
+/// installed (or aren't usable) are simply absent.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Toolbox {
+    tools: BTreeMap<ToolId, Capabilities>,
+}
+
+impl Toolbox {
+    pub fn new(tools: impl IntoIterator<Item = (ToolId, Capabilities)>) -> Self {
+        Self {
+            tools: tools.into_iter().collect(),
+        }
+    }
+
+    pub fn get(&self, tool: ToolId) -> Option<&Capabilities> {
+        self.tools.get(&tool)
+    }
+
+    pub fn contains(&self, tool: ToolId) -> bool {
+        self.tools.contains_key(&tool)
     }
 }
 

@@ -1,0 +1,401 @@
+//! Turning an inventory and a resolved preset into a plan: every job's output
+//! path, the tools that will produce it, and anything that stops it, all
+//! decided before a single file is written.
+//!
+//! Safety rules enforced here:
+//! - Source files are never overwritten, under any collision policy.
+//! - Two jobs never write the same output; clashes are blocked, not raced.
+//! - Existing files are only replaced under the `overwrite` policy, and the
+//!   plan says so.
+
+mod paths;
+mod route;
+
+use std::collections::HashMap;
+use std::fmt;
+use std::path::{Path, PathBuf};
+
+use chrono::NaiveDate;
+
+pub use paths::collision_key;
+pub use route::{Route, Step, can_animate};
+
+use crate::capability::Toolbox;
+use crate::format::Format;
+use crate::inspect::Content;
+use crate::inventory::Inventory;
+use crate::output::{CollisionPolicy, MetadataPolicy};
+use crate::preset::JobConfig;
+use crate::tool::ToolId;
+use paths::{NameContext, digits, numbered, output_dir, output_file_name};
+use route::{Requirements, find_route};
+
+/// Longest file name (one path component) most file systems allow.
+const MAX_FILE_NAME_BYTES: usize = 255;
+/// Give up renaming after this many numbered attempts.
+const MAX_RENAME_ATTEMPTS: u32 = 10_000;
+
+pub struct PlanContext<'a> {
+    /// The date `{date}` uses for `batchStart`.
+    pub batch_date: NaiveDate,
+    /// Whether a file already exists at a path. Injected so planning is
+    /// testable without touching the disk.
+    pub output_exists: &'a dyn Fn(&Path) -> bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    pub jobs: Vec<PlannedJob>,
+    /// Inventory entries that aren't convertible images (not excluded).
+    pub unsupported: Vec<usize>,
+    /// Convertible entries left out by the preset's input filter.
+    pub filtered_out: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedJob {
+    /// Index into the inventory's entries.
+    pub source: usize,
+    /// Index into the job configuration's targets.
+    pub target: usize,
+    pub output: PathBuf,
+    pub route: Option<Route>,
+    pub status: JobStatus,
+    /// The output already exists and will be replaced (overwrite policy).
+    pub replaces_existing: bool,
+    pub notes: Vec<PlanNote>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JobStatus {
+    Ready,
+    Skipped(SkipReason),
+    Blocked(BlockReason),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkipReason {
+    /// The output exists and the collision policy is `skip`.
+    OutputExists,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockReason {
+    NoRoute(String),
+    /// Other jobs (by index in [`Plan::jobs`]) would write the same file.
+    DuplicateOutput {
+        others: Vec<usize>,
+    },
+    WouldReplaceSource {
+        source: PathBuf,
+    },
+    /// The rename policy found no free numbered name.
+    NoFreeName,
+    NameTooLong,
+}
+
+/// Something the user should know about a job that will still run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlanNote {
+    FirstFrameOnly {
+        frames: Option<u32>,
+    },
+    SpecialistMissing {
+        preferred: ToolId,
+        used: ToolId,
+    },
+    MetadataNotHonoured {
+        policy: MetadataPolicy,
+        tool: ToolId,
+    },
+    CopyrightFilteringUnavailable,
+    Renamed {
+        original: PathBuf,
+    },
+    DamagedSource {
+        problem: String,
+    },
+    ExtensionMismatch {
+        declared: Format,
+        actual: Format,
+    },
+}
+
+impl fmt::Display for PlanNote {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlanNote::FirstFrameOnly { frames } => {
+                let frames = frames.map(|n| format!(" of {n}")).unwrap_or_default();
+                write!(
+                    f,
+                    "the source is animated, but this format isn't: only the first frame{frames} will be kept"
+                )
+            }
+            PlanNote::SpecialistMissing { preferred, used } => write!(
+                f,
+                "{} isn't installed, so {} will encode it instead",
+                preferred.program_name(),
+                used.program_name()
+            ),
+            PlanNote::MetadataNotHonoured { policy, tool } => write!(
+                f,
+                "{} can't apply the \"{}\" metadata setting to this file",
+                tool.program_name(),
+                policy_name(*policy)
+            ),
+            PlanNote::CopyrightFilteringUnavailable => write!(
+                f,
+                "keeping only copyright fields isn't possible yet; the file's EXIF/XMP won't be filtered"
+            ),
+            PlanNote::Renamed { original } => write!(
+                f,
+                "renamed because {} is taken",
+                original
+                    .file_name()
+                    .map(|n| n.to_string_lossy())
+                    .unwrap_or_default()
+            ),
+            PlanNote::DamagedSource { problem } => {
+                write!(f, "the source may be damaged: {problem}")
+            }
+            PlanNote::ExtensionMismatch { declared, actual } => write!(
+                f,
+                "the source's extension says {} but it is really {}",
+                declared.display_name(),
+                actual.display_name()
+            ),
+        }
+    }
+}
+
+impl fmt::Display for BlockReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlockReason::NoRoute(reason) => f.write_str(reason),
+            BlockReason::DuplicateOutput { others } => write!(
+                f,
+                "{} other job(s) would write the same file; add a naming suffix such as {{original_ext}} \
+                 or use the \"rename\" collision policy",
+                others.len()
+            ),
+            BlockReason::WouldReplaceSource { source } => {
+                write!(f, "it would replace a source file ({})", source.display())
+            }
+            BlockReason::NoFreeName => write!(
+                f,
+                "no free name was found (tried up to \"({MAX_RENAME_ATTEMPTS})\")"
+            ),
+            BlockReason::NameTooLong => write!(
+                f,
+                "the file name would be longer than {MAX_FILE_NAME_BYTES} bytes"
+            ),
+        }
+    }
+}
+
+fn policy_name(policy: MetadataPolicy) -> &'static str {
+    match policy {
+        MetadataPolicy::PreserveAll => "preserve all",
+        MetadataPolicy::StripAll => "strip all",
+        MetadataPolicy::ColorProfileOnly => "colour profile only",
+        MetadataPolicy::CopyrightOnly => "copyright only",
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PlanCounts {
+    pub ready: usize,
+    pub skipped: usize,
+    pub blocked: usize,
+}
+
+impl Plan {
+    pub fn counts(&self) -> PlanCounts {
+        let mut counts = PlanCounts::default();
+        for job in &self.jobs {
+            match job.status {
+                JobStatus::Ready => counts.ready += 1,
+                JobStatus::Skipped(_) => counts.skipped += 1,
+                JobStatus::Blocked(_) => counts.blocked += 1,
+            }
+        }
+        counts
+    }
+}
+
+/// Plans every (source, output target) pair.
+pub fn plan(
+    inventory: &Inventory,
+    config: &JobConfig,
+    tools: &Toolbox,
+    ctx: &PlanContext<'_>,
+) -> Plan {
+    let mut unsupported = Vec::new();
+    let mut filtered_out = 0;
+    let mut sources = Vec::new();
+    for (index, entry) in inventory.entries.iter().enumerate() {
+        if entry.excluded {
+            continue;
+        }
+        match entry.inspection.content {
+            Content::Image(format) if config.input_filter.accepts(format) => {
+                sources.push((index, format))
+            }
+            Content::Image(_) => filtered_out += 1,
+            Content::Other(_) | Content::Unknown => unsupported.push(index),
+        }
+    }
+
+    let counter_width = digits(sources.len());
+    let mut jobs = Vec::with_capacity(sources.len() * config.targets.len());
+    for (position, &(index, source_format)) in sources.iter().enumerate() {
+        let entry = &inventory.entries[index];
+        let root = &inventory.roots[entry.root];
+        for (target_index, target) in config.targets.iter().enumerate() {
+            let format = target.settings.format();
+            let name = output_file_name(
+                &target.naming,
+                &NameContext {
+                    entry,
+                    format,
+                    counter: position + 1,
+                    counter_width,
+                    batch_date: ctx.batch_date,
+                },
+            );
+            // Absolute, so a bare relative source like `photo.jpg` resolves
+            // against the current folder instead of an empty parent (R4).
+            let relative = output_dir(entry, root, &target.destination, format).join(&name);
+            let output = std::path::absolute(&relative).unwrap_or(relative);
+
+            let mut notes = Vec::new();
+            if let Some(problem) = &entry.inspection.problem {
+                notes.push(PlanNote::DamagedSource {
+                    problem: problem.clone(),
+                });
+            }
+            if let Some(declared) = entry.declared.filter(|&d| d != source_format) {
+                notes.push(PlanNote::ExtensionMismatch {
+                    declared,
+                    actual: source_format,
+                });
+            }
+
+            let routed = find_route(
+                tools,
+                &Requirements {
+                    from: source_format,
+                    to: format,
+                    animation: entry.inspection.animation,
+                    metadata: entry.inspection.metadata,
+                    policy: target.metadata,
+                },
+            );
+            let (route, status) = match routed {
+                Ok(routed) => {
+                    notes.extend(routed.notes);
+                    (Some(routed.route), JobStatus::Ready)
+                }
+                Err(reason) => (None, JobStatus::Blocked(BlockReason::NoRoute(reason))),
+            };
+            let status = if name.len() > MAX_FILE_NAME_BYTES {
+                JobStatus::Blocked(BlockReason::NameTooLong)
+            } else {
+                status
+            };
+            jobs.push(PlannedJob {
+                source: index,
+                target: target_index,
+                output,
+                route,
+                status,
+                replaces_existing: false,
+                notes,
+            });
+        }
+    }
+
+    resolve_collisions(&mut jobs, inventory, config.collision, ctx);
+    Plan {
+        jobs,
+        unsupported,
+        filtered_out,
+    }
+}
+
+/// Assigns each planned output a unique path or blocks/skips it, in job order.
+fn resolve_collisions(
+    jobs: &mut [PlannedJob],
+    inventory: &Inventory,
+    policy: CollisionPolicy,
+    ctx: &PlanContext<'_>,
+) {
+    // Every inventory file is protected, convertible or not, excluded or not.
+    let sources: HashMap<String, &Path> = inventory
+        .entries
+        .iter()
+        .map(|e| (collision_key(&e.path), e.path.as_path()))
+        .collect();
+    let mut claimed: HashMap<String, Vec<usize>> = HashMap::new();
+    let taken = |path: &Path, claimed: &HashMap<String, Vec<usize>>| {
+        let key = collision_key(path);
+        sources.contains_key(&key) || claimed.contains_key(&key) || (ctx.output_exists)(path)
+    };
+
+    for (index, job) in jobs.iter_mut().enumerate() {
+        if job.status != JobStatus::Ready {
+            continue;
+        }
+        let key = collision_key(&job.output);
+        if !taken(&job.output, &claimed) {
+            claimed.entry(key).or_default().push(index);
+            continue;
+        }
+
+        if policy == CollisionPolicy::Rename {
+            let original = job.output.clone();
+            let free = (2..MAX_RENAME_ATTEMPTS)
+                .map(|n| numbered(&original, n))
+                .find(|candidate| !taken(candidate, &claimed));
+            match free {
+                Some(renamed) => {
+                    claimed
+                        .entry(collision_key(&renamed))
+                        .or_default()
+                        .push(index);
+                    job.output = renamed;
+                    job.notes.push(PlanNote::Renamed { original });
+                }
+                None => job.status = JobStatus::Blocked(BlockReason::NoFreeName),
+            }
+            continue;
+        }
+
+        if let Some(source) = sources.get(&key) {
+            job.status = JobStatus::Blocked(BlockReason::WouldReplaceSource {
+                source: source.to_path_buf(),
+            });
+        } else if claimed.contains_key(&key) {
+            claimed.entry(key).or_default().push(index);
+        } else if policy == CollisionPolicy::Overwrite {
+            job.replaces_existing = true;
+            claimed.entry(key).or_default().push(index);
+        } else {
+            job.status = JobStatus::Skipped(SkipReason::OutputExists);
+        }
+    }
+
+    // Duplicate claims: block every job in the group. Letting the first one
+    // win would silently drop the others' sources from the result.
+    // Groups are in job order, since jobs claim in order.
+    for group in claimed.values().filter(|group| group.len() > 1) {
+        for &index in group {
+            let others = group.iter().copied().filter(|&o| o != index).collect();
+            jobs[index].status = JobStatus::Blocked(BlockReason::DuplicateOutput { others });
+            jobs[index].replaces_existing = false;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
