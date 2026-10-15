@@ -38,7 +38,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
 
 fn parse_container<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
     s.skip(CONTAINER_SIGNATURE.len() as u64)?;
-    let (mut exif, mut xmp) = (false, false);
+    let (mut exif, mut xmp, mut jpeg_reconstruction) = (false, false, false);
     let mut header = None;
 
     while s.remaining()? >= 8 {
@@ -59,6 +59,9 @@ fn parse_container<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         match &kind {
             b"Exif" => exif = true,
             b"xml " => xmp = true,
+            // JPEG bitstream reconstruction data, written by cjxl when it
+            // recompresses a JPEG losslessly.
+            b"jbrd" => jpeg_reconstruction = true,
             b"brob" => {
                 // Brotli-compressed box: the original type comes first.
                 let inner = s.array::<4>()?;
@@ -89,6 +92,7 @@ fn parse_container<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
             xmp: Presence::from_found(xmp),
             icc: Presence::Unknown,
         },
+        jpeg_reconstruction,
         ..Details::default()
     })
 }
@@ -294,5 +298,24 @@ mod tests {
             "brob(Exif) counts"
         );
         assert_eq!(details.metadata.xmp, Presence::Absent);
+        assert!(!details.jpeg_reconstruction);
+    }
+
+    #[test]
+    fn jbrd_box_marks_a_recompressed_jpeg() {
+        let body = codestream(64, 48, |w| {
+            w.write(1, 1);
+        });
+        let mut file = CONTAINER_SIGNATURE.to_vec();
+        for (kind, data) in [
+            (b"ftyp", &b"jxl     jxl "[..]),
+            (b"jbrd", &[0u8; 4][..]),
+            (b"jxlc", &body[..]),
+        ] {
+            file.extend_from_slice(&((data.len() + 8) as u32).to_be_bytes());
+            file.extend_from_slice(kind);
+            file.extend_from_slice(data);
+        }
+        assert!(parse(&mut source(file)).unwrap().jpeg_reconstruction);
     }
 }

@@ -1041,6 +1041,7 @@ dependencies = [
 name = "transmute-backends"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "tempfile",
  "thiserror",
  "tracing",
@@ -1083,6 +1084,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "process-wrap",
+ "serde_json",
  "tempfile",
  "thiserror",
  "tokio",

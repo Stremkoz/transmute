@@ -20,6 +20,22 @@ pub struct Capabilities {
     pub animated_reads: BTreeSet<Format>,
     /// Formats this tool can write as animations. A subset of `writes`.
     pub animated_writes: BTreeSet<Format>,
+    /// Animated formats from which this tool can take just the first frame,
+    /// for a still output. A subset of `animated_reads`. Tools that only
+    /// read animations whole (djxl writes every frame) aren't listed.
+    pub first_frame_reads: BTreeSet<Format>,
+    /// Settings the tool can't apply when writing a format, by their preset
+    /// field name (see `CodecSettings::relevant_settings`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub ignored_settings: BTreeMap<Format, BTreeSet<String>>,
+    /// Writing JPEG from a JPEG XL that holds a recompressed JPEG restores
+    /// the original file exactly, instead of re-encoding it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub restores_jpeg: bool,
+    /// Formats this tool reads only at 8 bits per channel. Deeper files
+    /// (10- or 12-bit AVIF, say) go to another tool.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub shallow_reads: BTreeSet<Format>,
     /// How the tool handles metadata on the files it writes. `None` means the
     /// tool isn't characterised for this, e.g. a decoder whose output only
     /// feeds another step, with metadata handled from the original source.
@@ -32,6 +48,18 @@ impl Capabilities {
     /// True if the tool converts `from` to `to` in one step.
     pub fn converts(&self, from: Format, to: Format) -> bool {
         self.reads.contains(&from) && self.writes.contains(&to)
+    }
+
+    /// Settings among `relevant` that this tool can't apply when writing `to`.
+    pub fn ignores(&self, to: Format, relevant: &[&str]) -> Vec<String> {
+        let Some(ignored) = self.ignored_settings.get(&to) else {
+            return Vec::new();
+        };
+        relevant
+            .iter()
+            .filter(|name| ignored.contains(**name))
+            .map(|name| (*name).to_owned())
+            .collect()
     }
 }
 

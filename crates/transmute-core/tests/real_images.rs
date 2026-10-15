@@ -116,6 +116,15 @@ fn icc_profiles_are_found_in_every_container() {
         assert_eq!(inspection.metadata.icc, Presence::Present, "{extension}");
     }
 
+    let deep = dir.path().join("deep.avif");
+    run("magick", &[&plain, &"-depth", &"10", &deep]);
+    assert_eq!(inspect(&deep).bit_depth, Some(10), "10-bit avif");
+    assert_eq!(
+        inspect(&dir.path().join("icc.avif")).bit_depth,
+        Some(8),
+        "8-bit avif"
+    );
+
     let cwebp_out = dir.path().join("cwebp.webp");
     run(
         "cwebp",
@@ -212,4 +221,35 @@ fn multi_page_tiff_and_bmp() {
     let bmp = dir.path().join("image.bmp");
     run("magick", &[&"-size", &"123x45", &"xc:white", &bmp]);
     assert_eq!(inspect(&bmp).dimensions, Some((123, 45)));
+}
+
+#[test]
+fn jxl_recompressed_jpeg_is_recognised() {
+    if !enabled() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let png = source_png(dir.path(), 64, 48);
+    let jpeg = dir.path().join("src.jpg");
+    run("magick", &[&png, &jpeg]);
+    let recompressed = dir.path().join("recompressed.jxl");
+    run(
+        "cjxl",
+        &[&jpeg, &recompressed, &"--lossless_jpeg=1", &"--quiet"],
+    );
+    assert!(inspect(&recompressed).jpeg_reconstruction);
+
+    let reencoded = dir.path().join("reencoded.jxl");
+    run(
+        "cjxl",
+        &[
+            &jpeg,
+            &reencoded,
+            &"--lossless_jpeg=0",
+            &"-d",
+            &"1",
+            &"--quiet",
+        ],
+    );
+    assert!(!inspect(&reencoded).jpeg_reconstruction);
 }

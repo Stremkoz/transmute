@@ -4,6 +4,8 @@
 //! static tables. vips, ImageMagick and ffmpeg vary by build, so their
 //! capabilities are parsed from the tool's own format/codec listings.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use transmute_core::capability::{Capabilities, MetadataKinds, MetadataSupport};
 use transmute_core::format::Format;
 use transmute_core::tool::ToolId;
@@ -22,6 +24,76 @@ pub fn listing_commands(tool: ToolId) -> &'static [&'static [&'static str]] {
         ],
         _ => &[],
     }
+}
+
+/// What a [`build_probes`] command tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Probe {
+    /// The format can actually be written.
+    Writes(Format),
+    /// Files deeper than 8 bits per channel can be handled. Tested by
+    /// encoding at 10 bits: reading can't be tested without a sample file,
+    /// and libheif's AV1 codecs are usually built with or without high bit
+    /// depth in both directions. A wrong guess only sends such files to
+    /// another tool.
+    DeepReads(Format),
+}
+
+/// Features a format listing can't vouch for. vips lists `heifsave` whenever
+/// libheif is present, even if libheif has no AV1 or HEVC encoder, and its
+/// AV1 codec may be 8-bit only. Each probe is a tiny encode to stdout; the
+/// feature is kept only if it works.
+pub fn build_probes(tool: ToolId) -> &'static [(Probe, &'static [&'static str])] {
+    match tool {
+        ToolId::Vips => &[
+            (
+                Probe::Writes(Format::Avif),
+                &["black", ".avif[compression=av1]", "8", "8"],
+            ),
+            (
+                Probe::Writes(Format::Heif),
+                &["black", ".heic[compression=hevc]", "8", "8"],
+            ),
+            (
+                Probe::DeepReads(Format::Avif),
+                &["black", ".avif[compression=av1,bitdepth=10]", "8", "8"],
+            ),
+        ],
+        _ => &[],
+    }
+}
+
+/// Applies one result of [`build_probes`].
+pub fn apply_probe(caps: &mut Capabilities, probe: Probe, works: bool) {
+    if works {
+        return;
+    }
+    match probe {
+        Probe::Writes(format) if caps.writes.contains(&format) => {
+            caps.writes.remove(&format);
+            caps.animated_writes.remove(&format);
+            caps.notes.push(format!(
+                "Can't write {}: this build has no encoder for it.",
+                format.display_name()
+            ));
+        }
+        Probe::DeepReads(format) if caps.reads.contains(&format) => {
+            caps.shallow_reads.insert(format);
+            caps.notes.push(format!(
+                "Reads only 8-bit {}; deeper files go to another tool.",
+                format.display_name()
+            ));
+        }
+        _ => {}
+    }
+}
+
+/// `ignored_settings` entries, from (format, field names) pairs.
+fn ignoring(entries: &[(Format, &[&str])]) -> BTreeMap<Format, BTreeSet<String>> {
+    entries
+        .iter()
+        .map(|(format, names)| (*format, names.iter().map(|n| (*n).to_owned()).collect()))
+        .collect()
 }
 
 /// Builds capabilities from the outputs of [`listing_commands`] (same order),
@@ -80,6 +152,7 @@ fn cjxl() -> Capabilities {
             selective: false,
         }),
         notes: vec!["Cannot strip metadata by itself.".into()],
+        ..Capabilities::default()
     }
 }
 
@@ -87,6 +160,15 @@ fn djxl() -> Capabilities {
     Capabilities {
         reads: [Format::Jxl].into(),
         writes: [Format::Png, Format::Jpeg].into(),
+        // It writes every frame (as APNG) and can't pick just the first, so
+        // there are no `first_frame_reads`.
+        animated_reads: [Format::Jxl].into(),
+        animated_writes: [Format::Png].into(),
+        ignored_settings: ignoring(&[
+            (Format::Jpeg, &["progressive"]),
+            (Format::Png, &["compression"]),
+        ]),
+        restores_jpeg: true,
         ..Capabilities::default()
     }
 }
@@ -120,6 +202,11 @@ fn dwebp() -> Capabilities {
     Capabilities {
         reads: [Format::Webp].into(),
         writes: [Format::Png, Format::Tiff, Format::Bmp].into(),
+        // PNG at its own fixed level; TIFF always uncompressed.
+        ignored_settings: ignoring(&[
+            (Format::Png, &["compression"]),
+            (Format::Tiff, &["compression"]),
+        ]),
         notes: vec!["Cannot decode animated WebP.".into()],
         ..Capabilities::default()
     }
@@ -140,7 +227,7 @@ fn gif2webp() -> Capabilities {
             can_strip: true,
             selective: true,
         }),
-        notes: Vec::new(),
+        ..Capabilities::default()
     }
 }
 
@@ -177,19 +264,19 @@ fn vips(listing: &str, version: Option<Version>) -> Capabilities {
     if has("magickload") {
         caps.reads.insert(Format::Bmp);
     }
-    // vips loads and saves every frame of GIF and WebP when asked.
+    // vips loads every frame of GIF and WebP when asked (and only the first
+    // otherwise), and saves them all.
     for format in [Format::Gif, Format::Webp] {
         if caps.reads.contains(&format) {
             caps.animated_reads.insert(format);
+            caps.first_frame_reads.insert(format);
         }
         if caps.writes.contains(&format) {
             caps.animated_writes.insert(format);
         }
     }
-    if caps.writes.contains(&Format::Heif) {
-        caps.notes
-            .push("HEIC output depends on the libheif build and hasn't been verified yet.".into());
-    }
+    // jxlsave encodes pixels; it can't recompress a JPEG losslessly.
+    caps.ignored_settings = ignoring(&[(Format::Jxl, &["reconstructJpeg"])]);
 
     // The `keep` option for choosing which metadata survives arrived in 8.15;
     // older versions can only keep everything or strip everything.
@@ -238,6 +325,14 @@ fn magick(listing: &str) -> Capabilities {
             }
         }
     }
+    // `file[0]` reads just the first frame of anything it reads animated.
+    caps.first_frame_reads = caps.animated_reads.clone();
+    caps.ignored_settings = ignoring(&[
+        (Format::Jxl, &["reconstructJpeg"]),
+        // Its HEIF coder has no lossless switch.
+        (Format::Avif, &["lossless"]),
+        (Format::Heif, &["lossless"]),
+    ]);
     caps.metadata = Some(MetadataSupport {
         preserves: MetadataKinds::ALL,
         can_strip: true,
@@ -278,8 +373,8 @@ fn ffmpeg(encoders: &str, decoders: &str) -> Capabilities {
             "gif" => (Format::Gif, true),
             "bmp" => (Format::Bmp, false),
             "tiff" => (Format::Tiff, false),
-            "libjxl" => (Format::Jxl, false),
-            "libjxl_anim" => (Format::Jxl, true),
+            // libjxl encoding isn't wired up: cjxl, vips and ImageMagick
+            // cover JPEG XL output.
             _ => continue,
         };
         caps.writes.insert(format);
@@ -306,6 +401,14 @@ fn ffmpeg(encoders: &str, decoders: &str) -> Capabilities {
             caps.animated_reads.insert(format);
         }
     }
+    // `-frames:v 1` keeps just the first frame.
+    caps.first_frame_reads = caps.animated_reads.clone();
+    caps.ignored_settings = ignoring(&[
+        // Its JPEG quality scale doesn't map onto libjpeg's, and it can't
+        // write progressive JPEG.
+        (Format::Jpeg, &["quality", "progressive"]),
+        (Format::Tiff, &["compression"]),
+    ]);
     caps.metadata = Some(MetadataSupport {
         // Image metadata isn't reliably carried through ffmpeg's filters.
         preserves: MetadataKinds::NONE,
@@ -477,6 +580,54 @@ Decoders:
             let caps = capabilities(tool, None, "windows", &listings);
             assert!(caps.animated_reads.is_subset(&caps.reads), "{tool:?}");
             assert!(caps.animated_writes.is_subset(&caps.writes), "{tool:?}");
+            assert!(
+                caps.first_frame_reads.is_subset(&caps.animated_reads),
+                "{tool:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn failed_probes_remove_what_they_tested() {
+        let mut caps = vips(VIPS_LISTING, Some(Version::new(8, 18, 1)));
+        apply_probe(&mut caps, Probe::Writes(Format::Heif), false);
+        apply_probe(&mut caps, Probe::Writes(Format::Avif), true);
+        assert!(!caps.writes.contains(&Format::Heif));
+        assert!(caps.writes.contains(&Format::Avif));
+        assert!(
+            caps.notes.iter().any(|n| n.contains("HEIF")),
+            "{:?}",
+            caps.notes
+        );
+
+        assert!(caps.shallow_reads.is_empty());
+        apply_probe(&mut caps, Probe::DeepReads(Format::Avif), false);
+        assert_eq!(caps.shallow_reads, [Format::Avif].into());
+    }
+
+    #[test]
+    fn djxl_restores_jpeg_but_cannot_pick_a_frame() {
+        let caps = djxl();
+        assert!(caps.restores_jpeg);
+        assert!(caps.animated_reads.contains(&Format::Jxl));
+        assert!(caps.first_frame_reads.is_empty());
+    }
+
+    #[test]
+    fn ignored_settings_name_real_fields() {
+        use transmute_core::codec::CodecSettings;
+        let listings = [VIPS_LISTING.to_owned(), MAGICK_LISTING.to_owned()];
+        for tool in ToolId::ALL {
+            let caps = capabilities(tool, None, "windows", &listings);
+            for (format, names) in &caps.ignored_settings {
+                let json = serde_json::to_value(CodecSettings::factory(*format)).unwrap();
+                for name in names {
+                    assert!(
+                        json.get(name).is_some(),
+                        "{tool:?}: {format:?} has no {name}"
+                    );
+                }
+            }
         }
     }
 }

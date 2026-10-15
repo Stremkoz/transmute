@@ -57,6 +57,8 @@ fn folder(root: &str, files: &[(&str, Format)]) -> Inventory {
                     animation: Animation::Still,
                     pages: None,
                     metadata: no_metadata(),
+                    jpeg_reconstruction: false,
+                    bit_depth: None,
                     problem: None,
                 },
                 excluded: false,

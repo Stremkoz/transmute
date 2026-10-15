@@ -24,7 +24,7 @@ pub struct ToolReport {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolStatus {
-    Available(ToolInfo),
+    Available(Box<ToolInfo>),
     NotFound,
     /// Found (or configured) but not usable; `reason` explains why.
     Unusable {
@@ -142,6 +142,11 @@ pub fn probe_tool(tool: ToolId, path: &Path, source: ToolSource) -> ToolStatus {
             .notes
             .push("Could not list supported formats; some formats may be missing.".into());
     }
+    for &(probe, args) in catalog::build_probes(tool) {
+        let works = run_captured(path, args, LISTING_TIMEOUT)
+            .is_ok_and(|output| output.exit_code == Some(0) && !output.stdout.is_empty());
+        catalog::apply_probe(&mut capabilities, probe, works);
+    }
     capabilities
         .notes
         .extend(catalog::build_notes(tool, &output));
@@ -160,13 +165,13 @@ pub fn probe_tool(tool: ToolId, path: &Path, source: ToolSource) -> ToolStatus {
         ));
     }
 
-    ToolStatus::Available(ToolInfo {
+    ToolStatus::Available(Box::new(ToolInfo {
         path: path.to_owned(),
         source,
         version,
         outdated,
         capabilities,
-    })
+    }))
 }
 
 #[cfg(test)]

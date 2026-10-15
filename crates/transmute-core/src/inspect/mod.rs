@@ -104,6 +104,13 @@ pub struct Inspection {
     /// For multi-page formats (TIFF): number of pages.
     pub pages: Option<u32>,
     pub metadata: MetadataPresence,
+    /// A JPEG XL file holding a losslessly recompressed JPEG, from which the
+    /// original JPEG file can be restored bit for bit.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub jpeg_reconstruction: bool,
+    /// Bits per colour channel, where the header states it (AVIF, HEIF).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bit_depth: Option<u8>,
     /// Set when the format was recognised but its header couldn't be fully
     /// read (truncated or corrupt); conversion is likely to fail.
     pub problem: Option<String>,
@@ -116,6 +123,8 @@ struct Details {
     animation: Animation,
     pages: Option<u32>,
     metadata: MetadataPresence,
+    jpeg_reconstruction: bool,
+    bit_depth: Option<u8>,
 }
 
 /// Inspects the file at `path`. I/O errors opening or reading the file are
@@ -146,6 +155,8 @@ pub fn inspect_reader<R: Read + Seek>(
             animation: details.animation,
             pages: details.pages,
             metadata: details.metadata,
+            jpeg_reconstruction: details.jpeg_reconstruction,
+            bit_depth: details.bit_depth,
             problem: None,
         },
         Err(err) => Inspection {

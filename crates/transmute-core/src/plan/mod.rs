@@ -125,6 +125,14 @@ pub enum PlanNote {
         declared: Format,
         actual: Format,
     },
+    /// The writer can't apply these settings (preset field names).
+    SettingsIgnored {
+        tool: ToolId,
+        settings: Vec<String>,
+    },
+    /// The source JPEG XL holds a recompressed JPEG, which is restored
+    /// exactly instead of being encoded again.
+    JpegRestored,
 }
 
 impl fmt::Display for PlanNote {
@@ -169,6 +177,16 @@ impl fmt::Display for PlanNote {
                 "the source's extension says {} but it is really {}",
                 declared.display_name(),
                 actual.display_name()
+            ),
+            PlanNote::SettingsIgnored { tool, settings } => write!(
+                f,
+                "{} can't apply these settings, so its defaults are used: {}",
+                tool.program_name(),
+                settings.join(", ")
+            ),
+            PlanNote::JpegRestored => write!(
+                f,
+                "the source holds a recompressed JPEG, so the original JPEG is restored exactly                  (quality settings don't apply)"
             ),
         }
     }
@@ -305,6 +323,9 @@ pub fn plan(
                     animation: entry.inspection.animation,
                     metadata: entry.inspection.metadata,
                     policy: target.metadata,
+                    settings: &target.settings,
+                    jpeg_reconstruction: entry.inspection.jpeg_reconstruction,
+                    bit_depth: entry.inspection.bit_depth,
                 },
             );
             let (route, status) = match routed {

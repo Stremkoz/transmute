@@ -2,7 +2,7 @@
 
 **A fast, approachable, Windows-first converter for image, video and audio files, including very large batches.**
 
-> **Status: pre-alpha / planning.** This is a ground-up overhaul of Transmute 1.x (C#/.NET). There is no runnable code here yet.
+> **Status: pre-alpha.** This is a ground-up overhaul of Transmute 1.x (C#/.NET). The backend is in progress: a developer CLI can already plan and convert image batches. There is no GUI yet.
 
 ---
 

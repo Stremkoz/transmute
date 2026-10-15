@@ -237,6 +237,30 @@ impl CodecSettings {
     pub fn validate(&self, v: &mut Validator) {
         for_each_codec!(Self, self, settings => settings.validate(v));
     }
+
+    /// The settings (by their preset field name) that shape the output when
+    /// converting from `source`. Lossless mode makes quality irrelevant, for
+    /// example. Routing uses this to tell whether a tool that can't apply
+    /// some setting matters for this job.
+    pub fn relevant_settings(&self, source: Format) -> Vec<&'static str> {
+        match self {
+            Self::Jpeg(_) => vec!["quality", "progressive"],
+            Self::Png(_) => vec!["compression"],
+            Self::Webp(s) if s.lossless => vec!["lossless", "method"],
+            Self::Webp(_) => vec!["lossless", "quality", "method"],
+            Self::Jxl(s) if s.lossless && s.reconstruct_jpeg && source == Format::Jpeg => {
+                vec!["lossless", "reconstructJpeg"]
+            }
+            Self::Jxl(s) if s.lossless => vec!["lossless", "effort"],
+            Self::Jxl(_) => vec!["lossless", "distance", "effort"],
+            Self::Avif(s) if s.lossless => vec!["lossless", "effort"],
+            Self::Avif(_) => vec!["lossless", "quality", "effort"],
+            Self::Heif(s) if s.lossless => vec!["lossless"],
+            Self::Heif(_) => vec!["lossless", "quality"],
+            Self::Tiff(_) => vec!["compression"],
+            Self::Gif(_) | Self::Bmp(_) => Vec::new(),
+        }
+    }
 }
 
 impl CodecPatch {
@@ -351,6 +375,36 @@ impl ValidateSettings for BmpSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relevant_settings_name_real_fields() {
+        for format in Format::ALL {
+            let settings = CodecSettings::factory(format);
+            let json = serde_json::to_value(&settings).unwrap();
+            for source in Format::ALL {
+                for name in settings.relevant_settings(source) {
+                    assert!(json.get(name).is_some(), "{format:?} has no {name}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lossless_makes_quality_irrelevant() {
+        let mut jxl = JxlSettings::factory();
+        jxl.lossless = true;
+        let jxl = CodecSettings::Jxl(jxl);
+        assert_eq!(
+            jxl.relevant_settings(Format::Jpeg),
+            ["lossless", "reconstructJpeg"]
+        );
+        assert_eq!(jxl.relevant_settings(Format::Png), ["lossless", "effort"]);
+        assert!(
+            CodecSettings::factory(Format::Jxl)
+                .relevant_settings(Format::Png)
+                .contains(&"distance")
+        );
+    }
 
     #[test]
     fn factory_settings_are_valid_for_every_format() {

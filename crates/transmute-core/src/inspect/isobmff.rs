@@ -5,6 +5,10 @@
 //! item, and thumbnails are smaller, so the largest extent is the image's
 //! size. Resolving the primary item exactly via `pitm`/`ipma` isn't needed
 //! for that.
+//!
+//! Bit depth comes from `pixi`, or from the codec configuration (`av1C`,
+//! `hvcC`). The deepest value wins, so a 10-bit image with an 8-bit
+//! thumbnail counts as 10-bit.
 
 use std::io::{self, Read, Seek};
 
@@ -45,6 +49,13 @@ struct Found {
     xmp: bool,
     icc: bool,
     sequence: bool,
+    bit_depth: Option<u8>,
+}
+
+impl Found {
+    fn depth(&mut self, bits: u8) {
+        self.bit_depth = self.bit_depth.max(Some(bits));
+    }
 }
 
 pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
@@ -62,6 +73,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
             Animation::Still
         },
         metadata: MetadataPresence::known(found.exif, found.xmp, found.icc),
+        bit_depth: found.bit_depth,
         ..Details::default()
     })
 }
@@ -102,6 +114,30 @@ fn walk<R: Read + Seek>(
                 {
                     found.largest_extent = Some(extent);
                 }
+            }
+            b"pixi" => {
+                s.skip(4)?; // version, flags
+                let channels = s.u8()?;
+                for _ in 0..channels {
+                    let bits = s.u8()?;
+                    found.depth(bits);
+                }
+            }
+            b"av1C" => {
+                // marker/version, profile/level, then tier, high_bitdepth
+                // and twelve_bit as the top bits.
+                let [_, _, flags] = s.array::<3>()?;
+                found.depth(match (flags & 0x40 != 0, flags & 0x20 != 0) {
+                    (false, _) => 8,
+                    (true, false) => 10,
+                    (true, true) => 12,
+                });
+            }
+            b"hvcC" => {
+                // bitDepthLumaMinus8 sits after 17 bytes of profile, level
+                // and format fields.
+                s.skip(17)?;
+                found.depth((s.u8()? & 0x07) + 8);
             }
             b"colr" => {
                 let colour_type = s.array::<4>()?;
@@ -236,6 +272,38 @@ mod tests {
         let colr = bx(b"colr", b"nclx\0\x01\0\x0d\0\x01\x80");
         let details = parse(&mut source(heif(&[ispe(1, 1), colr], &[], false))).unwrap();
         assert_eq!(details.metadata.icc, Presence::Absent);
+    }
+
+    #[test]
+    fn bit_depth_from_pixi_or_codec_configuration() {
+        let pixi = full(b"pixi", 0, &[3, 10, 10, 10]);
+        let details = parse(&mut source(heif(&[ispe(8, 8), pixi], &[], false))).unwrap();
+        assert_eq!(details.bit_depth, Some(10));
+
+        let av1c_12bit = bx(b"av1C", &[0x81, 0x00, 0x60, 0x00]);
+        let av1c_8bit = bx(b"av1C", &[0x81, 0x00, 0x0c, 0x00]);
+        let details = parse(&mut source(heif(
+            &[ispe(8, 8), av1c_8bit.clone(), av1c_12bit],
+            &[],
+            false,
+        )))
+        .unwrap();
+        assert_eq!(details.bit_depth, Some(12), "deepest wins");
+        let details = parse(&mut source(heif(&[ispe(8, 8), av1c_8bit], &[], false))).unwrap();
+        assert_eq!(details.bit_depth, Some(8));
+
+        let mut hvcc = vec![1u8; 23];
+        hvcc[17] = 0xfa; // reserved bits set, luma depth 8 + 2
+        let details = parse(&mut source(heif(
+            &[ispe(8, 8), bx(b"hvcC", &hvcc)],
+            &[],
+            false,
+        )))
+        .unwrap();
+        assert_eq!(details.bit_depth, Some(10));
+
+        let details = parse(&mut source(heif(&[ispe(8, 8)], &[], false))).unwrap();
+        assert_eq!(details.bit_depth, None);
     }
 
     #[test]

@@ -85,6 +85,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         animation: Animation::Still,
         pages: Some(pages),
         metadata: MetadataPresence::known(exif, xmp, icc),
+        ..Details::default()
     })
 }
 
