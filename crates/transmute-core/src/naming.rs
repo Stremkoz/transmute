@@ -21,6 +21,7 @@ use crate::validation::Validator;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
 pub struct NamingRule {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub prefix: String,
@@ -35,6 +36,7 @@ pub struct NamingRule {
 /// How `{date}` is written.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum DateStyle {
     /// `20261015`
     #[default]
@@ -48,6 +50,7 @@ pub enum DateStyle {
 /// Which date `{date}` refers to. Explicit so outputs are predictable (spec §5).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum DateSource {
     /// When the batch started: every file in a run gets the same date.
     #[default]

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 /// `cwebp` without `dwebp` still enables WebP encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum ToolId {
     Cjxl,
     Djxl,

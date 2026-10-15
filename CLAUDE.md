@@ -40,7 +40,7 @@ The toolchain is pinned in `rust-toolchain.toml`. CI runs fmt --check, clippy -D
 
 ## Workspace layout
 
-The crates follow the dependency direction `core ← backends ← engine ← cli`. Keep the layering:
+The crates follow the dependency direction `core ← backends ← engine ← api` (and `engine ← cli`, the dev tool). Keep the layering:
 - `transmute-core` must never spawn processes or depend on an async runtime, so the planner stays testable without tools.
 - Encoders are invoked only from `transmute-backends`.
 - Preset, user-defaults and settings JSON is a versioned public format, documented in `docs/preset-format.md`. Read and write stored files only through `transmute-core::store`, which does atomic saves and never silently replaces an unreadable or newer file (R12).
@@ -52,6 +52,7 @@ The crates follow the dependency direction `core ← backends ← engine ← cli
 - File formats are detected from content (`transmute-core/src/inspect/`). Each header parser gets synthetic-file unit tests (builders in `inspect/test_images.rs`) *and* a case in `tests/real_images.rs` against real encoder output; the synthetic tests alone only prove the parser matches our reading of the spec.
 - Planning (`transmute-core/src/plan/`) owns file safety: outputs never share a path, never replace a source, and only replace existing files under `overwrite`. The property test in `plan/tests.rs` guards this. Keep it passing, and commit `proptest-regressions/` files when it finds a case. When mutation-testing, `touch` restored files: cargo tracks mtimes, and a restored backup can leave a stale binary.
 - Metadata policy is carried out by `transmute-core::metadata` for the containers it can rewrite (JPEG, PNG, WebP, JPEG XL): encoders keep everything, then the engine sets the output's blocks from the original source. The planner records how in each job's `MetadataHandling`. The opt-in R5/R6 test (`TRANSMUTE_REAL_TOOLS=1 cargo test -p transmute-engine --test metadata`) must keep passing; a privacy failure there is a release blocker.
+- `transmute-api` is the only thing the desktop frontend talks to (documented in `docs/api.md`). It addresses files and jobs by id, never by frontend-supplied paths. Its types generate the TypeScript in `crates/transmute-api/bindings/`; after changing any type that crosses the boundary (API types, or core types deriving `ts_rs::TS` under the `typescript` feature), regenerate with `TRANSMUTE_UPDATE_BINDINGS=1 cargo test -p transmute-api --test bindings` and commit the result (a test fails otherwise). `tests/headless.rs` drives a whole session through the facade; keep it passing.
 - The engine (`transmute-engine`) never lets a tool write a final path. It uses a `.transmute-part-*` temp file plus a no-clobber move, journals temp files for crash recovery, and kills whole process trees on cancel. Adapters in `transmute-backends/src/invoke.rs` only build command lines; keep process handling out of them.
 - Tests that need executables use the stub scripts in `transmute-backends/src/process.rs` (`test_support`), not the real tools.
 - Factory defaults in `codec.rs` are backed by the M9 benchmark data (`docs/internal/m9-defaults.md`). Change them only with new measurements from `cargo dev bench`.

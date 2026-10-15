@@ -17,6 +17,7 @@ use crate::validation::Validator;
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum Destination {
     /// Next to each source file.
     #[default]
@@ -57,6 +58,7 @@ impl Destination {
 /// checks this against tool capabilities before running.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum MetadataPolicy {
     #[default]
     PreserveAll,
@@ -73,6 +75,7 @@ pub enum MetadataPolicy {
 /// overwritten, whatever the policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum CollisionPolicy {
     /// Leave the existing file and report the job as skipped.
     #[default]
@@ -87,6 +90,7 @@ pub enum CollisionPolicy {
 /// overrides of the preset-wide destination, naming and metadata policy.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
 pub struct OutputTarget {
     pub codec: CodecPatch,
     #[serde(default, skip_serializing_if = "Option::is_none")]

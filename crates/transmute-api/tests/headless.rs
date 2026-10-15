@@ -1,0 +1,380 @@
+//! M11's exit test: a whole session driven through the facade only, the
+//! way the desktop app will drive it. Stub tools stand in for the encoders
+//! (they copy their input), so this runs everywhere, CI included.
+
+// Test-only file: helpers panic on setup failures, which is what a test wants.
+#![allow(clippy::unwrap_used)]
+
+use std::collections::BTreeMap;
+use std::ffi::OsString;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+
+use tokio::sync::mpsc;
+
+use transmute_api::{
+    Api, ApiEvent, Backend, ErrorCode, JobFilter, JobState, NodeKind, PreviewTarget, RunState,
+};
+use transmute_backends::invoke::{Invocation, Invoker, StepRequest};
+use transmute_core::capability::{Capabilities, Toolbox};
+use transmute_core::format::Format;
+use transmute_core::output::{Destination, OutputTarget};
+use transmute_core::preset::Preset;
+use transmute_core::store::Locations;
+use transmute_core::tool::ToolId;
+
+/// Writes a stub "encoder": `copy` copies its input to its output; `slow`
+/// does the same after a long pause (to test cancelling).
+fn write_stub(dir: &Path, slow: bool) -> PathBuf {
+    let name = if slow { "slow" } else { "copy" };
+    #[cfg(windows)]
+    {
+        let wait = if slow {
+            "ping -n 30 127.0.0.1 >nul\r\n"
+        } else {
+            ""
+        };
+        let path = dir.join(format!("{name}.cmd"));
+        fs::write(
+            &path,
+            format!("@echo off\r\n{wait}copy /y \"%~1\" \"%~2\" >nul\r\n"),
+        )
+        .unwrap();
+        path
+    }
+    #[cfg(not(windows))]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let wait = if slow { "sleep 30\n" } else { "" };
+        let path = dir.join(name);
+        fs::write(&path, format!("#!/bin/sh\n{wait}cp \"$1\" \"$2\"\n")).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+}
+
+struct StubInvoker {
+    program: PathBuf,
+}
+
+impl Invoker for StubInvoker {
+    fn invocation(&self, request: &StepRequest<'_>) -> Result<Invocation, String> {
+        Ok(Invocation {
+            program: self.program.clone(),
+            args: vec![
+                OsString::from(request.input),
+                OsString::from(request.output),
+            ],
+        })
+    }
+}
+
+/// A 1×1 PNG, recognised by content detection.
+fn png_bytes() -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    for (kind, data) in [
+        (&b"IHDR"[..], &[0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0][..]),
+        (b"IDAT", &[0x78, 0x9C, 0x63, 0x60, 0, 0, 0, 2, 0, 1]),
+        (b"IEND", &[]),
+    ] {
+        bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        bytes.extend_from_slice(kind);
+        bytes.extend_from_slice(data);
+        bytes.extend_from_slice(&[0; 4]);
+    }
+    bytes
+}
+
+struct Fixture {
+    _dir: tempfile::TempDir,
+    photos: PathBuf,
+    api: Api,
+    events: mpsc::UnboundedReceiver<ApiEvent>,
+}
+
+/// A session over a `photos` folder (a.png, b.png, sub/c.png, notes.txt),
+/// with "magick" stubbed to "convert" PNG → TIFF (and back, for previews).
+fn fixture(slow: bool) -> Fixture {
+    let dir = tempfile::tempdir().unwrap();
+    let photos = dir.path().join("photos");
+    fs::create_dir_all(photos.join("sub")).unwrap();
+    for name in ["a.png", "b.png", "sub/c.png"] {
+        fs::write(photos.join(name), png_bytes()).unwrap();
+    }
+    fs::write(photos.join("notes.txt"), "not an image").unwrap();
+    let stubs = dir.path().join("stubs");
+    fs::create_dir_all(&stubs).unwrap();
+
+    let caps = Capabilities {
+        reads: [Format::Png, Format::Tiff].into(),
+        writes: [Format::Png, Format::Tiff].into(),
+        ..Capabilities::default()
+    };
+    let backend = Backend {
+        reports: Vec::new(),
+        toolbox: Toolbox::new([(ToolId::Magick, caps)]),
+        invoker: Arc::new(StubInvoker {
+            program: write_stub(&stubs, slow),
+        }),
+    };
+    let (sender, events) = mpsc::unbounded_channel();
+    let api = Api::with_backend(
+        Locations::portable(&dir.path().join("data")),
+        backend,
+        Arc::new(move |event| {
+            let _ = sender.send(event);
+        }),
+        false,
+    );
+    Fixture {
+        _dir: dir,
+        photos,
+        api,
+        events,
+    }
+}
+
+fn tiff_preset() -> Preset {
+    Preset {
+        name: "Archive".into(),
+        description: None,
+        input_filter: Default::default(),
+        destination: Some(Destination::Subfolder),
+        naming: None,
+        metadata: None,
+        collision: None,
+        outputs: vec![OutputTarget::new(Format::Tiff)],
+    }
+}
+
+/// Collects events until the run finishes.
+async fn until_finished(events: &mut mpsc::UnboundedReceiver<ApiEvent>) -> Vec<ApiEvent> {
+    let mut seen = Vec::new();
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(60), events.recv())
+            .await
+            .expect("the run should finish")
+            .expect("the event sink stays open");
+        let done = matches!(event, ApiEvent::RunFinished { .. });
+        seen.push(event);
+        if done {
+            return seen;
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_whole_session_through_the_facade() {
+    let mut fx = fixture(false);
+    let api = &fx.api;
+
+    // Drop a folder.
+    let inputs = api
+        .add_inputs(vec![fx.photos.display().to_string()], true)
+        .await
+        .unwrap();
+    assert_eq!(
+        (inputs.files, inputs.convertible, inputs.unsupported),
+        (4, 3, 1)
+    );
+    assert_eq!(inputs.roots.len(), 1);
+
+    // Browse it lazily, and exclude a file.
+    let top = api.tree(0, "").unwrap();
+    let names: Vec<&str> = top.iter().map(|n| n.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["sub", "a.png", "b.png", "notes.txt"],
+        "folders first"
+    );
+    assert!(matches!(
+        top[0].node,
+        NodeKind::Folder {
+            files: 1,
+            excluded: 0
+        }
+    ));
+    let sub = api.tree(0, "sub").unwrap();
+    assert_eq!(sub[0].relative_path, "sub/c.png");
+    let NodeKind::File { entry: a_entry, .. } = top[1].node else {
+        panic!("a.png is a file")
+    };
+    assert_eq!(api.set_excluded(0, "b.png", true).unwrap().excluded, 1);
+
+    // Configure, and plan.
+    api.set_preset(tiff_preset()).unwrap();
+    assert_eq!(
+        api.jobs(JobFilter::All, 0, 10).unwrap_err().code,
+        ErrorCode::NoPlan,
+        "there's no plan until one is made"
+    );
+    let plan = api.plan().await.unwrap();
+    assert_eq!((plan.jobs, plan.ready), (2, 2), "b.png is excluded");
+    assert_eq!(api.overview().plan.unwrap().ready, 2);
+    let page = api.jobs(JobFilter::Ready, 0, 1).unwrap();
+    assert_eq!((page.total, page.jobs.len()), (2, 1), "paged");
+    assert_eq!(page.jobs[0].format, Format::Tiff);
+
+    // Run it, following the events.
+    api.start_run().await.unwrap();
+    let events = until_finished(&mut fx.events).await;
+    let mut last_state: BTreeMap<u32, JobState> = BTreeMap::new();
+    for event in &events {
+        if let ApiEvent::JobsChanged { jobs } = event {
+            for update in jobs {
+                last_state.insert(update.id, update.state.clone());
+            }
+        }
+    }
+    assert_eq!(last_state.len(), 2);
+    assert!(
+        last_state
+            .values()
+            .all(|s| matches!(s, JobState::Converted { output_bytes, .. } if *output_bytes > 0)),
+        "{last_state:?}"
+    );
+    let Some(ApiEvent::RunFinished { progress }) = events.last() else {
+        panic!("ends with RunFinished")
+    };
+    assert_eq!(
+        (progress.total, progress.converted, progress.failed),
+        (2, 2, 0)
+    );
+    assert!(fx.photos.join("tiff").join("a.tiff").is_file());
+
+    // Review: results stay browsable, outputs can be previewed.
+    let overview = api.overview();
+    assert_eq!(overview.run.unwrap().state, RunState::Finished);
+    let converted = api.jobs(JobFilter::Converted, 0, 10).unwrap();
+    assert_eq!(converted.total, 2);
+    let source = api
+        .preview(PreviewTarget::Source { entry: a_entry })
+        .await
+        .unwrap();
+    assert!(!source.rendered, "PNG shows as it is");
+    let output = api
+        .preview(PreviewTarget::Output {
+            job: converted.jobs[0].id,
+        })
+        .await
+        .unwrap();
+    assert!(output.rendered, "TIFF is rendered for the webview");
+    assert!(Path::new(&output.path).is_file());
+    assert!(api.report().unwrap().contains("2 converted"));
+
+    // The plan has run; doing it again needs a fresh plan, which sees the
+    // outputs that now exist.
+    assert_eq!(api.start_run().await.unwrap_err().code, ErrorCode::NoPlan);
+    let again = api.plan().await.unwrap();
+    assert_eq!((again.ready, again.skipped), (0, 2));
+
+    // A trial conversion before committing to a batch.
+    let sample = api.sample(a_entry, 0).await.unwrap();
+    assert!(sample.output_bytes > 0);
+    assert!(sample.preview.rendered);
+
+    // Presets: save the working configuration, then load it back.
+    let id = api.save_preset(None, tiff_preset()).unwrap();
+    assert_eq!(id, "archive");
+    assert_eq!(api.stored_presets().unwrap().len(), 1);
+    api.set_preset(Preset {
+        name: "Other".into(),
+        ..tiff_preset()
+    })
+    .unwrap();
+    assert_eq!(api.load_preset("archive").unwrap().name, "Archive");
+    assert_eq!(api.preset().name, "Archive");
+
+    // Removing the input empties the session.
+    assert_eq!(api.remove_root(0).await.unwrap().files, 0);
+    api.clear_previews().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cancelling_through_the_facade() {
+    let mut fx = fixture(true);
+    let api = &fx.api;
+    api.add_inputs(vec![fx.photos.display().to_string()], true)
+        .await
+        .unwrap();
+    api.set_preset(tiff_preset()).unwrap();
+    api.plan().await.unwrap();
+    api.start_run().await.unwrap();
+
+    // While running, the session can't change underneath the run.
+    assert_eq!(
+        api.set_preset(tiff_preset()).unwrap_err().code,
+        ErrorCode::Busy
+    );
+    assert_eq!(api.plan().await.unwrap_err().code, ErrorCode::Busy);
+    api.pause().unwrap();
+    assert_eq!(api.overview().run.unwrap().state, RunState::Paused);
+    api.resume().unwrap();
+    api.cancel().unwrap();
+
+    let events = until_finished(&mut fx.events).await;
+    let Some(ApiEvent::RunFinished { progress }) = events.last() else {
+        panic!("ends with RunFinished")
+    };
+    assert_eq!(progress.converted, 0);
+    let cancelled = api.jobs(JobFilter::Cancelled, 0, 10).unwrap();
+    assert_eq!(cancelled.total, 3, "running and never-started jobs alike");
+    assert!(!fx.photos.join("tiff").join("a.tiff").exists());
+    assert_eq!(
+        api.cancel().unwrap_err().code,
+        ErrorCode::Invalid,
+        "nothing to cancel now"
+    );
+}
+
+/// The same path with the installed encoders: PNG → JPEG XL, then a
+/// preview, which the webview can't decode so it must be rendered.
+/// Opt-in: `TRANSMUTE_REAL_TOOLS=1`.
+#[tokio::test(flavor = "multi_thread")]
+async fn real_tools_convert_and_preview_jpeg_xl() {
+    if std::env::var("TRANSMUTE_REAL_TOOLS").map_or(true, |v| v != "1") {
+        eprintln!("skipped: set TRANSMUTE_REAL_TOOLS=1 to test against real encoders");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let photos = dir.path().join("photos");
+    fs::create_dir_all(&photos).unwrap();
+    let status = std::process::Command::new("magick")
+        .args(["-size", "64x48", "plasma:fractal"])
+        .arg(photos.join("p.png"))
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let (sender, mut events) = mpsc::unbounded_channel();
+    let api = Api::with_backend(
+        Locations::portable(&dir.path().join("data")),
+        Backend::discover(&Default::default()),
+        Arc::new(move |event| {
+            let _ = sender.send(event);
+        }),
+        false,
+    );
+    api.add_inputs(vec![photos.display().to_string()], true)
+        .await
+        .unwrap();
+    api.set_preset(Preset {
+        outputs: vec![OutputTarget::new(Format::Jxl)],
+        ..tiff_preset()
+    })
+    .unwrap();
+    assert_eq!(api.plan().await.unwrap().ready, 1);
+    api.start_run().await.unwrap();
+    until_finished(&mut events).await;
+    let job = api.jobs(JobFilter::Converted, 0, 1).unwrap().jobs.remove(0);
+    let preview = api
+        .preview(PreviewTarget::Output { job: job.id })
+        .await
+        .unwrap();
+    assert!(preview.rendered);
+    assert_eq!((preview.width, preview.height), (Some(64), Some(48)));
+    let rendered = fs::read(&preview.path).unwrap();
+    assert!(rendered.starts_with(b"\x89PNG"), "the rendering is a PNG");
+}

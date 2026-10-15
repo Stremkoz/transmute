@@ -14,6 +14,7 @@ publish = false
 transmute-core = { path = "crates/transmute-core" }
 transmute-backends = { path = "crates/transmute-backends" }
 transmute-engine = { path = "crates/transmute-engine" }
+transmute-api = { path = "crates/transmute-api" }
 
 brotli-decompressor = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
@@ -34,6 +35,7 @@ tokio-util = "0.7"
 windows = { version = "0.61", features = ["Win32_System_Threading"] }
 thiserror = "2"
 tracing = "0.1"
+ts-rs = { version = "12", features = ["no-serde-warnings"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [workspace.lints.rust]

@@ -9,6 +9,7 @@ use crate::extension::normalize_extension;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum MediaKind {
     Image,
     Video,
@@ -17,6 +18,7 @@ pub enum MediaKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum Format {
     #[serde(alias = "jpg")]
     Jpeg,

@@ -254,6 +254,47 @@ impl fmt::Display for PlanNote {
     }
 }
 
+impl SkipReason {
+    /// A stable identifier, for interfaces that group or translate messages.
+    pub fn code(&self) -> &'static str {
+        match self {
+            SkipReason::OutputExists => "output-exists",
+            SkipReason::OutputIsSource => "output-is-source",
+        }
+    }
+}
+
+impl BlockReason {
+    /// A stable identifier, for interfaces that group or translate messages.
+    pub fn code(&self) -> &'static str {
+        match self {
+            BlockReason::NoRoute(_) => "no-route",
+            BlockReason::DuplicateOutput { .. } => "duplicate-output",
+            BlockReason::WouldReplaceSource { .. } => "would-replace-source",
+            BlockReason::NoFreeName => "no-free-name",
+            BlockReason::NameTooLong => "name-too-long",
+        }
+    }
+}
+
+impl PlanNote {
+    /// A stable identifier, for interfaces that group or translate messages.
+    pub fn code(&self) -> &'static str {
+        match self {
+            PlanNote::FirstFrameOnly { .. } => "first-frame-only",
+            PlanNote::SpecialistMissing { .. } => "specialist-missing",
+            PlanNote::MetadataNotHonoured { .. } => "metadata-not-honoured",
+            PlanNote::MetadataLost { .. } => "metadata-lost",
+            PlanNote::CopyrightFilteringUnavailable => "copyright-filtering-unavailable",
+            PlanNote::Renamed { .. } => "renamed",
+            PlanNote::DamagedSource { .. } => "damaged-source",
+            PlanNote::ExtensionMismatch { .. } => "extension-mismatch",
+            PlanNote::SettingsIgnored { .. } => "settings-ignored",
+            PlanNote::JpegRestored => "jpeg-restored",
+        }
+    }
+}
+
 impl fmt::Display for BlockReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

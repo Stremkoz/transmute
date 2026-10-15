@@ -26,6 +26,7 @@ macro_rules! codec_settings {
         $(#[$meta])*
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        #[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
         pub struct $name {
             $( $(#[doc = $doc])* pub $field: $ty, )*
         }
@@ -44,6 +45,7 @@ macro_rules! codec_settings {
         #[doc = concat!("Partial [`", stringify!($name), "`]; unset fields inherit.")]
         #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
         #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        #[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
         pub struct $patch {
             $(
                 $(#[doc = $doc])*
@@ -121,6 +123,7 @@ codec_settings! {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum TiffCompression {
     None,
     Lzw,
@@ -146,6 +149,7 @@ codec_settings! {
 /// Fully specified encoder settings for one output format.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "format", rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum CodecSettings {
     Jpeg(JpegSettings),
     Png(PngSettings),
@@ -162,6 +166,7 @@ pub enum CodecSettings {
 /// selects the output format of a target.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "format", rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum CodecPatch {
     #[serde(alias = "jpg")]
     Jpeg(JpegPatch),

@@ -122,6 +122,7 @@ pub struct MetadataSupport {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
 pub struct MetadataKinds {
     pub exif: bool,
     pub xmp: bool,

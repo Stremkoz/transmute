@@ -25,6 +25,7 @@ pub const MAX_OUTPUTS: usize = 16;
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub enum InputFilter {
     #[default]
     All,
@@ -66,6 +67,7 @@ impl InputFilter {
 /// A saved (or unsaved, in-session) multi-output configuration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
 pub struct Preset {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -126,6 +128,7 @@ fn validate_name(name: &str, v: &mut Validator) {
 /// The user's own defaults, layered over the factory defaults.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
 pub struct UserDefaults {
     /// Per-format codec settings; at most one entry per format.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

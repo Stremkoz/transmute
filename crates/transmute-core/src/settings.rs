@@ -15,6 +15,7 @@ pub const MAX_WORKERS: usize = 256;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
 pub struct AppSettings {
     /// Executables to use instead of the ones found automatically.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
