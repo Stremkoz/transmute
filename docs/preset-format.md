@@ -1,6 +1,6 @@
-# Preset and defaults file format
+# Preset, defaults and settings file format
 
-Transmute stores presets and user defaults as JSON. This page describes schema version **1**.
+Transmute stores presets, user defaults and application settings as JSON. This page describes schema version **1** of each.
 
 The types are defined in `crates/transmute-core` (`preset.rs`, `output.rs`, `codec.rs`, `naming.rs`, `schema.rs`). If this page and the code disagree, the code wins. Please fix the page.
 
@@ -23,8 +23,9 @@ cargo dev preset check path/to/preset.json [--defaults path/to/defaults.json]
 ## Rules for every document
 
 - `schemaVersion` (a number) is required at the top level.
-  - A file from a **newer** Transmute is refused with an explanation, never half-read.
-  - Older versions are migrated automatically.
+  - A file from a **newer** Transmute is refused with an explanation, never half-read, and never overwritten.
+  - Older versions are migrated automatically. A stored file is upgraded on disk, and the original is kept beside it (`web.v1.json`).
+  - A stored file that can't be read is moved aside (`defaults.corrupt-20261015-093000.json`) and you're told; it is never silently replaced.
 - Field names are camelCase. **Unknown fields are errors**, so a typo like `qualty` is reported with its location (`outputs[0].codec: unknown field 'qualty'`) instead of being silently ignored.
 - All problems are reported together, each with its path.
 
@@ -87,6 +88,23 @@ The same shape, minus `name`, `inputFilter` and `outputs`, plus per-format codec
 ```
 
 `codecs` may hold at most one entry per format.
+
+## Settings
+
+How Transmute runs, rather than what it produces:
+
+```json
+{
+  "schemaVersion": 1,
+  "toolPaths": { "cjxl": "C:\\Tools\\libjxl\\cjxl.exe" },
+  "workers": 4
+}
+```
+
+| Field | Meaning | Default |
+|---|---|---|
+| `toolPaths` | Executables to use instead of the ones found automatically, per tool (`cjxl`, `djxl`, `cwebp`, `dwebp`, `gif2webp`, `vips`, `vipsheader`, `magick`, `ffmpeg`, `ffprobe`). Absolute paths only | found automatically |
+| `workers` | Conversions to run at once, 1–256 | one per CPU core |
 
 ## Codecs
 
@@ -181,3 +199,16 @@ What happens when a planned output path already exists. **Source files are never
 | `skip` | Leave the existing file; report the job as skipped (default) |
 | `rename` | Write the new file under a different name |
 | `overwrite` | Replace the existing output |
+
+## Where files are stored
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Settings, defaults, presets | `%APPDATA%\Transmute` | `~/Library/Application Support/Transmute` | `$XDG_CONFIG_HOME/transmute` (`~/.config/transmute`) |
+| Run state (temporary-file journals) | `%LOCALAPPDATA%\Transmute\state` | `…/Transmute/state` | `$XDG_STATE_HOME/transmute` (`~/.local/state/transmute`) |
+
+Inside the settings folder: `settings.json`, `defaults.json` and `presets/<id>.json`. A preset's id is its file name, made from its name when first saved ("Web & Archive" → `web-archive`).
+
+**Portable mode:** if a file named `portable` sits beside the executable, everything lives in a `data` folder next to it instead, and nothing is written to the user profile.
+
+Every save is atomic: the new file is written and flushed under a temporary name, then renamed into place, so a crash leaves the old file or the new one, never a mix.

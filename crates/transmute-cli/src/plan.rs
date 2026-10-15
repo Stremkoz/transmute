@@ -6,16 +6,14 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
-use transmute_backends::discovery::ToolConfig;
 use transmute_backends::probe::{ToolReport, discover_tools, toolbox};
 use transmute_core::inventory::{Inventory, ScanOptions, scan};
 use transmute_core::plan::{JobStatus, Plan, PlanContext, plan};
-use transmute_core::preset::{JobConfig, Preset, UserDefaults, resolve};
-
-use crate::preset::read_document;
+use transmute_core::preset::{JobConfig, resolve};
 
 pub struct PlanArgs {
     pub inputs: Vec<PathBuf>,
+    /// A preset file, or a stored preset's id.
     pub preset: PathBuf,
     pub defaults: Option<PathBuf>,
     pub recursive: bool,
@@ -39,15 +37,14 @@ pub struct Prepared {
     pub config: JobConfig,
     pub preset_name: String,
     pub reports: Vec<ToolReport>,
+    pub stored: crate::config::Config,
 }
 
 /// Loads the preset, scans the inputs, discovers tools and plans.
 pub fn prepare(args: &PlanArgs) -> Result<Prepared, String> {
-    let preset = read_document::<Preset>(&args.preset)?;
-    let defaults = match &args.defaults {
-        Some(path) => read_document::<UserDefaults>(path)?,
-        None => UserDefaults::default(),
-    };
+    let stored = crate::config::open()?;
+    let preset = stored.preset(&args.preset)?;
+    let defaults = stored.defaults_or(args.defaults.as_deref())?;
     let config = resolve(&defaults, &preset);
     let inventory = scan(
         &args.inputs,
@@ -58,7 +55,7 @@ pub fn prepare(args: &PlanArgs) -> Result<Prepared, String> {
         &AtomicBool::new(false),
     )
     .map_err(|err| err.to_string())?;
-    let reports = discover_tools(&ToolConfig::default());
+    let reports = discover_tools(&stored.tool_config());
 
     let exists = |path: &Path| path.exists();
     let plan = plan(
@@ -76,6 +73,7 @@ pub fn prepare(args: &PlanArgs) -> Result<Prepared, String> {
         config,
         preset_name: preset.name,
         reports,
+        stored,
     })
 }
 

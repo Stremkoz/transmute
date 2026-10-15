@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
 use crate::preset::{Preset, UserDefaults};
+use crate::settings::AppSettings;
 use crate::validation::ValidationError;
 
 const VERSION_KEY: &str = "schemaVersion";
@@ -52,6 +53,15 @@ impl Document for UserDefaults {
     }
 }
 
+impl Document for AppSettings {
+    const KIND: &'static str = "settings";
+    const VERSION: u32 = 1;
+
+    fn validate(&self) -> Result<(), ValidationError> {
+        AppSettings::validate(self)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum LoadError {
     #[error("not valid JSON: {0}")]
@@ -83,12 +93,19 @@ pub enum LoadError {
 
 /// Parses, migrates, deserializes and validates a document.
 pub fn load<D: Document>(json: &str) -> Result<D, LoadError> {
+    load_versioned(json).map(|(document, _)| document)
+}
+
+/// Like [`load`], also returning the schema version the JSON was written
+/// in, so callers can tell when a file was migrated.
+pub fn load_versioned<D: Document>(json: &str) -> Result<(D, u32), LoadError> {
     let value: Value = serde_json::from_str(json).map_err(LoadError::Syntax)?;
     let Value::Object(mut body) = value else {
         return Err(LoadError::NotAnObject);
     };
 
-    let mut version = take_version::<D>(&mut body)?;
+    let written = take_version::<D>(&mut body)?;
+    let mut version = written;
     if version > D::VERSION {
         return Err(LoadError::TooNew {
             kind: D::KIND,
@@ -113,7 +130,7 @@ pub fn load<D: Document>(json: &str) -> Result<D, LoadError> {
         kind: D::KIND,
         source,
     })?;
-    Ok(document)
+    Ok((document, written))
 }
 
 /// Serializes a document as pretty JSON with its schema version first.

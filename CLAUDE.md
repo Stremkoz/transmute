@@ -28,7 +28,9 @@ cargo dev <subcommand>                      # alias: run the transmute-dev CLI, 
 TRANSMUTE_REAL_TOOLS=1 cargo test --workspace   # opt-in: also run tests against the installed encoders
 cargo dev inspect <paths> [--list]          # scan files/folders, show detected formats
 cargo dev plan <paths> --preset <file>      # dry run: planned outputs, routes, collisions
-cargo dev run <paths> --preset <file>       # plan, then convert for real (Ctrl+C cancels)
+cargo dev run <paths> --preset <file|id>    # plan, then convert for real (Ctrl+C cancels)
+cargo dev preset list|import|export|delete  # stored presets; `defaults` and `settings` show/import the other documents
+cargo dev env                               # includes where settings live; a `portable` file beside the exe switches to <exe>/data
 cargo run --release -p transmute-cli -- bench-scan   # time a 50k-file scan (budget: ≤ 2 s)
 ```
 
@@ -39,7 +41,7 @@ The toolchain is pinned in `rust-toolchain.toml`. CI runs fmt --check, clippy -D
 The crates follow the dependency direction `core ← backends ← engine ← cli`. Keep the layering:
 - `transmute-core` must never spawn processes or depend on an async runtime, so the planner stays testable without tools.
 - Encoders are invoked only from `transmute-backends`.
-- Preset and user-defaults JSON is a versioned public format, documented in `docs/preset-format.md`.
+- Preset, user-defaults and settings JSON is a versioned public format, documented in `docs/preset-format.md`. Read and write stored files only through `transmute-core::store`, which does atomic saves and never silently replaces an unreadable or newer file (R12).
   - A breaking schema change must bump `Document::VERSION` and add a `migrate_step`.
   - Update the doc in the same change.
   - `examples/presets/` files are loaded by tests, so keep them valid.

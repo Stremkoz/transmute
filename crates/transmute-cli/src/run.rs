@@ -1,7 +1,6 @@
 //! `transmute-dev run`: plan, then convert for real.
 
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::mpsc;
@@ -36,8 +35,10 @@ pub fn execute(args: PlanArgs, workers: Option<NonZeroUsize>) -> Result<(), Stri
         inventory: prepared.inventory,
         config: prepared.config,
     });
+    // -j wins over the stored setting.
+    let workers = workers.or_else(|| prepared.stored.settings().workers);
     let options = RunOptions {
-        state_dir: state_dir(),
+        state_dir: prepared.stored.locations.state.clone(),
         workers: resolve_worker_count(workers),
     };
 
@@ -141,23 +142,6 @@ fn human(bytes: u64) -> String {
     } else {
         format!("{value:.1} {}", UNITS[unit])
     }
-}
-
-/// Where run journals live, for recovering from crashed runs.
-fn state_dir() -> PathBuf {
-    let base = if cfg!(windows) {
-        std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-    } else {
-        std::env::var_os("XDG_STATE_HOME")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .map(|home| PathBuf::from(home).join(".local").join("state"))
-            })
-    };
-    base.unwrap_or_else(std::env::temp_dir)
-        .join("Transmute")
-        .join("state")
 }
 
 #[cfg(test)]

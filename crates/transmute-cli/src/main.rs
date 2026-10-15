@@ -1,6 +1,7 @@
 //! `transmute-dev`: an internal tool for exercising the backend before the GUI
 //! exists. Not a product surface, but kept tidy so promoting it later is cheap.
 
+mod config;
 mod inspect;
 mod plan;
 mod preset;
@@ -48,10 +49,10 @@ enum Command {
         /// Files and/or folders.
         #[arg(required = true)]
         inputs: Vec<std::path::PathBuf>,
-        /// Preset JSON file.
+        /// Preset JSON file, or a stored preset's id.
         #[arg(long)]
         preset: std::path::PathBuf,
-        /// User-defaults JSON file (factory defaults if omitted).
+        /// User-defaults JSON file (the stored defaults if omitted).
         #[arg(long)]
         defaults: Option<std::path::PathBuf>,
         /// Don't descend into subfolders.
@@ -66,16 +67,16 @@ enum Command {
         /// Files and/or folders.
         #[arg(required = true)]
         inputs: Vec<std::path::PathBuf>,
-        /// Preset JSON file.
+        /// Preset JSON file, or a stored preset's id.
         #[arg(long)]
         preset: std::path::PathBuf,
-        /// User-defaults JSON file (factory defaults if omitted).
+        /// User-defaults JSON file (the stored defaults if omitted).
         #[arg(long)]
         defaults: Option<std::path::PathBuf>,
         /// Don't descend into subfolders.
         #[arg(long)]
         flat: bool,
-        /// Conversions to run at once (default: one per CPU).
+        /// Conversions to run at once (default: the stored setting, else one per CPU).
         #[arg(long, short = 'j')]
         jobs: Option<std::num::NonZeroUsize>,
     },
@@ -86,9 +87,15 @@ enum Command {
         #[arg(long, default_value_t = 1_000)]
         per_folder: usize,
     },
-    /// Work with preset files.
+    /// Work with presets: stored ones and files.
     #[command(subcommand)]
     Preset(preset::PresetCommand),
+    /// Show or replace the stored user defaults.
+    #[command(subcommand)]
+    Defaults(config::DocumentCommand),
+    /// Show or replace the stored application settings.
+    #[command(subcommand)]
+    Settings(config::DocumentCommand),
 }
 
 fn main() -> ExitCode {
@@ -96,14 +103,8 @@ fn main() -> ExitCode {
     init_logging(cli.verbose);
 
     let result = match cli.command {
-        Command::Env => {
-            print_env();
-            Ok(())
-        }
-        Command::Tools => {
-            tools::run();
-            Ok(())
-        }
+        Command::Env => print_env(),
+        Command::Tools => tools::run(),
         Command::Inspect { paths, flat, list } => inspect::run_inspect(&paths, !flat, list),
         Command::Plan {
             inputs,
@@ -136,6 +137,8 @@ fn main() -> ExitCode {
         ),
         Command::BenchScan { files, per_folder } => inspect::run_bench(files, per_folder),
         Command::Preset(command) => preset::run(command),
+        Command::Defaults(command) => config::run_defaults(command),
+        Command::Settings(command) => config::run_settings(command),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -160,8 +163,9 @@ fn init_logging(verbosity: u8) {
         .init();
 }
 
-fn print_env() {
+fn print_env() -> Result<(), String> {
     tracing::debug!("printing environment summary");
+    let config = config::open()?;
     let tools: Vec<_> = ToolId::ALL.iter().map(|t| t.program_name()).collect();
     println!("transmute-dev {}", env!("CARGO_PKG_VERSION"));
     println!(
@@ -169,8 +173,20 @@ fn print_env() {
         std::env::consts::OS,
         std::env::consts::ARCH
     );
-    println!("workers        {}", resolve_worker_count(None));
+    println!(
+        "workers        {}",
+        resolve_worker_count(config.settings().workers)
+    );
     println!("known tools    {}", tools.join(", "));
+    let mode = if config.locations.portable {
+        "portable (beside the executable)"
+    } else {
+        "installed (user profile)"
+    };
+    println!("mode           {mode}");
+    println!("settings       {}", config.locations.config.display());
+    println!("state          {}", config.locations.state.display());
+    Ok(())
 }
 
 #[cfg(test)]

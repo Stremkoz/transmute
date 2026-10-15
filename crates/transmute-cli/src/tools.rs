@@ -2,14 +2,16 @@
 
 use std::fmt::Write as _;
 
-use transmute_backends::discovery::{ToolConfig, ToolSource};
+use transmute_backends::discovery::ToolSource;
 use transmute_backends::probe::{ToolReport, ToolStatus, discover_tools};
 use transmute_core::capability::{Capabilities, MetadataSupport};
 use transmute_core::format::Format;
 
-pub fn run() {
-    let reports = discover_tools(&ToolConfig::default());
+pub fn run() -> Result<(), String> {
+    let config = crate::config::open()?;
+    let reports = discover_tools(&config.tool_config());
     print!("{}", describe(&reports));
+    Ok(())
 }
 
 fn describe(reports: &[ToolReport]) -> String {
