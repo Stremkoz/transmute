@@ -313,7 +313,7 @@ mod tests {
     fn user_codec_defaults_only_apply_to_their_format() {
         let defaults = UserDefaults {
             codecs: vec![CodecPatch::Jxl(JxlPatch {
-                effort: Some(9),
+                effort: Some(Some(9)),
                 ..JxlPatch::default()
             })],
             ..UserDefaults::default()
@@ -330,7 +330,7 @@ mod tests {
         let CodecSettings::Jxl(jxl) = &job.targets[1].settings else {
             panic!("wrong codec");
         };
-        assert_eq!(jxl.effort, 9);
+        assert_eq!(jxl.effort, Some(9));
     }
 
     #[test]

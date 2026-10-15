@@ -5,7 +5,7 @@
 use std::io::{self, Read, Seek};
 
 use super::bytes::{Source, invalid};
-use super::{Animation, Details, MetadataPresence};
+use super::{Animation, Details, MetadataPresence, Presence};
 
 const EXIF_ID: &[u8] = b"Exif\0\0";
 const XMP_ID: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
@@ -58,6 +58,8 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         dimensions,
         animation: Animation::Still,
         metadata: MetadataPresence::known(exif, xmp, icc),
+        // JPEG has no transparency.
+        alpha: Presence::Absent,
         ..Details::default()
     })
 }
@@ -115,5 +117,13 @@ mod tests {
         let mut file = jpeg(10, 10, &[(0xE1, vec![0; 100])]);
         file.truncate(60);
         assert!(parse(&mut source(file)).is_err());
+    }
+
+    #[test]
+    fn jpeg_is_never_transparent() {
+        assert_eq!(
+            parse(&mut source(jpeg(4, 4, &[]))).unwrap().alpha,
+            Presence::Absent
+        );
     }
 }

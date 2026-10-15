@@ -121,8 +121,8 @@ The factory defaults were chosen by measuring size, speed and visual fidelity (S
 | | `quality` | 0–100 | 85 | |
 | | `method` | 0–6 | 4 | Higher is slower and smaller |
 | `jxl` | `lossless` | bool | false | When true, `distance` is ignored |
-| | `distance` | 0.01–25 | 1.0 | ~1.0 is visually lossless. Use `lossless` rather than distance 0 |
-| | `effort` | 1–10 | 7 | 5 is ~1.5–5× faster for lossy output at the same size; lossless files grow ~8% |
+| | `distance` | 0, or 0.01–25 | 1.5 | Lower is better quality and bigger. ~1.0 is visually lossless; 1.5 matches WebP 85–90. **0 means lossless** (same as `lossless: true`) |
+| | `effort` | 1–10, or absent | automatic | Absent: 5 for lossy images known to be opaque (same result as 7, ~1.7× faster); 7 for lossless output and for images with transparency, or where transparency can't be determined (JPEG XL, AVIF, HEIF and some TIFF/BMP sources) |
 | | `reconstructJpeg` | bool | true | Lossless + JPEG input: store a reversible recompression of the original JPEG |
 | `avif` | `lossless` | bool | false | |
 | | `quality` | 1–100 | 70 | |

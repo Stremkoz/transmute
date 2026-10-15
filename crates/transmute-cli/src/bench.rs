@@ -107,7 +107,7 @@ fn grid(quick: bool) -> Vec<Setting> {
         CodecSettings::Jxl(JxlSettings {
             lossless,
             distance,
-            effort,
+            effort: Some(effort),
             reconstruct_jpeg: true,
         })
     };
@@ -122,6 +122,9 @@ fn grid(quick: bool) -> Vec<Setting> {
     if !quick {
         for effort in [4, 5, 6, 9] {
             add(format!("d1 e{effort}"), jxl(1.0, effort, false));
+        }
+        for effort in [5, 6] {
+            add(format!("d1.5 e{effort}"), jxl(1.5, effort, false));
         }
         add("lossless e5".into(), jxl(0.0, 5, true));
     }

@@ -59,6 +59,7 @@ fn folder(root: &str, files: &[(&str, Format)]) -> Inventory {
                     metadata: no_metadata(),
                     jpeg_reconstruction: false,
                     bit_depth: None,
+                    alpha: Presence::Absent,
                     problem: None,
                 },
                 excluded: false,

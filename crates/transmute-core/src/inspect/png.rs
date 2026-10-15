@@ -5,7 +5,7 @@
 use std::io::{self, Read, Seek};
 
 use super::bytes::{Source, invalid};
-use super::{Animation, Details, MetadataPresence};
+use super::{Animation, Details, MetadataPresence, Presence};
 
 const XMP_KEYWORD: &[u8] = b"XML:com.adobe.xmp\0";
 /// ImageMagick's hex-encoded profiles in text chunks.
@@ -16,6 +16,7 @@ const KEYWORD_PREFIX: u64 = 22;
 pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
     s.skip(8)?; // signature, checked by the sniffer
     let (mut exif, mut xmp, mut icc) = (false, false, false);
+    let mut alpha = false;
     let mut dimensions = None;
     let mut animation_frames = None;
 
@@ -24,7 +25,14 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         let kind = s.array::<4>()?;
         let start = s.position()?;
         match &kind {
-            b"IHDR" => dimensions = Some((s.u32_be()?, s.u32_be()?)),
+            b"IHDR" => {
+                dimensions = Some((s.u32_be()?, s.u32_be()?));
+                let [_depth, colour_type] = s.array::<2>()?;
+                // Grey + alpha (4) and RGBA (6) carry an alpha channel.
+                alpha |= matches!(colour_type, 4 | 6);
+            }
+            // Transparency for palette or single-colour images.
+            b"tRNS" => alpha = true,
             b"acTL" => animation_frames = Some(s.u32_be()?),
             b"eXIf" => exif = true,
             b"iCCP" => icc = true,
@@ -57,6 +65,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         dimensions: Some(dimensions),
         animation,
         metadata: MetadataPresence::known(exif, xmp, icc),
+        alpha: Presence::from_found(alpha),
         ..Details::default()
     })
 }
@@ -131,5 +140,27 @@ mod tests {
             "ImageMagick raw profile"
         );
         assert_eq!(details.metadata.icc, Presence::Absent);
+    }
+
+    #[test]
+    fn alpha_from_colour_type_or_trns() {
+        // The builder writes RGBA (colour type 6).
+        assert_eq!(
+            parse(&mut source(png(4, 4, &[]))).unwrap().alpha,
+            Presence::Present
+        );
+        let mut rgb = png(4, 4, &[]);
+        rgb[8 + 8 + 9] = 2; // IHDR colour type: RGB
+        assert_eq!(
+            parse(&mut source(rgb.clone())).unwrap().alpha,
+            Presence::Absent
+        );
+        // A tRNS chunk makes an RGB or palette image transparent.
+        let mut with_trns = png(4, 4, &[(b"tRNS", vec![0, 0, 0, 0, 0, 0])]);
+        with_trns[8 + 8 + 9] = 2;
+        assert_eq!(
+            parse(&mut source(with_trns)).unwrap().alpha,
+            Presence::Present
+        );
     }
 }

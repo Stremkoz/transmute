@@ -253,3 +253,150 @@ fn jxl_recompressed_jpeg_is_recognised() {
     );
     assert!(!inspect(&reencoded).jpeg_reconstruction);
 }
+
+/// Transparency as written by the real encoders. JPEG XL's effort choice
+/// relies on this: only `Absent` lets it use the faster effort.
+#[test]
+fn transparency_is_detected_in_real_files() {
+    if !enabled() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let opaque = source_png(dir.path(), 48, 32);
+    // The same image with a soft alpha ramp.
+    let transparent = dir.path().join("alpha.png");
+    run(
+        "magick",
+        &[
+            &opaque,
+            &"(",
+            &"-size",
+            &"48x32",
+            &"gradient:white-black",
+            &")",
+            &"-alpha",
+            &"off",
+            &"-compose",
+            &"CopyOpacity",
+            &"-composite",
+            &format!("PNG32:{}", transparent.display()),
+        ],
+    );
+    let palette = dir.path().join("palette.png");
+    run(
+        "magick",
+        &[
+            &transparent,
+            &"-colors",
+            &"16",
+            &format!("PNG8:{}", palette.display()),
+        ],
+    );
+
+    let mut cases: Vec<(String, PathBuf, Presence)> = vec![
+        ("png rgb".into(), opaque.clone(), Presence::Absent),
+        ("png rgba".into(), transparent.clone(), Presence::Present),
+        ("png palette + tRNS".into(), palette, Presence::Present),
+    ];
+    let mut add =
+        |label: &str, program: &str, args: Vec<std::ffi::OsString>, out: PathBuf, expected| {
+            let args: Vec<&dyn AsRef<std::ffi::OsStr>> = args.iter().map(|a| a as _).collect();
+            run(program, &args);
+            cases.push((label.into(), out, expected));
+        };
+    let os = |items: &[&dyn AsRef<std::ffi::OsStr>]| -> Vec<std::ffi::OsString> {
+        items.iter().map(|i| i.as_ref().to_owned()).collect()
+    };
+    for (name, source, expected) in [
+        ("rgb", &opaque, Presence::Absent),
+        ("rgba", &transparent, Presence::Present),
+    ] {
+        let lossy = dir.path().join(format!("cwebp-lossy-{name}.webp"));
+        add(
+            &format!("cwebp lossy {name}"),
+            "cwebp",
+            os(&[&"-quiet", source, &"-o", &lossy]),
+            lossy,
+            expected,
+        );
+        let lossless = dir.path().join(format!("cwebp-lossless-{name}.webp"));
+        add(
+            &format!("cwebp lossless {name}"),
+            "cwebp",
+            os(&[&"-quiet", &"-lossless", source, &"-o", &lossless]),
+            lossless,
+            expected,
+        );
+        let vips_webp = dir.path().join(format!("vips-{name}.webp"));
+        add(
+            &format!("vips webp {name}"),
+            "vips",
+            os(&[&"copy", source, &vips_webp]),
+            vips_webp,
+            expected,
+        );
+        let gif = dir.path().join(format!("{name}.gif"));
+        add(
+            &format!("gif {name}"),
+            "magick",
+            os(&[source, &gif]),
+            gif,
+            expected,
+        );
+        let tif = dir.path().join(format!("{name}.tif"));
+        add(
+            &format!("tiff {name}"),
+            "magick",
+            os(&[source, &tif]),
+            tif,
+            expected,
+        );
+        // A 32-bit BMP might use its fourth byte as alpha: unknown.
+        let bmp = dir.path().join(format!("{name}.bmp"));
+        let bmp_expected = if name == "rgba" {
+            Presence::Unknown
+        } else {
+            Presence::Absent
+        };
+        add(
+            &format!("bmp {name}"),
+            "magick",
+            os(&[source, &bmp]),
+            bmp,
+            bmp_expected,
+        );
+        let jxl = dir.path().join(format!("{name}.jxl"));
+        add(
+            &format!("jxl {name}"),
+            "cjxl",
+            os(&[source, &jxl, &"--quiet"]),
+            jxl,
+            Presence::Unknown,
+        );
+        let avif = dir.path().join(format!("{name}.avif"));
+        add(
+            &format!("avif {name}"),
+            "vips",
+            os(&[&"copy", source, &avif]),
+            avif,
+            Presence::Unknown,
+        );
+    }
+    let jpeg = dir.path().join("photo.jpg");
+    add(
+        "jpeg",
+        "magick",
+        os(&[&opaque, &jpeg]),
+        jpeg,
+        Presence::Absent,
+    );
+
+    let wrong: Vec<String> = cases
+        .iter()
+        .filter_map(|(label, path, expected)| {
+            let found = inspect(path).alpha;
+            (found != *expected).then(|| format!("{label}: expected {expected:?}, found {found:?}"))
+        })
+        .collect();
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+}

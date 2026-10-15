@@ -9,13 +9,15 @@ export type JxlPatch = {
  */
 lossless?: boolean, 
 /**
- * Butteraugli distance: ~1.0 is visually lossless, higher is smaller.
+ * Butteraugli distance: ~1.0 is visually lossless, higher is
+ * smaller. 0 means lossless (it switches `lossless` on).
  */
 distance?: number, 
 /**
- * Encoder effort, 1 (fastest) – 10 (smallest).
+ * Encoder effort, 1 (fastest) – 10 (smallest). Absent means
+ * automatic: see [`JxlSettings::effort_for`].
  */
-effort?: number, 
+effort?: number | null, 
 /**
  * In lossless mode, store JPEG inputs as a reversible recompression of
  * the original bitstream instead of re-encoding the pixels.

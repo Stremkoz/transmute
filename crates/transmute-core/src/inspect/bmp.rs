@@ -3,7 +3,7 @@
 use std::io::{self, Read, Seek};
 
 use super::bytes::Source;
-use super::{Animation, Details, MetadataPresence};
+use super::{Animation, Details, MetadataPresence, Presence};
 
 /// `LCS_PROFILE_EMBEDDED` ('MBED') in a BITMAPV5HEADER's colour-space field.
 const PROFILE_EMBEDDED: u32 = 0x4D42_4544;
@@ -21,6 +21,15 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         let height = s.u32_le()? as i32;
         (width.unsigned_abs(), height.unsigned_abs())
     };
+    s.skip(2)?; // colour planes
+    let bits_per_pixel = s.u16_le()?;
+    // 32-bit pixels may or may not use their fourth byte as alpha; the
+    // header alone doesn't settle it.
+    let alpha = if bits_per_pixel == 32 {
+        Presence::Unknown
+    } else {
+        Presence::Absent
+    };
 
     let icc = if header_size >= V5_HEADER_SIZE {
         s.seek_to(14 + 56)?;
@@ -33,6 +42,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         animation: Animation::Still,
         // BMP has no EXIF or XMP.
         metadata: MetadataPresence::known(false, false, icc),
+        alpha,
         ..Details::default()
     })
 }
@@ -55,5 +65,17 @@ mod tests {
     fn v5_header_with_embedded_profile() {
         let details = parse(&mut source(bmp(16, 16, true))).unwrap();
         assert_eq!(details.metadata.icc, Presence::Present);
+    }
+
+    #[test]
+    fn only_32_bit_pixels_might_carry_alpha() {
+        let mut file = bmp(4, 4, false);
+        file[28..30].copy_from_slice(&24u16.to_le_bytes());
+        assert_eq!(
+            parse(&mut source(file.clone())).unwrap().alpha,
+            Presence::Absent
+        );
+        file[28..30].copy_from_slice(&32u16.to_le_bytes());
+        assert_eq!(parse(&mut source(file)).unwrap().alpha, Presence::Unknown);
     }
 }

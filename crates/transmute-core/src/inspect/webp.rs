@@ -4,15 +4,19 @@
 use std::io::{self, Read, Seek};
 
 use super::bytes::{Source, invalid};
-use super::{Animation, Details, MetadataPresence};
+use super::{Animation, Details, MetadataPresence, Presence};
 
 const ANIMATION_FLAG: u8 = 0x02;
+const ALPHA_FLAG: u8 = 0x10;
+/// VP8L header: the `alpha_is_used` hint.
+const VP8L_ALPHA_BIT: u32 = 1 << 28;
 
 pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
     s.skip(12)?; // "RIFF", size, "WEBP"
     let (mut exif, mut xmp, mut icc) = (false, false, false);
     let mut dimensions = None;
     let mut animated_flag = false;
+    let mut alpha = false;
     let mut frames = 0u32;
 
     while s.remaining()? >= 8 {
@@ -21,7 +25,9 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         let start = s.position()?;
         match &kind {
             b"VP8X" => {
-                animated_flag = s.u8()? & ANIMATION_FLAG != 0;
+                let flags = s.u8()?;
+                animated_flag = flags & ANIMATION_FLAG != 0;
+                alpha |= flags & ALPHA_FLAG != 0;
                 s.skip(3)?;
                 let width = u24_le(s.array()?) + 1;
                 let height = u24_le(s.array()?) + 1;
@@ -42,8 +48,10 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
                 }
                 let bits = s.u32_le()?;
                 dimensions = Some(((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1));
+                alpha |= bits & VP8L_ALPHA_BIT != 0;
             }
             b"ANMF" => frames += 1,
+            b"ALPH" => alpha = true,
             b"EXIF" => exif = true,
             b"XMP " => xmp = true,
             b"ICCP" => icc = true,
@@ -64,6 +72,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         dimensions: Some(dimensions.ok_or_else(|| invalid("WebP has no image chunk"))?),
         animation,
         metadata: MetadataPresence::known(exif, xmp, icc),
+        alpha: Presence::from_found(alpha),
         ..Details::default()
     })
 }
@@ -116,5 +125,29 @@ mod tests {
         chunks.extend(frames);
         let details = parse(&mut source(webp_extended(64, 64, ANIMATION_FLAG, &chunks))).unwrap();
         assert_eq!(details.animation, Animation::Animated { frames: Some(5) });
+    }
+
+    #[test]
+    fn alpha_from_vp8x_flag_alph_chunk_or_vp8l_bit() {
+        assert_eq!(
+            parse(&mut source(webp_lossless(8, 8))).unwrap().alpha,
+            Presence::Absent
+        );
+        let mut with_bit = webp_lossless(8, 8);
+        // VP8L header bits start after "RIFF....WEBPVP8L" + size + 0x2F.
+        with_bit[21 + 3] |= 0x10; // bit 28 of the 32-bit header word
+        assert_eq!(
+            parse(&mut source(with_bit)).unwrap().alpha,
+            Presence::Present
+        );
+        let flagged = webp_extended(8, 8, 0x10, &[]);
+        assert_eq!(
+            parse(&mut source(flagged)).unwrap().alpha,
+            Presence::Present
+        );
+        let alph = webp_extended(8, 8, 0, &[(b"ALPH", vec![0; 4])]);
+        assert_eq!(parse(&mut source(alph)).unwrap().alpha, Presence::Present);
+        let opaque = webp_extended(8, 8, 0, &[]);
+        assert_eq!(parse(&mut source(opaque)).unwrap().alpha, Presence::Absent);
     }
 }

@@ -25,7 +25,7 @@ CURVES = {
     "avif": ["q40 e4", "q50 e4", "q60 e4", "q70 e4", "q80 e4"],
 }
 EFFORTS = {
-    "jxl": ["d1 e4", "d1 e5", "d1 e6", "d1 e7", "d1 e9", "lossless e5", "lossless e7"],
+    "jxl": ["d1 e4", "d1 e5", "d1 e6", "d1 e7", "d1 e9", "d1.5 e5", "d1.5 e6", "d1.5 e7", "lossless e5", "lossless e7"],
     "webp": ["q75 m4", "q75 m6", "q85 m4", "q85 m6"],
     "avif": ["q60 e2", "q60 e4", "q60 e6"],
     "png": ["c1", "c6", "c9"],

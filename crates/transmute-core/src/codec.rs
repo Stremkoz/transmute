@@ -6,13 +6,14 @@
 //! and they layer over the factory defaults (null means "inherit").
 //!
 //! Factory defaults come from the M9 benchmarks (`cargo dev bench`): lossy
-//! codecs aim for high quality on photos (SSIMULACRA2 ≈ 80), JPEG XL for
-//! visually lossless (≈ 86), at the effort where size stops improving.
+//! codecs aim for high quality on photos (SSIMULACRA2 ≈ 80; JPEG XL d1.5,
+//! WebP q85, JPEG q85, AVIF q70), at the effort where size stops improving.
 //! HEIF couldn't be measured (no HEVC encoder on the benchmark machine).
 
 use serde::{Deserialize, Serialize};
 
 use crate::format::Format;
+use crate::inspect::{Inspection, Presence};
 use crate::validation::Validator;
 
 /// Defines a settings struct, its patch twin, `factory()` and `apply()`.
@@ -89,10 +90,12 @@ codec_settings! {
     JxlSettings / JxlPatch {
         /// Lossless mode ignores `distance`.
         lossless: bool = false,
-        /// Butteraugli distance: ~1.0 is visually lossless, higher is smaller.
-        distance: f32 = 1.0,
-        /// Encoder effort, 1 (fastest) – 10 (smallest).
-        effort: u8 = 7,
+        /// Butteraugli distance: ~1.0 is visually lossless, higher is
+        /// smaller. 0 means lossless (it switches `lossless` on).
+        distance: f32 = 1.5,
+        /// Encoder effort, 1 (fastest) – 10 (smallest). Absent means
+        /// automatic: see [`JxlSettings::effort_for`].
+        effort: Option<u8> = None,
         /// In lossless mode, store JPEG inputs as a reversible recompression of
         /// the original bitstream instead of re-encoding the pixels.
         reconstruct_jpeg: bool = true,
@@ -231,6 +234,14 @@ impl CodecSettings {
     /// Applies `patch` if it targets the same format; returns `false` (and
     /// changes nothing) on a format mismatch.
     pub fn apply(&mut self, patch: &CodecPatch) -> bool {
+        let applied = self.apply_fields(patch);
+        if let Self::Jxl(jxl) = self {
+            jxl.normalise();
+        }
+        applied
+    }
+
+    fn apply_fields(&mut self, patch: &CodecPatch) -> bool {
         match (self, patch) {
             (Self::Jpeg(s), CodecPatch::Jpeg(p)) => s.apply(p),
             (Self::Png(s), CodecPatch::Png(p)) => s.apply(p),
@@ -248,6 +259,19 @@ impl CodecSettings {
 
     pub fn validate(&self, v: &mut Validator) {
         for_each_codec!(Self, self, settings => settings.validate(v));
+    }
+
+    /// The settings for one particular source: automatic values resolved
+    /// against what the source is (JPEG XL's effort depends on whether it
+    /// has transparency). Conversions must use this, not `self`.
+    pub fn for_source(&self, source: &Inspection) -> Self {
+        match self {
+            Self::Jxl(jxl) => Self::Jxl(JxlSettings {
+                effort: Some(jxl.effort_for(source.alpha)),
+                ..jxl.clone()
+            }),
+            other => other.clone(),
+        }
     }
 
     /// The settings (by their preset field name) that shape the output when
@@ -343,19 +367,52 @@ impl ValidateSettings for WebpSettings {
     }
 }
 
+/// The effort used whenever there's any doubt: it never does worse than a
+/// lower effort, only slower.
+pub const JXL_SAFE_EFFORT: u8 = 7;
+/// The effort for lossy images without transparency: the M9 benchmarks
+/// found the same size (±3%) and quality (≤1 point) as 7 on every photo,
+/// 1.7× faster. Soft transparency (alpha gradients, shadows) grew up to
+/// 1.9× at this effort, hence the rule in [`JxlSettings::effort_for`].
+pub const JXL_FAST_EFFORT: u8 = 5;
+
+impl JxlSettings {
+    /// The effort for a source whose transparency is `alpha`: the chosen
+    /// one if set; otherwise [`JXL_FAST_EFFORT`] for lossy output of images
+    /// known to be opaque, and [`JXL_SAFE_EFFORT`] for everything else
+    /// (lossless, transparent, or transparency unknown).
+    pub fn effort_for(&self, alpha: Presence) -> u8 {
+        match self.effort {
+            Some(effort) => effort,
+            None if !self.lossless && alpha == Presence::Absent => JXL_FAST_EFFORT,
+            None => JXL_SAFE_EFFORT,
+        }
+    }
+
+    /// A distance of 0 is lossless: model it with `lossless` so the two
+    /// can't disagree, keeping a usable distance for when lossless is
+    /// switched off again.
+    fn normalise(&mut self) {
+        if self.distance == 0.0 {
+            self.lossless = true;
+            self.distance = Self::factory().distance;
+        }
+    }
+}
+
 impl ValidateSettings for JxlSettings {
     fn validate(&self, v: &mut Validator) {
-        // A distance of 0 means lossless to cjxl; we model that with
-        // `lossless` instead so the two can't disagree.
         if !self.distance.is_finite() || !(0.01..=25.0).contains(&self.distance) {
             v.at("distance", |v| {
                 v.issue(format!(
-                    "must be between 0.01 and 25 (got {}); use `lossless: true` for lossless output",
+                    "must be 0 (lossless) or between 0.01 and 25 (got {})",
                     self.distance
                 ));
             });
         }
-        v.check_range("effort", self.effort, 1..=10);
+        if let Some(effort) = self.effort {
+            v.check_range("effort", effort, 1..=10);
+        }
     }
 }
 
@@ -482,11 +539,74 @@ mod tests {
     #[test]
     fn invalid_patch_values_are_reported_by_field() {
         let patch: CodecPatch =
-            serde_json::from_str(r#"{"format":"jxl","distance":0.0,"effort":12}"#).unwrap();
+            serde_json::from_str(r#"{"format":"jxl","distance":-1.0,"effort":12}"#).unwrap();
         let mut v = Validator::new();
         patch.validate(&mut v);
         let issues = v.finish().unwrap_err().issues;
         let paths: Vec<_> = issues.iter().map(|i| i.path.as_str()).collect();
         assert_eq!(paths, ["distance", "effort"]);
+    }
+
+    #[test]
+    fn jxl_distance_zero_means_lossless() {
+        let patch: CodecPatch = serde_json::from_str(r#"{"format":"jxl","distance":0}"#).unwrap();
+        let mut v = Validator::new();
+        patch.validate(&mut v);
+        assert!(v.finish().is_ok(), "0 is a valid way to ask for lossless");
+        let mut settings = CodecSettings::factory(Format::Jxl);
+        settings.apply(&patch);
+        let CodecSettings::Jxl(jxl) = settings else {
+            panic!("jxl")
+        };
+        assert!(jxl.lossless);
+        assert_eq!(
+            jxl.distance, 1.5,
+            "a usable distance for when lossless is turned off"
+        );
+    }
+
+    #[test]
+    fn jxl_effort_is_fast_only_when_certainly_safe() {
+        let lossy = JxlSettings::factory();
+        assert_eq!(lossy.effort, None, "automatic by default");
+        assert_eq!(lossy.effort_for(Presence::Absent), JXL_FAST_EFFORT);
+        // Any doubt about transparency falls back to the safe effort.
+        assert_eq!(lossy.effort_for(Presence::Present), JXL_SAFE_EFFORT);
+        assert_eq!(lossy.effort_for(Presence::Unknown), JXL_SAFE_EFFORT);
+        let lossless = JxlSettings {
+            lossless: true,
+            ..JxlSettings::factory()
+        };
+        for alpha in [Presence::Absent, Presence::Present, Presence::Unknown] {
+            assert_eq!(lossless.effort_for(alpha), JXL_SAFE_EFFORT);
+        }
+        // A chosen effort always wins.
+        let chosen = JxlSettings {
+            effort: Some(9),
+            ..JxlSettings::factory()
+        };
+        assert_eq!(chosen.effort_for(Presence::Absent), 9);
+    }
+
+    #[test]
+    fn settings_for_a_source_resolve_automatic_values() {
+        let opaque = Inspection {
+            alpha: Presence::Absent,
+            ..Inspection::default()
+        };
+        let CodecSettings::Jxl(jxl) = CodecSettings::factory(Format::Jxl).for_source(&opaque)
+        else {
+            panic!("jxl")
+        };
+        assert_eq!(jxl.effort, Some(JXL_FAST_EFFORT));
+        // A default inspection knows nothing about transparency.
+        let CodecSettings::Jxl(jxl) =
+            CodecSettings::factory(Format::Jxl).for_source(&Inspection::default())
+        else {
+            panic!("jxl")
+        };
+        assert_eq!(jxl.effort, Some(JXL_SAFE_EFFORT));
+        let webp = CodecSettings::factory(Format::Webp);
+        assert_eq!(webp.for_source(&opaque), webp, "other codecs are unchanged");
     }
 }

@@ -5,7 +5,7 @@
 use std::io::{self, Read, Seek};
 
 use super::bytes::{Source, invalid};
-use super::{Animation, Details, MetadataPresence};
+use super::{Animation, Details, MetadataPresence, Presence};
 
 pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
     s.skip(6)?; // "GIF87a" / "GIF89a"
@@ -16,6 +16,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
     skip_colour_table(s, packed)?;
 
     let (mut frames, mut xmp, mut icc) = (0u32, false, false);
+    let mut transparent = false;
     loop {
         match s.u8()? {
             0x2C => {
@@ -28,7 +29,15 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
             }
             0x21 => {
                 let label = s.u8()?;
-                if label == 0xFF {
+                if label == 0xF9 {
+                    // Graphic control extension: bit 0 of its first data
+                    // byte flags a transparent colour index.
+                    let size = s.u8()?;
+                    if size >= 1 {
+                        transparent |= s.u8()? & 1 != 0;
+                        s.skip(u64::from(size) - 1)?;
+                    }
+                } else if label == 0xFF {
                     let size = s.u8()?;
                     if size == 11 {
                         let identifier = s.array::<11>()?;
@@ -57,6 +66,7 @@ pub fn parse<R: Read + Seek>(s: &mut Source<R>) -> io::Result<Details> {
         animation,
         // GIF has no EXIF.
         metadata: MetadataPresence::known(false, xmp, icc),
+        alpha: Presence::from_found(transparent),
         ..Details::default()
     })
 }
@@ -113,5 +123,27 @@ mod tests {
         let mut file = gif(4, 4, 2, &[]);
         file.pop();
         assert!(parse(&mut source(file)).is_err());
+    }
+
+    #[test]
+    fn alpha_from_any_frames_transparency_flag() {
+        let opaque = gif(4, 4, 2, &[]);
+        assert_eq!(
+            parse(&mut source(opaque.clone())).unwrap().alpha,
+            Presence::Absent
+        );
+        // Set the transparent-colour flag in the second frame's control block.
+        let mut transparent = opaque;
+        let controls: Vec<usize> = transparent
+            .windows(3)
+            .enumerate()
+            .filter(|(_, w)| *w == [0x21, 0xF9, 4])
+            .map(|(i, _)| i)
+            .collect();
+        transparent[controls[1] + 3] = 1;
+        assert_eq!(
+            parse(&mut source(transparent)).unwrap().alpha,
+            Presence::Present
+        );
     }
 }

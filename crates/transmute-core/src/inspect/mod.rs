@@ -70,7 +70,7 @@ pub enum Presence {
 }
 
 impl Presence {
-    fn from_found(found: bool) -> Self {
+    pub(crate) fn from_found(found: bool) -> Self {
         if found { Self::Present } else { Self::Absent }
     }
 }
@@ -111,6 +111,11 @@ pub struct Inspection {
     /// Bits per colour channel, where the header states it (AVIF, HEIF).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bit_depth: Option<u8>,
+    /// Whether the image has transparency. `Unknown` where the header
+    /// doesn't say cheaply (JPEG XL, AVIF, HEIF), so callers must treat
+    /// it as possibly transparent.
+    #[serde(default)]
+    pub alpha: Presence,
     /// Set when the format was recognised but its header couldn't be fully
     /// read (truncated or corrupt); conversion is likely to fail.
     pub problem: Option<String>,
@@ -125,6 +130,7 @@ struct Details {
     metadata: MetadataPresence,
     jpeg_reconstruction: bool,
     bit_depth: Option<u8>,
+    alpha: Presence,
 }
 
 /// Inspects the file at `path`. I/O errors opening or reading the file are
@@ -157,6 +163,7 @@ pub fn inspect_reader<R: Read + Seek>(
             metadata: details.metadata,
             jpeg_reconstruction: details.jpeg_reconstruction,
             bit_depth: details.bit_depth,
+            alpha: details.alpha,
             problem: None,
         },
         Err(err) => Inspection {

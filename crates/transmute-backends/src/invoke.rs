@@ -11,8 +11,8 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use transmute_core::codec::{
-    AvifSettings, CodecSettings, HeifSettings, JpegSettings, JxlSettings, PngSettings,
-    TiffCompression, TiffSettings, WebpSettings,
+    AvifSettings, CodecSettings, HeifSettings, JXL_SAFE_EFFORT, JpegSettings, JxlSettings,
+    PngSettings, TiffCompression, TiffSettings, WebpSettings,
 };
 use transmute_core::format::Format;
 use transmute_core::output::MetadataPolicy;
@@ -199,6 +199,7 @@ fn cjxl(
         effort,
         reconstruct_jpeg,
     } = *jxl;
+    let effort = effort.unwrap_or(JXL_SAFE_EFFORT);
     args.path(request.input).path(request.output);
     let from_jpeg = request.step.from == Format::Jpeg;
     if lossless && reconstruct_jpeg && from_jpeg {
@@ -349,10 +350,16 @@ fn vips(
             lossless: true,
             effort,
             ..
-        }) => vec!["lossless=true".into(), format!("effort={effort}")],
+        }) => vec![
+            "lossless=true".into(),
+            format!("effort={}", effort.unwrap_or(JXL_SAFE_EFFORT)),
+        ],
         CodecSettings::Jxl(JxlSettings {
             distance, effort, ..
-        }) => vec![format!("distance={distance}"), format!("effort={effort}")],
+        }) => vec![
+            format!("distance={distance}"),
+            format!("effort={}", effort.unwrap_or(JXL_SAFE_EFFORT)),
+        ],
         CodecSettings::Avif(AvifSettings {
             lossless,
             quality,
@@ -468,7 +475,8 @@ fn magick(
                 magick_jxl_quality(*distance)
             };
             args.add("-quality").add(quality.to_string());
-            args.add("-define").add(format!("jxl:effort={effort}"));
+            args.add("-define")
+                .add(format!("jxl:effort={}", effort.unwrap_or(JXL_SAFE_EFFORT)));
         }
         CodecSettings::Avif(AvifSettings {
             quality, effort, ..
@@ -706,7 +714,7 @@ mod tests {
     fn cjxl_lossy_jpeg_reencodes_pixels() {
         let settings = CodecSettings::Jxl(JxlSettings {
             distance: 1.5,
-            effort: 5,
+            effort: Some(5),
             ..JxlSettings::factory()
         });
         let args = args_for(
@@ -865,7 +873,10 @@ mod tests {
             Some(&CodecSettings::factory(Format::Jxl)),
             MetadataPolicy::PreserveAll,
         );
-        assert_eq!(jxl[2], "out[distance=1,effort=7,keep=all]");
+        assert_eq!(
+            jxl[2], "out[distance=1.5,effort=7,keep=all]",
+            "unresolved automatic effort falls back to the safe one"
+        );
     }
 
     #[test]

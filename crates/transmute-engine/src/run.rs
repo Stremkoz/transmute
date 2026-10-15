@@ -284,6 +284,8 @@ async fn execute_job(
         return failed("the route has no steps".into());
     };
     let to = target.settings.format();
+    // Automatic settings (JPEG XL effort) depend on the source.
+    let settings = target.settings.for_source(&entry.inspection);
 
     // Each step's result is the next step's input. Every temp file deletes
     // itself when dropped, unless the last one is moved into place.
@@ -343,7 +345,7 @@ async fn execute_job(
             step,
             input: &input,
             output: &output,
-            settings: is_last.then_some(&target.settings),
+            settings: is_last.then_some(&settings),
             metadata: job.metadata.tool_policy,
             auto_orient: job.metadata.auto_orient,
         };
