@@ -1,0 +1,20 @@
+# Normalise line endings in the repo; check out with native endings
+* text=auto
+
+*.rs   text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.jxl binary

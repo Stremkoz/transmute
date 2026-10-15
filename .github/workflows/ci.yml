@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Each job skips its steps until the relevant manifest exists, so CI stays green
+# before the Tauri app is scaffolded and starts checking automatically afterwards.
+jobs:
+  rust:
+    name: Rust core
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate Cargo manifest
+        id: cargo
+        shell: bash
+        run: |
+          for manifest in Cargo.toml src-tauri/Cargo.toml; do
+            if [ -f "$manifest" ]; then
+              echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "No Cargo.toml yet; skipping Rust checks."
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.cargo.outputs.manifest
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.cargo.outputs.manifest
+
+      - name: Format
+        if: steps.cargo.outputs.manifest
+        run: cargo fmt --manifest-path ${{ steps.cargo.outputs.manifest }} --all -- --check
+
+      - name: Clippy
+        if: steps.cargo.outputs.manifest
+        run: cargo clippy --manifest-path ${{ steps.cargo.outputs.manifest }} --all-targets -- -D warnings
+
+      - name: Test
+        if: steps.cargo.outputs.manifest
+        run: cargo test --manifest-path ${{ steps.cargo.outputs.manifest }}
+
+  frontend:
+    name: Frontend
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for package.json
+        id: node
+        shell: bash
+        run: |
+          if [ -f package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No package.json yet; skipping frontend checks."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.node.outputs.present
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install
+        if: steps.node.outputs.present
+        run: npm ci
+
+      - name: Lint
+        if: steps.node.outputs.present
+        run: npm run lint --if-present
+
+      - name: Type check
+        if: steps.node.outputs.present
+        run: npm run typecheck --if-present
+
+      - name: Test
+        if: steps.node.outputs.present
+        run: npm test --if-present
+
+      - name: Build
+        if: steps.node.outputs.present
+        run: npm run build --if-present

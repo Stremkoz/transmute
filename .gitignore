@@ -1,0 +1,46 @@
+## Reference material (local only: legacy app clone and draft spec)
+docs/sourcefiles/
+
+## Rust / Tauri
+target/
+**/*.rs.bk
+src-tauri/gen/
+
+## Node / frontend
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+## Environment and secrets
+.env
+.env.*
+!.env.example
+
+## Local data
+*.db
+*.db-journal
+*.sqlite
+*.log
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.vs/
+
+## Claude Code session notes
+CURRENT_SESSION.md
+.claude/settings.local.json
