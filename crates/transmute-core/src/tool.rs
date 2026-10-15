@@ -2,11 +2,14 @@
 
 use std::env::consts::EXE_SUFFIX;
 
+use serde::{Deserialize, Serialize};
+
 /// An external program Transmute knows how to discover and invoke.
 ///
 /// Encoders and decoders are separate entries so that, for example, having
 /// `cwebp` without `dwebp` still enables WebP encoding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ToolId {
     Cjxl,
     Djxl,

@@ -24,7 +24,8 @@ cargo test --workspace                      # all tests
 cargo test -p transmute-core extension      # one crate, tests matching a name
 cargo lint                                  # alias: clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
-cargo dev <subcommand>                      # alias: run the transmute-dev CLI, e.g. `cargo dev env`
+cargo dev <subcommand>                      # alias: run the transmute-dev CLI, e.g. `cargo dev tools`
+TRANSMUTE_REAL_TOOLS=1 cargo test -p transmute-backends --test real_tools   # opt-in: probe the installed encoders
 ```
 
 The toolchain is pinned in `rust-toolchain.toml`. CI runs fmt --check, clippy -D warnings and tests, all with `--locked`, on Windows and Ubuntu.
@@ -38,6 +39,8 @@ The crates follow the dependency direction `core ← backends ← engine ← cli
   - A breaking schema change must bump `Document::VERSION` and add a `migrate_step`.
   - Update the doc in the same change.
   - `examples/presets/` files are loaded by tests, so keep them valid.
+- Tool capabilities are data (`transmute-core::capability`). Adding or changing a tool means updating `transmute-backends/src/catalog.rs`, whose static tables or listing parsers are tested against captured real output, and `version.rs`. Never hardcode format support anywhere else.
+- Tests that need executables use the stub scripts in `transmute-backends/src/process.rs` (`test_support`), not the real tools.
 - New codec settings go through the `codec_settings!` macro in `transmute-core/src/codec.rs`, which generates the patch twin. Validation lives in that codec's `ValidateSettings` impl.
 - Workspace lints deny `unsafe_code` and warn on `unwrap_used` outside tests. Prefer typed errors (`thiserror`) at crate boundaries.
 

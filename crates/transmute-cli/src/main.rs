@@ -2,12 +2,13 @@
 //! exists. Not a product surface, but kept tidy so promoting it later is cheap.
 
 mod preset;
+mod tools;
 
 use std::process::ExitCode;
 
 use clap::{ArgAction, Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
-use transmute_backends::tool::ToolId;
+use transmute_core::tool::ToolId;
 use transmute_engine::concurrency::resolve_worker_count;
 
 #[derive(Debug, Parser)]
@@ -25,6 +26,8 @@ struct Cli {
 enum Command {
     /// Show build, platform, and default engine settings.
     Env,
+    /// List external tools, their versions, and what each can read and write.
+    Tools,
     /// Work with preset files.
     #[command(subcommand)]
     Preset(preset::PresetCommand),
@@ -37,6 +40,10 @@ fn main() -> ExitCode {
     let result = match cli.command {
         Command::Env => {
             print_env();
+            Ok(())
+        }
+        Command::Tools => {
+            tools::run();
             Ok(())
         }
         Command::Preset(command) => preset::run(command),
