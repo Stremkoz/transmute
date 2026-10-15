@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This repo is the **overhaul** of Transmute, a Windows-first media converter. As of 2026-10-15 it contains only repository scaffolding: README, MIT LICENSE, `.github/` CI and templates, and empty top-level directories. The Tauri app has not been scaffolded yet. Reference material:
+This repo is the **overhaul** of Transmute, a Windows-first media converter. Development is backend-first: a Rust Cargo workspace under `crates/`. The Tauri app hasn't been scaffolded yet and won't be until the plan's M11 gate. Reference material:
 
 - `docs/sourcefiles/Transmute_Overhaul_Specification.md`: the working-draft product spec for the overhaul. Read it before starting design or implementation work. It is a proposed direction, not a final contract. Section 12 lists decisions that are still open. It is an **internal design document**: never commit it, quote it in release material, or move it out of the ignored folder.
 - `docs/sourcefiles/transmute/`: a full clone of the **existing** Transmute app (C#/.NET 9, upstream `github.com/Stremkoz/transmute-legacy` (archived), v1.1.0). It has its own `.git`. Treat it as **read-only reference**: audit it, but don't edit it. The goal is an overhaul, not a port. Keep what works and don't feel bound by its design.
@@ -14,7 +14,27 @@ This repo is the **overhaul** of Transmute, a Windows-first media converter. As 
 
 `docs/sourcefiles/` (user-provided reference) and `docs/internal/` (generated design notes) are both gitignored and stay local only. Put new internal design documents in `docs/internal/`. The repo is hosted privately at `github.com/Stremkoz/transmute`. The old 1.x repo is archived as `Stremkoz/transmute-legacy`. `CURRENT_SESSION.md` (session-continuity notes required by the workspace rules) is also gitignored and must never be committed.
 
-CI (`.github/workflows/ci.yml`, windows-latest) detects `Cargo.toml` / `src-tauri/Cargo.toml` and `package.json` and runs `cargo fmt --check`, `clippy -D warnings`, `cargo test`, and the `npm` lint/typecheck/test/build scripts. Until those files exist it is a no-op, so new projects should define scripts with those names.
+The frontend CI job stays a no-op until `package.json` exists. It then runs the `npm` lint/typecheck/test/build scripts if they're defined, so use those script names.
+
+## Commands
+
+```sh
+cargo build --workspace
+cargo test --workspace                      # all tests
+cargo test -p transmute-core extension      # one crate, tests matching a name
+cargo lint                                  # alias: clippy --workspace --all-targets -- -D warnings
+cargo fmt --all
+cargo dev <subcommand>                      # alias: run the transmute-dev CLI, e.g. `cargo dev env`
+```
+
+The toolchain is pinned in `rust-toolchain.toml`. CI runs fmt --check, clippy -D warnings and tests, all with `--locked`, on Windows and Ubuntu.
+
+## Workspace layout
+
+The crates follow the dependency direction `core ← backends ← engine ← cli`. Keep the layering:
+- `transmute-core` must never spawn processes or depend on an async runtime, so the planner stays testable without tools.
+- Encoders are invoked only from `transmute-backends`.
+- Workspace lints deny `unsafe_code` and warn on `unwrap_used` outside tests. Prefer typed errors (`thiserror`) at crate boundaries.
 
 ## Overhaul direction (from the spec)
 

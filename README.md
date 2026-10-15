@@ -68,21 +68,34 @@ transmute/
 ├── docs/           # Project documentation
 ├── examples/       # Example presets and sample workflows
 ├── scripts/        # Build and utility scripts
-├── src/            # Application source
-└── tests/          # Integration tests and test fixtures
+├── crates/         # Rust workspace crates (backend)
+├── src/            # Frontend source (later)
+└── tests/          # Shared test fixtures and corpora
 ```
 
-The layout inside `src/` will be set when the Tauri app is scaffolded in Phase 1.
+The Tauri shell will be added as `src-tauri/`, with its React frontend in `src/`, once the backend API is ready.
 
 ## Development
 
-Prerequisites for the planned stack:
+The Rust backend is built first; the desktop GUI comes later.
 
-- [Rust](https://rustup.rs/) (stable)
-- [Node.js](https://nodejs.org/) LTS
-- [Tauri 2 prerequisites for Windows](https://v2.tauri.app/start/prerequisites/) (WebView2, MSVC build tools)
+**Prerequisites:** [rustup](https://rustup.rs/). The pinned toolchain in `rust-toolchain.toml` installs automatically. To actually convert files you'll also need the external encoders on `PATH`: cjxl/djxl, cwebp/dwebp, libvips, ImageMagick, ffmpeg.
 
-Build and test commands will be added here once the app is scaffolded. CI (`.github/workflows/ci.yml`) already runs Rust and frontend checks automatically as soon as a `Cargo.toml` or `package.json` exists.
+```sh
+cargo build --workspace        # build everything
+cargo test --workspace         # run all tests
+cargo test -p transmute-core   # test one crate
+cargo lint                     # clippy, exactly as CI runs it
+cargo fmt --all                # format
+cargo dev --help               # run the developer CLI (transmute-dev)
+```
+
+| Crate | Purpose |
+|-------|---------|
+| `transmute-core` | Domain types, settings/preset schemas, inventory, planner, path and collision policy. Spawns no processes. |
+| `transmute-backends` | External tool discovery, capability probing, per-tool adapters, metadata I/O |
+| `transmute-engine` | Scheduling, process supervision, safe file finalisation, progress events |
+| `transmute-cli` | `transmute-dev`, an internal CLI for driving the backend before the GUI exists |
 
 ## Contributing
 

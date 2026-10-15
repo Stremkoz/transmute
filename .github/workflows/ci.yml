@@ -9,47 +9,35 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Each job skips its steps until the relevant manifest exists, so CI stays green
-# before the Tauri app is scaffolded and starts checking automatically afterwards.
 jobs:
   rust:
-    name: Rust core
-    runs-on: windows-latest
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the target platform; Ubuntu is cheaper and keeps the core portable.
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Locate Cargo manifest
-        id: cargo
-        shell: bash
-        run: |
-          for manifest in Cargo.toml src-tauri/Cargo.toml; do
-            if [ -f "$manifest" ]; then
-              echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          done
-          echo "No Cargo.toml yet; skipping Rust checks."
-
-      - uses: dtolnay/rust-toolchain@stable
-        if: steps.cargo.outputs.manifest
-        with:
-          components: rustfmt, clippy
+      # rustup reads rust-toolchain.toml and installs the pinned version and components.
+      - name: Install toolchain
+        run: rustup toolchain install
 
       - uses: Swatinem/rust-cache@v2
-        if: steps.cargo.outputs.manifest
 
       - name: Format
-        if: steps.cargo.outputs.manifest
-        run: cargo fmt --manifest-path ${{ steps.cargo.outputs.manifest }} --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: Clippy
-        if: steps.cargo.outputs.manifest
-        run: cargo clippy --manifest-path ${{ steps.cargo.outputs.manifest }} --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Test
-        if: steps.cargo.outputs.manifest
-        run: cargo test --manifest-path ${{ steps.cargo.outputs.manifest }}
+        run: cargo test --workspace --locked
 
+  # Skips its steps until package.json exists, so CI stays green before the
+  # Tauri frontend is scaffolded.
   frontend:
     name: Frontend
     runs-on: windows-latest

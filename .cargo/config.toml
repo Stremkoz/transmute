@@ -1,0 +1,5 @@
+[alias]
+# Run the developer CLI: `cargo dev --help`
+dev = "run -p transmute-cli --"
+# Same checks CI runs
+lint = "clippy --workspace --all-targets -- -D warnings"
