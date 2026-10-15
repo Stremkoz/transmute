@@ -237,17 +237,16 @@ fn r04_bare_file_name_converts_beside_it() {
 }
 
 /// Regression R11: re-encoding to the same format with default naming would
-/// overwrite the source. That's refused, whatever the policy (except rename).
+/// overwrite the source. It's refused at planning time, whatever the policy
+/// (except rename, which writes alongside).
 #[test]
 fn r11_output_that_would_replace_its_source_is_refused() {
     let inventory = folder("/in", &[("photo.jpg", Format::Jpeg)]);
     for policy in [CollisionPolicy::Skip, CollisionPolicy::Overwrite] {
         let plan = run(&inventory, &config(vec![target(Format::Jpeg)], policy), &[]);
-        assert!(
-            matches!(
-                plan.jobs[0].status,
-                JobStatus::Blocked(BlockReason::WouldReplaceSource { .. })
-            ),
+        assert_eq!(
+            plan.jobs[0].status,
+            JobStatus::Skipped(SkipReason::OutputIsSource),
             "{policy:?}"
         );
     }
@@ -272,6 +271,75 @@ fn output_landing_on_a_different_source_is_refused() {
         plan.jobs[1].status,
         JobStatus::Blocked(BlockReason::WouldReplaceSource { .. })
     ));
+    let skip = run(
+        &inventory,
+        &config(vec![target(Format::Jpeg)], CollisionPolicy::Skip),
+        &[],
+    );
+    assert_eq!(
+        skip.jobs[1].status,
+        JobStatus::Skipped(SkipReason::OutputExists),
+        "under skip it's simply an existing file"
+    );
+}
+
+/// Rerunning a preset whose outputs go into a subfolder of the source tree:
+/// the earlier outputs are recognised, not converted again into
+/// `webp/webp/...`, and the originals' jobs are skipped as done.
+#[test]
+fn rerun_recognises_earlier_outputs_in_derived_locations() {
+    let inventory = folder(
+        "/in",
+        &[("a.jpg", Format::Jpeg), ("webp/a.webp", Format::Webp)],
+    );
+    let mut webp = target(Format::Webp);
+    webp.destination = Destination::Subfolder;
+    let plan = run(&inventory, &config(vec![webp], CollisionPolicy::Skip), &[]);
+
+    assert_eq!(plan.previous_outputs, [1]);
+    assert_eq!(plan.jobs.len(), 1, "webp/a.webp isn't a source");
+    assert_eq!(
+        plan.jobs[0].status,
+        JobStatus::Skipped(SkipReason::OutputExists)
+    );
+}
+
+#[test]
+fn earlier_outputs_can_be_replaced_under_overwrite() {
+    let inventory = folder(
+        "/in",
+        &[("a.jpg", Format::Jpeg), ("webp/a.webp", Format::Webp)],
+    );
+    let mut webp = target(Format::Webp);
+    webp.destination = Destination::Subfolder;
+    let plan = run(
+        &inventory,
+        &config(vec![webp], CollisionPolicy::Overwrite),
+        &[],
+    );
+    assert_eq!(plan.jobs[0].status, JobStatus::Ready);
+    assert!(plan.jobs[0].replaces_existing);
+}
+
+/// Beside the source with unchanged names, an output looks exactly like an
+/// original, so it stays protected: a rerun skips instead of converting.
+#[test]
+fn rerun_beside_source_skips_without_treating_files_as_outputs() {
+    let inventory = folder("/in", &[("a.jpg", Format::Jpeg), ("a.webp", Format::Webp)]);
+    let plan = run(
+        &inventory,
+        &config(vec![target(Format::Webp)], CollisionPolicy::Skip),
+        &[],
+    );
+    assert!(plan.previous_outputs.is_empty());
+    assert_eq!(
+        plan.jobs[0].status,
+        JobStatus::Skipped(SkipReason::OutputExists)
+    );
+    assert_eq!(
+        plan.jobs[1].status,
+        JobStatus::Skipped(SkipReason::OutputIsSource)
+    );
 }
 
 #[test]
@@ -474,19 +542,32 @@ proptest! {
         let existing_keys: HashSet<String> = existing.iter().map(|p| collision_key(p)).collect();
         let plan = run(&inventory, &cfg, &existing);
 
-        let sources: HashSet<String> = inventory.entries.iter().map(|e| collision_key(&e.path)).collect();
+        // Earlier outputs of this preset are ordinary existing files; every
+        // other inventory file is a protected source.
+        let earlier: HashSet<usize> = plan.previous_outputs.iter().copied().collect();
+        let protected: HashSet<String> = inventory.entries.iter().enumerate()
+            .filter(|(i, _)| !earlier.contains(i))
+            .map(|(_, e)| collision_key(&e.path))
+            .collect();
+        let on_disk: HashSet<String> = existing_keys.iter().cloned()
+            .chain(earlier.iter().map(|&i| collision_key(&inventory.entries[i].path)))
+            .collect();
+
         let mut outputs = HashSet::new();
+        for job in &plan.jobs {
+            prop_assert!(!earlier.contains(&job.source), "an earlier output was planned as a source");
+        }
         for job in plan.jobs.iter().filter(|j| j.status == JobStatus::Ready) {
             let key = collision_key(&job.output);
             prop_assert!(outputs.insert(key.clone()), "two ready jobs write {}", job.output.display());
-            prop_assert!(!sources.contains(&key), "ready job overwrites source {}", job.output.display());
-            let exists = existing_keys.contains(&key);
+            prop_assert!(!protected.contains(&key), "ready job overwrites source {}", job.output.display());
+            let exists = on_disk.contains(&key);
             prop_assert_eq!(job.replaces_existing, exists);
             if exists {
                 prop_assert_eq!(policy, CollisionPolicy::Overwrite);
             }
         }
-        prop_assert_eq!(plan.jobs.len(), files.len() * cfg.targets.len());
+        prop_assert_eq!(plan.jobs.len(), (files.len() - earlier.len()) * cfg.targets.len());
     }
 }
 
@@ -500,12 +581,8 @@ fn source_protection_survives_mixed_separators() {
         &config(vec![target(Format::Jpeg)], CollisionPolicy::Overwrite),
         &[],
     );
-    assert!(
-        matches!(
-            plan.jobs[0].status,
-            JobStatus::Blocked(BlockReason::WouldReplaceSource { .. })
-        ),
-        "{:?}",
-        plan.jobs[0].status
+    assert_eq!(
+        plan.jobs[0].status,
+        JobStatus::Skipped(SkipReason::OutputIsSource)
     );
 }

@@ -5,6 +5,7 @@
 
 pub mod catalog;
 pub mod discovery;
+pub mod invoke;
 pub mod probe;
 pub mod process;
 pub mod version;

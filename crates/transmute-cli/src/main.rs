@@ -4,6 +4,7 @@
 mod inspect;
 mod plan;
 mod preset;
+mod run;
 mod tools;
 
 use std::process::ExitCode;
@@ -60,6 +61,24 @@ enum Command {
         #[arg(long)]
         list: bool,
     },
+    /// Plan, then convert for real. Ctrl+C cancels cleanly.
+    Run {
+        /// Files and/or folders.
+        #[arg(required = true)]
+        inputs: Vec<std::path::PathBuf>,
+        /// Preset JSON file.
+        #[arg(long)]
+        preset: std::path::PathBuf,
+        /// User-defaults JSON file (factory defaults if omitted).
+        #[arg(long)]
+        defaults: Option<std::path::PathBuf>,
+        /// Don't descend into subfolders.
+        #[arg(long)]
+        flat: bool,
+        /// Conversions to run at once (default: one per CPU).
+        #[arg(long, short = 'j')]
+        jobs: Option<std::num::NonZeroUsize>,
+    },
     /// Time a scan of a synthetic tree of small files.
     BenchScan {
         #[arg(long, default_value_t = 50_000)]
@@ -99,6 +118,22 @@ fn main() -> ExitCode {
             recursive: !flat,
             list,
         }),
+        Command::Run {
+            inputs,
+            preset,
+            defaults,
+            flat,
+            jobs,
+        } => run::execute(
+            plan::PlanArgs {
+                inputs,
+                preset,
+                defaults,
+                recursive: !flat,
+                list: false,
+            },
+            jobs,
+        ),
         Command::BenchScan { files, per_folder } => inspect::run_bench(files, per_folder),
         Command::Preset(command) => preset::run(command),
     };

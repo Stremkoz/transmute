@@ -11,7 +11,7 @@
 mod paths;
 mod route;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -24,8 +24,8 @@ use crate::capability::Toolbox;
 use crate::format::Format;
 use crate::inspect::Content;
 use crate::inventory::Inventory;
-use crate::output::{CollisionPolicy, MetadataPolicy};
-use crate::preset::JobConfig;
+use crate::output::{CollisionPolicy, Destination, MetadataPolicy};
+use crate::preset::{JobConfig, ResolvedTarget};
 use crate::tool::ToolId;
 use paths::{NameContext, digits, numbered, output_dir, output_file_name};
 use route::{Requirements, find_route};
@@ -50,6 +50,9 @@ pub struct Plan {
     pub unsupported: Vec<usize>,
     /// Convertible entries left out by the preset's input filter.
     pub filtered_out: usize,
+    /// Entries recognised as outputs of an earlier run of this preset (see
+    /// `previous_outputs`), which aren't converted again.
+    pub previous_outputs: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +80,9 @@ pub enum JobStatus {
 pub enum SkipReason {
     /// The output exists and the collision policy is `skip`.
     OutputExists,
+    /// The output would be the source file itself (same format, same name,
+    /// same folder), so there's nothing to convert.
+    OutputIsSource,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,7 +151,7 @@ impl fmt::Display for PlanNote {
             ),
             PlanNote::CopyrightFilteringUnavailable => write!(
                 f,
-                "keeping only copyright fields isn't possible yet; the file's EXIF/XMP won't be filtered"
+                "keeping only copyright fields isn't possible yet, so EXIF and XMP will be removed and only the colour profile kept"
             ),
             PlanNote::Renamed { original } => write!(
                 f,
@@ -193,6 +199,17 @@ impl fmt::Display for BlockReason {
     }
 }
 
+impl fmt::Display for SkipReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            SkipReason::OutputExists => "the output already exists",
+            SkipReason::OutputIsSource => {
+                "it is already in this format (the output would be the file itself)"
+            }
+        })
+    }
+}
+
 fn policy_name(policy: MetadataPolicy) -> &'static str {
     match policy {
         MetadataPolicy::PreserveAll => "preserve all",
@@ -232,41 +249,40 @@ pub fn plan(
 ) -> Plan {
     let mut unsupported = Vec::new();
     let mut filtered_out = 0;
-    let mut sources = Vec::new();
+    let mut candidates = Vec::new();
     for (index, entry) in inventory.entries.iter().enumerate() {
         if entry.excluded {
             continue;
         }
         match entry.inspection.content {
             Content::Image(format) if config.input_filter.accepts(format) => {
-                sources.push((index, format))
+                candidates.push((index, format));
             }
             Content::Image(_) => filtered_out += 1,
             Content::Other(_) | Content::Unknown => unsupported.push(index),
         }
     }
 
+    let previous_outputs = previous_outputs(inventory, config, &candidates, ctx.batch_date);
+    let sources: Vec<(usize, Format)> = candidates
+        .into_iter()
+        .filter(|(index, _)| !previous_outputs.contains(index))
+        .collect();
+
     let counter_width = digits(sources.len());
     let mut jobs = Vec::with_capacity(sources.len() * config.targets.len());
     for (position, &(index, source_format)) in sources.iter().enumerate() {
         let entry = &inventory.entries[index];
-        let root = &inventory.roots[entry.root];
         for (target_index, target) in config.targets.iter().enumerate() {
             let format = target.settings.format();
-            let name = output_file_name(
-                &target.naming,
-                &NameContext {
-                    entry,
-                    format,
-                    counter: position + 1,
-                    counter_width,
-                    batch_date: ctx.batch_date,
-                },
+            let (output, name) = output_path(
+                inventory,
+                index,
+                target,
+                position + 1,
+                counter_width,
+                ctx.batch_date,
             );
-            // Absolute, so a bare relative source like `photo.jpg` resolves
-            // against the current folder instead of an empty parent (R4).
-            let relative = output_dir(entry, root, &target.destination, format).join(&name);
-            let output = std::path::absolute(&relative).unwrap_or(relative);
 
             let mut notes = Vec::new();
             if let Some(problem) = &entry.inspection.problem {
@@ -315,31 +331,117 @@ pub fn plan(
         }
     }
 
-    resolve_collisions(&mut jobs, inventory, config.collision, ctx);
+    resolve_collisions(
+        &mut jobs,
+        inventory,
+        &previous_outputs,
+        config.collision,
+        ctx,
+    );
+    let mut previous_outputs: Vec<usize> = previous_outputs.into_iter().collect();
+    previous_outputs.sort_unstable();
     Plan {
         jobs,
         unsupported,
         filtered_out,
+        previous_outputs,
     }
+}
+
+/// Where one source's output for one target goes, and its file name.
+fn output_path(
+    inventory: &Inventory,
+    source: usize,
+    target: &ResolvedTarget,
+    counter: usize,
+    counter_width: usize,
+    batch_date: NaiveDate,
+) -> (PathBuf, String) {
+    let entry = &inventory.entries[source];
+    let root = &inventory.roots[entry.root];
+    let format = target.settings.format();
+    let name = output_file_name(
+        &target.naming,
+        &NameContext {
+            entry,
+            format,
+            counter,
+            counter_width,
+            batch_date,
+        },
+    );
+    // Absolute, so a bare relative source like `photo.jpg` resolves against
+    // the current folder instead of an empty parent (R4).
+    let relative = output_dir(entry, root, &target.destination, format).join(&name);
+    (std::path::absolute(&relative).unwrap_or(relative), name)
+}
+
+/// True when outputs land somewhere recognisably derived from their source
+/// (another folder, or a changed name). Outputs placed beside the source
+/// under the same name look exactly like originals, so they can't be told
+/// apart and stay protected as sources.
+fn derived_location(target: &ResolvedTarget) -> bool {
+    target.destination != Destination::BesideSource || !target.naming.is_identity()
+}
+
+/// Candidates that sit exactly where another candidate's output would go, in
+/// a derived location: results of an earlier run of this preset. They are
+/// not converted again (that would nest `webp/webp/...` on every rerun) and
+/// count as existing outputs instead.
+fn previous_outputs(
+    inventory: &Inventory,
+    config: &JobConfig,
+    candidates: &[(usize, Format)],
+    batch_date: NaiveDate,
+) -> HashSet<usize> {
+    let width = digits(candidates.len());
+    let mut produced: HashMap<String, usize> = HashMap::new();
+    for (position, &(index, _)) in candidates.iter().enumerate() {
+        for target in config.targets.iter().filter(|t| derived_location(t)) {
+            let (output, _) =
+                output_path(inventory, index, target, position + 1, width, batch_date);
+            produced.entry(collision_key(&output)).or_insert(index);
+        }
+    }
+    candidates
+        .iter()
+        .map(|&(index, _)| index)
+        .filter(|&index| {
+            produced
+                .get(&collision_key(&inventory.entries[index].path))
+                .is_some_and(|&producer| producer != index)
+        })
+        .collect()
 }
 
 /// Assigns each planned output a unique path or blocks/skips it, in job order.
 fn resolve_collisions(
     jobs: &mut [PlannedJob],
     inventory: &Inventory,
+    previous_outputs: &HashSet<usize>,
     policy: CollisionPolicy,
     ctx: &PlanContext<'_>,
 ) {
-    // Every inventory file is protected, convertible or not, excluded or not.
-    let sources: HashMap<String, &Path> = inventory
-        .entries
-        .iter()
-        .map(|e| (collision_key(&e.path), e.path.as_path()))
-        .collect();
+    // Every inventory file is protected (convertible or not, excluded or
+    // not), except earlier outputs of this preset, which are ordinary
+    // existing files.
+    let mut protected: HashMap<String, (usize, &Path)> = HashMap::new();
+    let mut existing: HashSet<String> = HashSet::new();
+    for (index, entry) in inventory.entries.iter().enumerate() {
+        let key = collision_key(&entry.path);
+        if previous_outputs.contains(&index) {
+            existing.insert(key);
+        } else {
+            protected.insert(key, (index, entry.path.as_path()));
+        }
+    }
     let mut claimed: HashMap<String, Vec<usize>> = HashMap::new();
     let taken = |path: &Path, claimed: &HashMap<String, Vec<usize>>| {
         let key = collision_key(path);
-        sources.contains_key(&key) || claimed.contains_key(&key) || (ctx.output_exists)(path)
+        protected.contains_key(&key)
+            || claimed.contains_key(&key)
+            || existing.contains(&key)
+            || (ctx.output_exists)(path)
     };
 
     for (index, job) in jobs.iter_mut().enumerate() {
@@ -371,17 +473,28 @@ fn resolve_collisions(
             continue;
         }
 
-        if let Some(source) = sources.get(&key) {
-            job.status = JobStatus::Blocked(BlockReason::WouldReplaceSource {
-                source: source.to_path_buf(),
-            });
-        } else if claimed.contains_key(&key) {
-            claimed.entry(key).or_default().push(index);
-        } else if policy == CollisionPolicy::Overwrite {
-            job.replaces_existing = true;
-            claimed.entry(key).or_default().push(index);
-        } else {
-            job.status = JobStatus::Skipped(SkipReason::OutputExists);
+        match protected.get(&key) {
+            // Converting a file onto itself: there's nothing to do (R11).
+            Some(&(source, _)) if source == job.source => {
+                job.status = JobStatus::Skipped(SkipReason::OutputIsSource);
+            }
+            // Another source is in the way. Under `skip` that's just an
+            // existing file; `overwrite` never applies to sources.
+            Some(&(_, path)) => {
+                job.status = if policy == CollisionPolicy::Overwrite {
+                    JobStatus::Blocked(BlockReason::WouldReplaceSource {
+                        source: path.to_path_buf(),
+                    })
+                } else {
+                    JobStatus::Skipped(SkipReason::OutputExists)
+                };
+            }
+            None if claimed.contains_key(&key) => claimed.entry(key).or_default().push(index),
+            None if policy == CollisionPolicy::Overwrite => {
+                job.replaces_existing = true;
+                claimed.entry(key).or_default().push(index);
+            }
+            None => job.status = JobStatus::Skipped(SkipReason::OutputExists),
         }
     }
 
