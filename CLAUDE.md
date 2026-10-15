@@ -34,6 +34,11 @@ The toolchain is pinned in `rust-toolchain.toml`. CI runs fmt --check, clippy -D
 The crates follow the dependency direction `core ← backends ← engine ← cli`. Keep the layering:
 - `transmute-core` must never spawn processes or depend on an async runtime, so the planner stays testable without tools.
 - Encoders are invoked only from `transmute-backends`.
+- Preset and user-defaults JSON is a versioned public format, documented in `docs/preset-format.md`.
+  - A breaking schema change must bump `Document::VERSION` and add a `migrate_step`.
+  - Update the doc in the same change.
+  - `examples/presets/` files are loaded by tests, so keep them valid.
+- New codec settings go through the `codec_settings!` macro in `transmute-core/src/codec.rs`, which generates the patch twin. Validation lives in that codec's `ValidateSettings` impl.
 - Workspace lints deny `unsafe_code` and warn on `unwrap_used` outside tests. Prefer typed errors (`thiserror`) at crate boundaries.
 
 ## Overhaul direction (from the spec)

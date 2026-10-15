@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "name": "Archive and Web",
+  "description": "Lossless JPEG XL for the archive, plus a small WebP for sharing.",
+  "inputFilter": { "mode": "exclude", "formats": ["gif"] },
+  "destination": { "mode": "subfolder" },
+  "outputs": [
+    {
+      "codec": { "format": "jxl", "lossless": true },
+      "naming": { "prefix": "archive_", "suffix": "_{date}", "dateStyle": "short" }
+    },
+    {
+      "codec": { "format": "webp", "quality": 80 },
+      "naming": { "prefix": "web_" },
+      "metadata": "stripAll"
+    }
+  ]
+}

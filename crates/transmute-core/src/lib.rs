@@ -4,4 +4,11 @@
 //! dependencies so that inventory, planning, and path/collision policy can be
 //! unit-tested without any external tools installed.
 
+pub mod codec;
 pub mod extension;
+pub mod format;
+pub mod naming;
+pub mod output;
+pub mod preset;
+pub mod schema;
+pub mod validation;
