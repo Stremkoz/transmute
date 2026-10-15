@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This repo is the **overhaul** of Transmute, a Windows-first media converter. Development is backend-first: a Rust Cargo workspace under `crates/`. The Tauri app hasn't been scaffolded yet and won't be until the plan's M11 gate. Reference material:
+This repo is the **overhaul** of Transmute, a Windows-first media converter. The backend is a Rust Cargo workspace under `crates/`; milestones M0–M9 and M11 are done, and M10 (video/audio) is paused while the user decides whether Transmute stays images-only. **The M11 gate is open**: the desktop app (Tauri 2 + React/TypeScript) talks only to `crates/transmute-api` (`docs/api.md`), but it hasn't been planned or scaffolded yet. Plan GUI work with the user before writing it. Reference material:
 
 - `docs/sourcefiles/Transmute_Overhaul_Specification.md`: the working-draft product spec for the overhaul. Read it before starting design or implementation work. It is a proposed direction, not a final contract. Section 12 lists decisions that are still open. It is an **internal design document**: never commit it, quote it in release material, or move it out of the ignored folder.
 - `docs/sourcefiles/transmute/`: a full clone of the **existing** Transmute app (C#/.NET 9, upstream `github.com/Stremkoz/transmute-legacy` (archived), v1.1.0). It has its own `.git`. Treat it as **read-only reference**: audit it, but don't edit it. The goal is an overhaul, not a port. Keep what works and don't feel bound by its design.
 
-- `docs/internal/backend-plan.md`: **the active plan.** Backend-first: Rust workspace milestones M0–M11, architecture decisions, testing strategy, open decisions and a decision log. GUI work waits for the M11 gate. Check which milestone is current before starting work, and record decisions in its log.
+- `docs/internal/backend-plan.md`: **the active plan.** Backend-first: Rust workspace milestones M0–M11, architecture decisions, testing strategy, open decisions and a decision log. Check which milestone is current before starting work, and record decisions in its log.
 - `docs/internal/legacy-audit.md`: the Phase 0 audit of 1.x, with confirmed defects, keep/change/drop recommendations, and the regression cases the overhaul's tests must cover. Read it before designing the job planner, file safety, metadata or routing.
 
 `docs/sourcefiles/` (user-provided reference) and `docs/internal/` (generated design notes) are both gitignored and stay local only. Put new internal design documents in `docs/internal/`. The repo is hosted privately at `github.com/Stremkoz/transmute`. The old 1.x repo is archived as `Stremkoz/transmute-legacy`. `CURRENT_SESSION.md` (session-continuity notes required by the workspace rules) is also gitignored and must never be committed.
