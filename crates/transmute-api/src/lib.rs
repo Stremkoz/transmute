@@ -214,6 +214,8 @@ struct Inner {
     fixed_backend: bool,
     session: Mutex<Session>,
     events: EventSink,
+    /// Thumbnails render a few at a time, however many rows ask at once.
+    thumbnails: tokio::sync::Semaphore,
 }
 
 /// The facade. Cheap to clone; every clone is the same session.
@@ -229,6 +231,10 @@ fn store_error(err: impl std::fmt::Display) -> ApiError {
 fn internal(err: impl std::fmt::Display) -> ApiError {
     ApiError::new(ErrorCode::Internal, err.to_string())
 }
+
+/// Thumbnails rendered at once: enough to fill a screen of rows quickly
+/// without starving a running conversion.
+const THUMBNAIL_WORKERS: usize = 4;
 
 fn invalid(err: impl std::fmt::Display) -> ApiError {
     ApiError::new(ErrorCode::Invalid, err.to_string())
@@ -303,6 +309,7 @@ impl Api {
                 store,
                 backend: RwLock::new(Arc::new(backend)),
                 fixed_backend: !discovered,
+                thumbnails: tokio::sync::Semaphore::new(THUMBNAIL_WORKERS),
                 session: Mutex::new(Session {
                     inputs: Vec::new(),
                     recursive: true,
@@ -359,6 +366,10 @@ impl Api {
 
     fn previews_dir(&self) -> PathBuf {
         self.inner.locations.state.join("previews")
+    }
+
+    fn thumbnails_dir(&self) -> PathBuf {
+        self.inner.locations.state.join("thumbnails")
     }
 
     fn samples_dir(&self) -> PathBuf {
@@ -1343,22 +1354,9 @@ impl Api {
             let session = self.session();
             match target {
                 PreviewTarget::Source { entry } => {
-                    let entry = session
-                        .inventory
-                        .entries
-                        .get(entry as usize)
-                        .ok_or_else(|| {
-                            ApiError::new(ErrorCode::NotFound, format!("no file {entry}"))
-                        })?;
-                    match entry.inspection.content {
-                        Content::Image(format) => (entry.path.clone(), format),
-                        _ => {
-                            return Err(ApiError::new(
-                                ErrorCode::Invalid,
-                                "this file isn't an image Transmute can show",
-                            ));
-                        }
-                    }
+                    drop(session);
+                    let (path, format) = self.source_image(entry)?;
+                    return self.render(path, format).await;
                 }
                 PreviewTarget::Output { job } => {
                     let plan = session.current_plan()?;
@@ -1379,6 +1377,23 @@ impl Api {
         self.render(path, format).await
     }
 
+    /// Where one inventory image is, and its format.
+    fn source_image(&self, entry: EntryId) -> ApiResult<(PathBuf, Format)> {
+        let session = self.session();
+        let source = session
+            .inventory
+            .entries
+            .get(entry as usize)
+            .ok_or_else(|| ApiError::new(ErrorCode::NotFound, format!("no file {entry}")))?;
+        match source.inspection.content {
+            Content::Image(format) => Ok((source.path.clone(), format)),
+            _ => Err(ApiError::new(
+                ErrorCode::Invalid,
+                "this file isn't an image Transmute can show",
+            )),
+        }
+    }
+
     async fn render(&self, path: PathBuf, format: Format) -> ApiResult<Preview> {
         let cache = self.previews_dir();
         let backend = self.backend();
@@ -1395,9 +1410,33 @@ impl Api {
         .map_err(internal)?
     }
 
-    /// Removes every cached rendering and trial conversion.
+    /// A small rendering of one image for the files list, cached.
+    /// `unavailable` when the file is gone or no tool can read it.
+    pub async fn thumbnail(&self, entry: EntryId) -> ApiResult<Preview> {
+        let (path, format) = self.source_image(entry)?;
+        let _turn = self.inner.thumbnails.acquire().await.map_err(internal)?;
+        let cache = self.thumbnails_dir();
+        let backend = self.backend();
+        tokio::task::spawn_blocking(move || {
+            preview::thumbnail(
+                &path,
+                format,
+                &cache,
+                &backend.toolbox,
+                backend.invoker.as_ref(),
+            )
+        })
+        .await
+        .map_err(internal)?
+    }
+
+    /// Removes every cached rendering, thumbnail and trial conversion.
     pub fn clear_previews(&self) -> ApiResult<()> {
-        for dir in [self.previews_dir(), self.samples_dir()] {
+        for dir in [
+            self.previews_dir(),
+            self.thumbnails_dir(),
+            self.samples_dir(),
+        ] {
             match std::fs::remove_dir_all(&dir) {
                 Ok(()) => {}
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}

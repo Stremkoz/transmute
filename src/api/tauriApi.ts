@@ -52,6 +52,7 @@ export const COMMANDS = {
   reveal: "reveal",
   preview: "preview",
   sample: "sample",
+  thumbnail: "thumbnail",
   clearPreviews: "clear_previews",
 } as const satisfies Partial<Record<keyof TransmuteApi, string>>;
 
@@ -104,6 +105,7 @@ export const tauriApi: TransmuteApi = {
 
   preview: (target) => invoke(COMMANDS.preview, { target }),
   sample: (entry, target) => invoke(COMMANDS.sample, { entry, target }),
+  thumbnail: (entry) => invoke(COMMANDS.thumbnail, { entry }),
   clearPreviews: () => invoke(COMMANDS.clearPreviews),
   previewUrl: (preview) => convertFileSrc(preview.path),
 

@@ -39,6 +39,18 @@ pub struct StepRequest<'a> {
     pub auto_orient: bool,
 }
 
+/// A small preview of one image, for the files list.
+#[derive(Debug, Clone, Copy)]
+pub struct ThumbnailRequest<'a> {
+    /// vips or ImageMagick: the tools that can resize.
+    pub tool: ToolId,
+    pub input: &'a Path,
+    /// Its extension picks the format (`.webp` or `.png`).
+    pub output: &'a Path,
+    /// The longest side, in pixels.
+    pub size: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invocation {
     pub program: PathBuf,
@@ -49,6 +61,14 @@ pub struct Invocation {
 /// so tests can substitute stub tools.
 pub trait Invoker: Send + Sync {
     fn invocation(&self, request: &StepRequest<'_>) -> Result<Invocation, String>;
+
+    /// A command that writes a thumbnail: first frame, upright, no metadata.
+    fn thumbnail(&self, request: &ThumbnailRequest<'_>) -> Result<Invocation, String> {
+        Err(format!(
+            "{} can't make thumbnails here",
+            request.tool.program_name()
+        ))
+    }
 }
 
 /// The real tools, at the paths discovery found.
@@ -95,6 +115,35 @@ impl Invoker for ToolInvoker {
         }
         Ok(Invocation {
             program: self.program(tool)?,
+            args: args.0,
+        })
+    }
+
+    fn thumbnail(&self, request: &ThumbnailRequest<'_>) -> Result<Invocation, String> {
+        let size = request.size.to_string();
+        let mut args = Args::default();
+        match request.tool {
+            // `thumbnail` shrinks while loading where it can (JPEG, WebP),
+            // turns the image upright and reads only the first frame.
+            ToolId::Vips => {
+                args.add("thumbnail")
+                    .add(with_suffix(request.input, "[]"))
+                    .add(with_suffix(request.output, "[Q=75,keep=none]"))
+                    .add(&size)
+                    .flags(&["--height"])
+                    .add(&size);
+            }
+            ToolId::Magick => {
+                args.add(with_suffix(request.input, "[0]"))
+                    .flags(&["-auto-orient", "-thumbnail"])
+                    .add(format!("{size}x{size}"))
+                    .flags(&["-strip", "-quality", "75"])
+                    .path(request.output);
+            }
+            other => return Err(format!("{} can't make thumbnails", other.program_name())),
+        }
+        Ok(Invocation {
+            program: self.program(request.tool)?,
             args: args.0,
         })
     }
@@ -767,6 +816,31 @@ mod tests {
         );
         assert!(!args.iter().any(|a| a.starts_with("--lossless_jpeg")));
         assert!(has_pair(&args, ["-d", "0"]));
+    }
+
+    #[test]
+    fn thumbnails_fit_a_box_and_drop_metadata() {
+        let request = |tool| ThumbnailRequest {
+            tool,
+            input: Path::new("-in.jpg"),
+            output: Path::new("out.webp"),
+            size: 96,
+        };
+        let strings = |args: Vec<OsString>| -> Vec<String> {
+            args.iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        let vips = strings(invoker().thumbnail(&request(ToolId::Vips)).unwrap().args);
+        assert_eq!(vips[0], "thumbnail");
+        assert!(vips[1].starts_with("./-in.jpg") || vips[1].starts_with(".\\-in.jpg"));
+        assert!(vips[2].ends_with("[Q=75,keep=none]"));
+        assert!(has_pair(&vips, ["--height", "96"]));
+        let magick = strings(invoker().thumbnail(&request(ToolId::Magick)).unwrap().args);
+        assert!(magick[0].ends_with("-in.jpg[0]"));
+        assert!(has_pair(&magick, ["-thumbnail", "96x96"]));
+        assert!(magick.iter().any(|a| a == "-strip"));
+        assert!(invoker().thumbnail(&request(ToolId::Cjxl)).is_err());
     }
 
     #[test]

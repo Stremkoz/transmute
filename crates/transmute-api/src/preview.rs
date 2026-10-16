@@ -24,10 +24,19 @@ use transmute_core::inspect::{MetadataPresence, Presence, inspect_path};
 use transmute_core::output::MetadataPolicy;
 use transmute_core::plan::{Requirements, find_route};
 
+use transmute_backends::invoke::ThumbnailRequest;
+use transmute_core::inspect::Inspection;
+use transmute_core::tool::ToolId;
+
+use crate::files::present_metadata;
 use crate::types::{ApiError, ApiResult, ErrorCode, Preview};
 
 /// Largest total size of cached renderings.
 pub const CACHE_LIMIT: u64 = 1024 * 1024 * 1024;
+/// Largest total size of cached thumbnails (~5 KB each).
+pub const THUMBNAIL_CACHE_LIMIT: u64 = 256 * 1024 * 1024;
+/// The longest side of a thumbnail: a 48 px row at 2× scaling.
+pub const THUMBNAIL_SIZE: u32 = 96;
 
 /// Formats every supported webview displays without help.
 pub fn displayable(format: Format) -> bool {
@@ -62,24 +71,12 @@ pub fn preview(
 ) -> ApiResult<Preview> {
     let metadata = fs::metadata(path).map_err(|_| unavailable(path))?;
     let inspection = inspect_path(path).map_err(|_| unavailable(path))?;
-    let (width, height) = inspection.dimensions.unzip();
-    let preview = |shown: PathBuf, rendered| Preview {
-        path: shown.display().to_string(),
-        width,
-        height,
-        bytes: metadata.len(),
-        rendered,
-    };
+    let preview = |shown: PathBuf, rendered| describe(shown, rendered, &inspection, metadata.len());
     if displayable(format) {
         return Ok(preview(path.to_path_buf(), false));
     }
 
-    let modified = metadata
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map_or(0, |d| d.as_nanos());
-    let key = fnv1a(format!("{}|{}|{modified}", path.display(), metadata.len()).as_bytes());
+    let key = cache_key(path, &metadata, "");
     let rendering = cache.join(format!("{key:016x}.png"));
     if rendering.is_file() {
         return Ok(preview(rendering, true));
@@ -158,6 +155,97 @@ pub fn preview(
     fs::rename(&input, &rendering).map_err(io_error)?;
     prune(cache, CACHE_LIMIT);
     Ok(preview(rendering, true))
+}
+
+fn describe(shown: PathBuf, rendered: bool, inspection: &Inspection, bytes: u64) -> Preview {
+    let (width, height) = inspection.dimensions.unzip();
+    Preview {
+        path: shown.display().to_string(),
+        width,
+        height,
+        bytes,
+        rendered,
+        metadata: present_metadata(&inspection.metadata),
+    }
+}
+
+/// A cache name for `path` as it is now: a replaced file gets a new one.
+fn cache_key(path: &Path, metadata: &fs::Metadata, variant: &str) -> u64 {
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos());
+    fnv1a(format!("{}|{}|{modified}{variant}", path.display(), metadata.len()).as_bytes())
+}
+
+/// A small rendering of the image at `path` for the files list, made by
+/// vips (or ImageMagick, for what vips can't read) and cached in `cache`.
+pub fn thumbnail(
+    path: &Path,
+    format: Format,
+    cache: &Path,
+    tools: &Toolbox,
+    invoker: &dyn Invoker,
+) -> ApiResult<Preview> {
+    let metadata = fs::metadata(path).map_err(|_| unavailable(path))?;
+    let inspection = inspect_path(path).map_err(|_| unavailable(path))?;
+    let key = cache_key(path, &metadata, &format!("|thumb{THUMBNAIL_SIZE}"));
+    for extension in ["webp", "png"] {
+        let cached = cache.join(format!("{key:016x}.{extension}"));
+        if cached.is_file() {
+            return Ok(describe(cached, true, &inspection, metadata.len()));
+        }
+    }
+
+    // vips first: it shrinks JPEG and WebP while loading, so it's fast.
+    let (tool, writes) = [ToolId::Vips, ToolId::Magick]
+        .into_iter()
+        .find_map(|tool| {
+            let caps = tools.get(tool)?;
+            caps.reads
+                .contains(&format)
+                .then_some((tool, caps.writes.clone()))
+        })
+        .ok_or_else(|| {
+            ApiError::new(
+                ErrorCode::Unavailable,
+                format!(
+                    "no installed tool can make a thumbnail of {}",
+                    format.display_name()
+                ),
+            )
+        })?;
+    let extension = if writes.contains(&Format::Webp) {
+        "webp"
+    } else {
+        "png"
+    };
+    fs::create_dir_all(cache).map_err(io_error)?;
+    let finished = cache.join(format!("{key:016x}.{extension}"));
+    let partial = cache.join(format!("{key:016x}.partial.{extension}"));
+    let invocation = invoker
+        .thumbnail(&ThumbnailRequest {
+            tool,
+            input: path,
+            output: &partial,
+            size: THUMBNAIL_SIZE,
+        })
+        .map_err(|message| ApiError::new(ErrorCode::Unavailable, message))?;
+    let result = Command::new(&invocation.program)
+        .args(&invocation.args)
+        .output()
+        .map_err(io_error)?;
+    if !result.status.success() || !partial.is_file() {
+        let _ = fs::remove_file(&partial);
+        return Err(ApiError::new(
+            ErrorCode::Unavailable,
+            format!("{} couldn't make a thumbnail", tool.program_name()),
+        ));
+    }
+    fs::rename(&partial, &finished).map_err(io_error)?;
+    prune(cache, THUMBNAIL_CACHE_LIMIT);
+    Ok(describe(finished, true, &inspection, metadata.len()))
 }
 
 fn io_error(err: std::io::Error) -> ApiError {

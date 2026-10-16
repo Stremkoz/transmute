@@ -167,3 +167,7 @@
   word-break: break-all;
   user-select: text;
 }
+
+.try {
+  margin-right: auto;
+}

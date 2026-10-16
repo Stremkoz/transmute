@@ -6,10 +6,19 @@ import { useSession } from "../../state/sessionContext";
 import styles from "./FilesList.module.css";
 import { FORMAT_LABELS } from "../../lib/formats";
 import { IncludeBox, OutputChips } from "./rows";
-import { activates, dimensions, folderInclusion, folderSize, folderStatus } from "./rowHelpers";
+import {
+  ROW_HEIGHT,
+  THUMB_ROW_HEIGHT,
+  activates,
+  dimensions,
+  folderInclusion,
+  folderSize,
+  folderStatus,
+  hasConverted,
+} from "./rowHelpers";
+import { Thumbnail } from "./Thumbnail";
 import { useFileTree, type TreeRow } from "./useFileTree";
 
-const ROW_HEIGHT = 34;
 const INDENT = 20;
 
 function Chevron({ open }: { open: boolean }) {
@@ -55,7 +64,12 @@ export function TreeList() {
   const select = useSession((state) => state.select);
   const setExcluded = useSession((state) => state.setExcluded);
   const removeRoot = useSession((state) => state.removeRoot);
-  const { ref, onScroll, start, end, top, height } = useWindowedRows(rows.length, ROW_HEIGHT);
+  const openViewer = useSession((state) => state.openViewer);
+  const thumbnails = useSession((state) => state.thumbnails);
+  const { ref, onScroll, start, end, top, height } = useWindowedRows(
+    rows.length,
+    thumbnails ? THUMB_ROW_HEIGHT : ROW_HEIGHT,
+  );
 
   const draw = (row: TreeRow): ReactNode => {
     switch (row.kind) {
@@ -137,7 +151,10 @@ export function TreeList() {
             role="row"
             aria-label={row.relativePath}
             aria-selected={isSelected}
-            {...activates(() => select(file.entry))}
+            {...activates(
+              () => select(file.entry),
+              hasConverted(file) ? () => openViewer({ mode: "compare", entry: file.entry, target: null }) : undefined,
+            )}
           >
             {image ? (
               <IncludeBox
@@ -150,6 +167,7 @@ export function TreeList() {
               <span />
             )}
             <div className={styles.name} style={{ paddingLeft: row.depth * INDENT + 24 }}>
+              {thumbnails && (image ? <Thumbnail entry={file.entry} /> : <span className={styles.thumb} />)}
               <span>{row.name}</span>
             </div>
             <span className={styles.muted}>{file.format ? FORMAT_LABELS[file.format] : ""}</span>
@@ -171,7 +189,14 @@ export function TreeList() {
   };
 
   return (
-    <div className={styles.scroller} ref={ref} onScroll={onScroll} role="grid" aria-label="Files" aria-rowcount={rows.length}>
+    <div
+      className={`${styles.scroller} ${thumbnails ? styles.withThumbs : ""}`}
+      ref={ref}
+      onScroll={onScroll}
+      role="grid"
+      aria-label="Files"
+      aria-rowcount={rows.length}
+    >
       <ListHead />
       <div style={{ height: height, position: "relative" }}>
         <div style={{ position: "absolute", top: top, left: 0, right: 0 }}>

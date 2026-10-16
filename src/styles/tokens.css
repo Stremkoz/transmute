@@ -64,6 +64,7 @@
   --z-overlay: 20;
   --z-dialog: 21;
   --z-menu: 30;
+  --z-viewer: 25;
   --duration-fast: 120ms;
 }
 

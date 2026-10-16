@@ -28,6 +28,22 @@ function AddButtons({ disabled }: { disabled: boolean }) {
   );
 }
 
+function ThumbnailsToggle() {
+  const thumbnails = useSession((state) => state.thumbnails);
+  const setThumbnails = useSession((state) => state.setThumbnails);
+  return (
+    <button
+      type="button"
+      className="button"
+      aria-pressed={thumbnails}
+      title={thumbnails ? "Hide the small previews" : "Show a small preview of each image (made as you scroll)"}
+      onClick={() => setThumbnails(!thumbnails)}
+    >
+      Thumbnails
+    </button>
+  );
+}
+
 function ScanStatus() {
   const scan = useSession((state) => state.scan);
   if (!scan) return null;
@@ -172,6 +188,7 @@ export function FilesPanel({ inputs }: { inputs: InputsSummary }) {
         <div className={styles.actions}>
           <AddButtons disabled={locked} />
           <FormatFilter inputs={inputs} disabled={locked} />
+          <ThumbnailsToggle />
           <ClearMenu disabled={locked} />
         </div>
       </div>

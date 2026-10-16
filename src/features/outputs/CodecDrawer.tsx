@@ -88,12 +88,29 @@ export function CodecDrawer() {
   const editOutput = useSession((state) => state.editOutput);
   const updateOutput = useSession((state) => state.updateOutput);
   const makeDefaults = useSession((state) => state.makeDefaults);
+  const openViewer = useSession((state) => state.openViewer);
+  const example = useSession((state) =>
+    editing === null ? undefined : state.overview?.plan?.examples.find((e) => e.target === editing),
+  );
   const locked = useSession((state) => isRunActive(state.run));
   const output = editing === null ? undefined : preset?.outputs[editing];
   const changed = output ? !isDefaultPatch(output.codec) : false;
 
   const footer = output && editing !== null && (
     <>
+      <button
+        type="button"
+        className={`button ${styles.try}`}
+        disabled={!example}
+        title={
+          example
+            ? `Converts ${example.source} with these settings into a cache, and compares it with the original`
+            : "Add images first: there's no file to try"
+        }
+        onClick={() => example && openViewer({ mode: "trial", entry: example.entry, target: editing })}
+      >
+        Try on one file…
+      </button>
       <button
         type="button"
         className="button"

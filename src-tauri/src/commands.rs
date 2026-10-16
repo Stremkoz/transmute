@@ -258,6 +258,13 @@ pub async fn preview(
 }
 
 #[tauri::command]
+pub async fn thumbnail(app: AppHandle, api: State<'_, Api>, entry: EntryId) -> ApiResult<Preview> {
+    let thumbnail = api.thumbnail(entry).await?;
+    allow_preview(&app, &thumbnail)?;
+    Ok(thumbnail)
+}
+
+#[tauri::command]
 pub async fn sample(
     app: AppHandle,
     api: State<'_, Api>,

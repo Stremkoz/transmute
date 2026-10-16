@@ -81,6 +81,8 @@ export interface TransmuteApi {
 
   preview(target: PreviewTarget): Promise<Preview>;
   sample(entry: number, target: number): Promise<Sample>;
+  /** A small cached rendering of one image, for the files list. */
+  thumbnail(entry: number): Promise<Preview>;
   clearPreviews(): Promise<void>;
   /** A URL the webview can load for a preview's file. */
   previewUrl(preview: Preview): string;

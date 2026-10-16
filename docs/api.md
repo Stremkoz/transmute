@@ -59,7 +59,8 @@ Rules the API keeps:
 | `locate(target)` | path | Rust only (not a shell command): where a source or a converted output is, for the shell's `reveal`, which shows it in the file manager. `unavailable` if it's gone. |
 | `preview(target)` | `Preview` | Async. `{ kind: "source", entry }` or `{ kind: "output", job }` (converted jobs only). See [Previews](#previews). |
 | `sample(entry, target)` | `Sample` | Async. Converts one file with one output into the cache, with size, time, notes and a preview: a trial before a long batch. |
-| `clearPreviews()` | — | Empties the preview and sample caches. |
+| `thumbnail(entry)` | `Preview` | Async. A small rendering (96 px box, WebP or PNG) of one image for the files list, made by libvips (ImageMagick for what vips can't read) and cached. At most four render at once, however many rows ask. `unavailable` if the file is gone or no tool reads it. |
+| `clearPreviews()` | — | Empties the preview, thumbnail and sample caches. |
 
 ## File states
 
@@ -97,8 +98,9 @@ The webview decodes JPEG, PNG, WebP, GIF, BMP and AVIF itself, so `preview` retu
 
 The cache policy is explicit (spec §7):
 
-- Renderings live in `<state>/previews/` (see [where files are stored](preset-format.md#where-files-are-stored)). They're keyed by the file's path, size and modification time, so a replaced file is rendered afresh.
-- The cache is capped at 1 GB, oldest renderings first. Trial conversions live in `<state>/samples/` and are removed when the app starts.
+- Renderings live in `<state>/previews/` (see [where files are stored](preset-format.md#where-files-are-stored)), thumbnails in `<state>/thumbnails/`. Both are keyed by the file's path, size and modification time, so a replaced file is rendered afresh.
+- Every `Preview` lists the metadata blocks the image has (`metadata`: "EXIF", "ICC profile", "XMP"), for the compare viewer's table.
+- The preview cache is capped at 1 GB and the thumbnail cache at 256 MB, oldest first. Trial conversions live in `<state>/samples/` and are removed when the app starts.
 - No copies of originals are kept. If a source or output has moved or been deleted, `preview` fails with `unavailable`, and the viewer should say so.
 
 ## Wiring into Tauri (sketch)

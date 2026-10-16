@@ -18,7 +18,9 @@ import type {
   JobUpdate,
   Overview,
   PlanSummary,
+  Sample,
   Preset,
+  Preview,
   Progress,
   RunStatus,
   StoredPreset,
@@ -244,6 +246,19 @@ function hash(text: string): number {
 
 function baseName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+/**
+ * A made-up picture for a file: a landscape in colours from its name, so
+ * the browser build has something to compare. `softness` blurs it a little,
+ * standing in for a lossy output.
+ */
+function picture(name: string, width: number, height: number, softness = 0): string {
+  const hue = hash(name) % 360;
+  const blur = softness > 0 ? `<filter id="b"><feGaussianBlur stdDeviation="${softness}"/></filter>` : "";
+  const filter = softness > 0 ? ' filter="url(#b)"' : "";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 160 90">${blur}<g${filter}><rect width="160" height="90" fill="hsl(${hue} 55% 62%)"/><circle cx="118" cy="24" r="11" fill="hsl(${(hue + 40) % 360} 90% 82%)"/><path d="M0 70 L38 34 L62 56 L92 22 L160 72 V90 H0Z" fill="hsl(${(hue + 180) % 360} 30% 30%)"/><path d="M0 80 Q40 66 80 78 T160 76 V90 H0Z" fill="hsl(${(hue + 200) % 360} 35% 20%)"/></g></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 function message(code: string, text: string) {
@@ -499,7 +514,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
         examples: preset.outputs.flatMap((_, target) => {
           const first = jobs.find((j) => j.target === target && j.state.state === "ready") ?? jobs.find((j) => j.target === target);
           const entry = first && entries.find((e) => e.id === first.entry);
-          return first && entry ? [{ target, source: entry.relativePath, output: first.output }] : [];
+          return first && entry ? [{ target, entry: entry.id, source: entry.relativePath, output: first.output }] : [];
         }),
       },
     };
@@ -867,8 +882,65 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
     },
     reveal: async () => {},
 
-    preview: () => notYet("preview"),
-    sample: () => notYet("sample"),
+    preview: async (target): Promise<Preview> => {
+      if (target.kind === "source") {
+        const entry = entries.find((e) => e.id === target.entry);
+        if (!entry?.format) throw failure("invalid", "this file isn't an image Transmute can show");
+        const { width, height } = { width: entry.width ?? 1600, height: entry.height ?? 900 };
+        return {
+          path: picture(entry.relativePath, width, height),
+          width,
+          height,
+          bytes: entry.size,
+          rendered: false,
+          metadata: entry.format === "jpeg" ? ["EXIF", "ICC profile"] : [],
+        };
+      }
+      const job = plan?.jobs.find((j) => j.id === target.job);
+      if (job?.state.state !== "converted") throw failure("invalid", "this job hasn't produced an output");
+      const entry = entries.find((e) => e.id === job.entry);
+      if (!entry) throw failure("unavailable", "the output is no longer there (moved or deleted?)");
+      const lossless = (preset.outputs[job.target]?.codec as { lossless?: boolean } | undefined)?.lossless === true;
+      return {
+        path: picture(entry.relativePath, entry.width ?? 1600, entry.height ?? 900, lossless ? 0 : 0.6),
+        width: entry.width,
+        height: entry.height,
+        bytes: job.state.outputBytes,
+        rendered: job.format === "jxl" || job.format === "heif" || job.format === "tiff",
+        metadata: entry.format === "jpeg" ? ["EXIF", "ICC profile"] : [],
+      };
+    },
+    sample: async (id, target): Promise<Sample> => {
+      const entry = entries.find((e) => e.id === id);
+      const output = preset.outputs[target];
+      if (!entry?.format) throw failure("notFound", `no file ${id}`);
+      if (!output) throw failure("notFound", `no output ${target}`);
+      if (!writableFormats(tools).has(output.codec.format)) {
+        throw failure("invalid", "no installed tool can write this format");
+      }
+      const lossless = (output.codec as { lossless?: boolean }).lossless === true;
+      const outputBytes = Math.round(entry.size * (lossless ? 0.55 : output.codec.format === "jxl" ? 0.13 : 0.2));
+      await new Promise((resolve) => setTimeout(resolve, runStepMs));
+      return {
+        preview: {
+          path: picture(entry.relativePath, entry.width ?? 1600, entry.height ?? 900, lossless ? 0 : 0.6),
+          width: entry.width,
+          height: entry.height,
+          bytes: outputBytes,
+          rendered: false,
+          metadata: [],
+        },
+        inputBytes: entry.size,
+        outputBytes,
+        seconds: 0.4 + (hash(entry.relativePath) % 7) / 10,
+        notes: [],
+      };
+    },
+    thumbnail: async (id): Promise<Preview> => {
+      const entry = entries.find((e) => e.id === id);
+      if (!entry?.format) throw failure("invalid", "this file isn't an image Transmute can show");
+      return { path: picture(entry.relativePath, 96, 54), width: entry.width, height: entry.height, bytes: entry.size, rendered: true, metadata: [] };
+    },
     clearPreviews: async () => {},
     previewUrl: (preview) => preview.path,
 

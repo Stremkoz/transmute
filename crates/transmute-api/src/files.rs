@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use transmute_core::format::Format;
-use transmute_core::inspect::{Animation, Content, Presence};
+use transmute_core::inspect::{Animation, Content, MetadataPresence, Presence};
 use transmute_core::inventory::{Inventory, SourceEntry};
 use transmute_core::plan::{Plan, PlannedJob};
 
@@ -305,7 +305,10 @@ pub fn page(
 
 /// Metadata blocks the file definitely has, by name.
 pub fn metadata_names(entry: &SourceEntry) -> Vec<String> {
-    let metadata = &entry.inspection.metadata;
+    present_metadata(&entry.inspection.metadata)
+}
+
+pub fn present_metadata(metadata: &MetadataPresence) -> Vec<String> {
     [
         (metadata.exif, "EXIF"),
         (metadata.icc, "ICC profile"),

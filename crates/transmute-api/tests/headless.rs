@@ -348,7 +348,7 @@ async fn real_tools_convert_and_preview_jpeg_xl() {
     let photos = dir.path().join("photos");
     fs::create_dir_all(&photos).unwrap();
     let status = std::process::Command::new("magick")
-        .args(["-size", "64x48", "plasma:fractal"])
+        .args(["-size", "300x200", "plasma:fractal"])
         .arg(photos.join("p.png"))
         .status()
         .unwrap();
@@ -380,9 +380,15 @@ async fn real_tools_convert_and_preview_jpeg_xl() {
         .await
         .unwrap();
     assert!(preview.rendered);
-    assert_eq!((preview.width, preview.height), (Some(64), Some(48)));
+    assert_eq!((preview.width, preview.height), (Some(300), Some(200)));
     let rendered = fs::read(&preview.path).unwrap();
     assert!(rendered.starts_with(b"\x89PNG"), "the rendering is a PNG");
+
+    // A thumbnail fits a 96 px box, and the second request is the cached one.
+    let thumbnail = api.thumbnail(job.entry).await.unwrap();
+    let small = transmute_core::inspect::inspect_path(Path::new(&thumbnail.path)).unwrap();
+    assert_eq!(small.dimensions, Some((96, 64)), "{}", thumbnail.path);
+    assert_eq!(api.thumbnail(job.entry).await.unwrap().path, thumbnail.path);
 }
 
 /// A session with no tools, for tests that only configure.

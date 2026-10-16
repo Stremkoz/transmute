@@ -6,7 +6,8 @@ import { useWindowedRows } from "../../lib/virtual";
 import { useApi, useSession } from "../../state/sessionContext";
 import styles from "./FilesList.module.css";
 import { OutputChips } from "./rows";
-import { activates, dimensions, failureReasons } from "./rowHelpers";
+import { ROW_HEIGHT, THUMB_ROW_HEIGHT, activates, dimensions, failureReasons, hasConverted } from "./rowHelpers";
+import { Thumbnail } from "./Thumbnail";
 import { ListHead } from "./TreeList";
 
 const PAGE = 200;
@@ -25,8 +26,11 @@ export function FlatList({ filter }: { filter: FileFilter }) {
   const setFilter = useSession((state) => state.setFilter);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState<Map<number, FileRow[]>>(() => new Map());
+  const openViewer = useSession((state) => state.openViewer);
+  const thumbnails = useSession((state) => state.thumbnails);
   const tall = WITH_REASONS.has(filter);
-  const { ref, onScroll, start, end, top, height } = useWindowedRows(total, tall ? 52 : 34);
+  const rowHeight = thumbnails ? THUMB_ROW_HEIGHT : tall ? 52 : ROW_HEIGHT;
+  const { ref, onScroll, start, end, top, height } = useWindowedRows(total, rowHeight);
   const firstPage = Math.floor(start / PAGE);
   const lastPage = Math.floor(Math.max(end - 1, 0) / PAGE);
 
@@ -50,7 +54,14 @@ export function FlatList({ filter }: { filter: FileFilter }) {
   }
 
   return (
-    <div className={styles.scroller} ref={ref} onScroll={onScroll} role="grid" aria-label="Files" aria-rowcount={total}>
+    <div
+      className={`${styles.scroller} ${thumbnails ? styles.withThumbs : ""}`}
+      ref={ref}
+      onScroll={onScroll}
+      role="grid"
+      aria-label="Files"
+      aria-rowcount={total}
+    >
       <ListHead />
       <div style={{ height: height, position: "relative" }}>
         <div style={{ position: "absolute", top: top, left: 0, right: 0 }}>
@@ -70,21 +81,27 @@ export function FlatList({ filter }: { filter: FileFilter }) {
                 role="row"
                 aria-label={row.relativePath}
                 aria-selected={isSelected}
-                {...activates(() => select(file.entry))}
+                {...activates(
+                  () => select(file.entry),
+                  hasConverted(file) ? () => openViewer({ mode: "compare", entry: file.entry, target: null }) : undefined,
+                )}
               >
                 <span />
-                <div className={styles.nameStack}>
-                  <div className={styles.name}>
-                    <span>
-                      <span className={styles.meta}>{folder.replaceAll("/", "\\")}</span>
-                      {row.name}
-                    </span>
+                <div className={styles.thumbRow}>
+                  {thumbnails && (file.format !== null ? <Thumbnail entry={file.entry} /> : <span className={styles.thumb} />)}
+                  <div className={styles.nameStack}>
+                    <div className={styles.name}>
+                      <span>
+                        <span className={styles.meta}>{folder.replaceAll("/", "\\")}</span>
+                        {row.name}
+                      </span>
+                    </div>
+                    {tall && reasons.length > 0 && (
+                      <span className={styles.reason} title={reasons.join("\n")}>
+                        {reasons.join(" · ")}
+                      </span>
+                    )}
                   </div>
-                  {tall && reasons.length > 0 && (
-                    <span className={styles.reason} title={reasons.join("\n")}>
-                      {reasons.join(" · ")}
-                    </span>
-                  )}
                 </div>
                 <span className={styles.muted}>{file.format ? FORMAT_LABELS[file.format] : ""}</span>
                 <span className={`${styles.muted} ${styles.num}`}>{dimensions(file)}</span>

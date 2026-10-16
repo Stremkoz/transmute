@@ -74,6 +74,7 @@ fn main() {
             commands::reveal,
             commands::preview,
             commands::sample,
+            commands::thumbnail,
             commands::clear_previews,
         ])
         .build(tauri::generate_context!());

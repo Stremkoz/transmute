@@ -156,6 +156,7 @@ pub fn plan_summary(plan: &Plan, inventory: &Inventory, outputs_per_source: usiz
         .into_iter()
         .map(|(target, job)| ExampleOutput {
             target: target as u32,
+            entry: job.source as u32,
             source: slash_path(&inventory.entries[job.source].relative_path),
             output: job.output.display().to_string(),
         })

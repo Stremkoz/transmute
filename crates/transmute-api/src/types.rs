@@ -67,6 +67,7 @@ pub struct CodecDefaults {
 pub struct ExampleOutput {
     /// Index of the output target in the preset.
     pub target: u32,
+    pub entry: EntryId,
     /// The source, relative to its root.
     pub source: String,
     pub output: String,
@@ -506,6 +507,8 @@ pub struct Preview {
     pub bytes: u64,
     /// True when `path` is a rendering in the preview cache.
     pub rendered: bool,
+    /// Metadata blocks the image has ("EXIF", "ICC profile", "XMP").
+    pub metadata: Vec<String>,
 }
 
 /// A trial conversion of one source with one output target.

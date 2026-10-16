@@ -117,3 +117,9 @@ button {
 .button-danger:hover:not(:disabled) {
   background: var(--color-error-bg);
 }
+
+/* A toggle button that's on. */
+.button[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
+}

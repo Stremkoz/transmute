@@ -12,4 +12,8 @@ bytes: number,
 /**
  * True when `path` is a rendering in the preview cache.
  */
-rendered: boolean, };
+rendered: boolean, 
+/**
+ * Metadata blocks the image has ("EXIF", "ICC profile", "XMP").
+ */
+metadata: Array<string>, };

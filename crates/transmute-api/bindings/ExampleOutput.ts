@@ -7,7 +7,7 @@ export type ExampleOutput = {
 /**
  * Index of the output target in the preset.
  */
-target: number, 
+target: number, entry: number, 
 /**
  * The source, relative to its root.
  */

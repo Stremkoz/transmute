@@ -76,8 +76,11 @@ function Details({ details }: { details: EntryDetails }) {
   const reveal = useSession((state) => state.reveal);
   const setExcluded = useSession((state) => state.setExcluded);
   const locked = useSession((state) => isRunActive(state.run));
+  const openViewer = useSession((state) => state.openViewer);
+  const hasOutputs = useSession((state) => (state.overview?.preset.outputs.length ?? 0) > 0);
   const { file } = details;
   const image = file.format !== null;
+  const converted = details.jobs.some((job) => job.state.state === "converted");
 
   return (
     <>
@@ -140,6 +143,29 @@ function Details({ details }: { details: EntryDetails }) {
             <p className={styles.muted}>
               {file.excluded ? "Excluded, so nothing will be made from it." : "Pick an output to see what this file becomes."}
             </p>
+          )}
+          {(converted || (hasOutputs && !file.excluded)) && (
+            <div className={styles.actions}>
+              {converted && (
+                <button
+                  type="button"
+                  className="button button-primary"
+                  onClick={() => openViewer({ mode: "compare", entry: file.entry, target: null })}
+                >
+                  Compare
+                </button>
+              )}
+              {hasOutputs && !file.excluded && (
+                <button
+                  type="button"
+                  className="button"
+                  title="Converts just this file into a cache to see the result; nothing is written beside it"
+                  onClick={() => openViewer({ mode: "trial", entry: file.entry, target: null })}
+                >
+                  Try on this file
+                </button>
+              )}
+            </div>
           )}
         </DrawerSection>
       )}

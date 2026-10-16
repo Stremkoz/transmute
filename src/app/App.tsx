@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FileDrawer } from "../features/files/FileDrawer";
 import { FilesPanel } from "../features/files/FilesPanel";
+import { CompareViewer } from "../features/compare/CompareViewer";
 import { CodecDrawer } from "../features/outputs/CodecDrawer";
 import { PresetMenu } from "../features/presets/PresetMenu";
 import { SettingsDialog } from "../features/settings/SettingsDialog";
@@ -104,6 +105,7 @@ export function App() {
           <BottomBar overview={overview} />
           <FileDrawer />
           <CodecDrawer />
+          <CompareViewer />
         </>
       )}
       {hovering && (

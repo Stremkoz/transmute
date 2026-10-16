@@ -28,6 +28,28 @@ export const LIST_REFRESH_MS = 750;
 /** The preset-wide settings the "Where and how" rows edit. */
 export type PresetPolicies = Partial<Pick<Preset, "destination" | "naming" | "metadata" | "collision" | "inputFilter">>;
 
+/**
+ * The compare viewer: a file's original beside its converted outputs, or
+ * beside trial conversions ("Try on one file") that write only to a cache.
+ */
+export interface ViewerState {
+  mode: "compare" | "trial";
+  entry: number;
+  /** The output shown; null picks the first available. */
+  target: number | null;
+}
+
+const THUMBNAILS_KEY = "transmute.thumbnails";
+
+/** The thumbnails toggle is a per-viewer convenience, so browser storage is enough. */
+function storedThumbnails(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(THUMBNAILS_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
 /** A run as the workspace shows it, kept after it finishes until an edit. */
 export interface RunView {
   state: RunState;
@@ -79,6 +101,11 @@ export interface SessionState {
   selected: number | null;
   /** Bumped whenever the files list's data may have changed. */
   listVersion: number;
+  /** Bumped when the inventory changes, so entry-keyed caches start again. */
+  inventoryVersion: number;
+  viewer: ViewerState | null;
+  /** Small previews in the files list. */
+  thumbnails: boolean;
   /** The last command that failed, until dismissed. */
   commandError: string | null;
 
@@ -115,6 +142,9 @@ export interface SessionState {
   saveReport(path: string): Promise<void>;
   reveal(target: PreviewTarget): Promise<void>;
   setFilter(filter: FileFilter): void;
+  openViewer(viewer: ViewerState): void;
+  closeViewer(): void;
+  setThumbnails(on: boolean): void;
   select(entry: number | null): void;
   dismissNotices(): Promise<void>;
   dismissError(): void;
@@ -220,6 +250,9 @@ export function createSessionStore(api: TransmuteApi) {
       }, PLAN_DELAY_MS);
     };
 
+    /** Inputs changed: entry ids may now mean other files. */
+    const inventoryChanged = () => set({ inventoryVersion: get().inventoryVersion + 1, viewer: null });
+
     /** Runs an edit, then redraws from the backend and re-plans. */
     const edit = async (command: () => Promise<unknown>) => {
       try {
@@ -314,6 +347,9 @@ export function createSessionStore(api: TransmuteApi) {
       filter: "all",
       selected: null,
       listVersion: 0,
+      inventoryVersion: 0,
+      viewer: null,
+      thumbnails: storedThumbnails(),
       commandError: null,
 
       async load() {
@@ -348,16 +384,22 @@ export function createSessionStore(api: TransmuteApi) {
       async addInputs(paths) {
         set({ scan: { discovered: 0, inspected: 0 } });
         await edit(() => api.addInputs(paths, true));
+        inventoryChanged();
         set({ scan: null });
       },
-      removeRoot: (root) => edit(() => api.removeRoot(root)),
+      async removeRoot(root) {
+        await edit(() => api.removeRoot(root));
+        inventoryChanged();
+      },
       async clearInputs() {
         set({ filter: "all", selected: null });
         await edit(() => api.clearInputs());
+        inventoryChanged();
       },
       async clearFinished() {
         set({ filter: "all", selected: null });
         await edit(() => api.clearFinished());
+        inventoryChanged();
       },
       setExcluded: (root, relativePath, excluded) => edit(() => api.setExcluded(root, relativePath, excluded)),
 
@@ -476,6 +518,16 @@ export function createSessionStore(api: TransmuteApi) {
       },
 
       setFilter: (filter) => set({ filter }),
+      openViewer: (viewer) => set({ viewer }),
+      closeViewer: () => set({ viewer: null }),
+      setThumbnails(thumbnails) {
+        set({ thumbnails });
+        try {
+          globalThis.localStorage?.setItem(THUMBNAILS_KEY, thumbnails ? "on" : "off");
+        } catch {
+          // Not remembered, which is fine.
+        }
+      },
       select: (selected) => set({ selected, editing: selected === null ? get().editing : null }),
 
       async dismissNotices() {

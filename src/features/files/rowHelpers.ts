@@ -37,15 +37,44 @@ export function folderInclusion(counts: FileCounts): { checked: boolean; mixed: 
   return { checked: counts.excluded < images, mixed: counts.excluded > 0 && counts.excluded < images };
 }
 
+/** Row heights: plain, and with thumbnails (a 48 px preview plus padding). */
+export const ROW_HEIGHT = 34;
+export const THUMB_ROW_HEIGHT = 58;
+
+/** True when a file has an output the compare viewer can show. */
+export function hasConverted(file: FileInfo): boolean {
+  return file.outputs.some((output) => output.state.state === "converted");
+}
+
 export function dimensions(file: FileInfo): string {
   return file.width !== null && file.height !== null ? `${file.width} × ${file.height}` : "";
 }
 
-/** Props that make a row open on click, Enter or Space. */
-export function activates(open: () => void) {
+/** How long a click waits to see whether it's the first of a double-click. */
+export const DOUBLE_CLICK_MS = 250;
+
+// At most one click is waiting at a time, so one timer is enough.
+let pendingClick: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Props that make a row open on click, Enter or Space, and `compare` on
+ * double-click. A row that can be compared opens a moment after the click:
+ * opened at once, the drawer's overlay would catch the second click.
+ */
+export function activates(open: () => void, compare?: () => void) {
   return {
     tabIndex: 0,
-    onClick: open,
+    onClick: (event: { detail: number }) => {
+      clearTimeout(pendingClick);
+      if (!compare) open();
+      else if (event.detail < 2) pendingClick = setTimeout(open, DOUBLE_CLICK_MS);
+    },
+    onDoubleClick: compare
+      ? () => {
+          clearTimeout(pendingClick);
+          compare();
+        }
+      : undefined,
     onKeyDown: (event: { key: string; preventDefault(): void }) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
