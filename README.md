@@ -4,9 +4,9 @@
 
 Drop in files or folders, pick the formats you want, convert. Transmute keeps your file names, never overwrites anything without asking, and shows you what each conversion did before and after. When you want more control, every format has its real encoder settings, explained in plain English.
 
-![Transmute after converting a folder to JPEG XL and WebP](docs/screenshots/main.png)
+![Transmute after converting a folder to JPEG XL and WebP, in the dark and light themes](docs/screenshots/themes.png)
 
-> **Version 0.1.** A ground-up rewrite of Transmute 1.x. It converts images; video and audio aren't supported.
+> A ground-up rewrite of Transmute 1.x.
 
 ---
 
