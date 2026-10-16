@@ -70,7 +70,7 @@ fn grid(quick: bool) -> Vec<Setting> {
             format!("q{quality}"),
             CodecSettings::Jpeg(JpegSettings {
                 quality,
-                progressive: true,
+                ..JpegSettings::factory()
             }),
         );
         add(

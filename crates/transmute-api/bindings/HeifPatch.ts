@@ -9,6 +9,7 @@ export type HeifPatch = {
  */
 lossless?: boolean, 
 /**
- * Quality, 1–100.
+ * Quality, 1–100 (libheif's scale). 50 matches the other lossy
+ * defaults on photos; 60 was ~6 points higher at 75% more bytes.
  */
 quality?: number, };

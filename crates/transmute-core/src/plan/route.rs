@@ -757,6 +757,22 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_from_jxl_goes_to_a_tool_that_flattens_transparency() {
+        // djxl drops alpha when writing JPEG; a JPEG XL may be transparent.
+        let djxl = ignoring(
+            caps(&[Format::Jxl], &[Format::Jpeg]),
+            Format::Jpeg,
+            &["progressive", "background"],
+        );
+        let tools = Toolbox::new([
+            (ToolId::Djxl, djxl),
+            (ToolId::Vips, caps(&[Format::Jxl], &[Format::Jpeg])),
+        ]);
+        let routed = find_route(&tools, &req(Format::Jxl, Format::Jpeg)).unwrap();
+        assert_eq!(tools_used(&routed), [ToolId::Vips]);
+    }
+
+    #[test]
     fn ignored_settings_are_noted_when_unavoidable() {
         let djxl = ignoring(
             caps(&[Format::Jxl], &[Format::Jpeg]),

@@ -179,7 +179,8 @@ fn djxl() -> Capabilities {
         animated_reads: [Format::Jxl].into(),
         animated_writes: [Format::Png].into(),
         ignored_settings: ignoring(&[
-            (Format::Jpeg, &["progressive"]),
+            // Writing JPEG, it drops transparency: transparent areas turn black.
+            (Format::Jpeg, &["progressive", "background"]),
             (Format::Png, &["compression"]),
         ]),
         restores_jpeg: true,

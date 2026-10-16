@@ -11,4 +11,8 @@ quality?: number,
 /**
  * Progressive scans: usually smaller, decodes incrementally on the web.
  */
-progressive?: boolean, };
+progressive?: boolean, 
+/**
+ * What transparent areas become (`#rrggbb`): JPEG has no alpha.
+ */
+background?: string, };

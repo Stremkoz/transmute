@@ -156,10 +156,6 @@ fn safe_path(path: &Path) -> PathBuf {
     }
 }
 
-/// What transparent areas become in JPEG output, which has no alpha (vips
-/// `background`: one value, applied to every band).
-const JPEG_BACKGROUND: u8 = 255;
-
 /// `path` with a suffix appended, e.g. vips and ImageMagick option brackets.
 fn with_suffix(path: &Path, suffix: &str) -> OsString {
     let mut text = safe_path(path).into_os_string();
@@ -324,16 +320,16 @@ fn vips(
     };
 
     let mut save: Vec<String> = match settings {
-        // JPEG has no alpha: flatten transparency onto white, as people
-        // expect, rather than vips's default black.
-        CodecSettings::Jpeg(JpegSettings {
-            quality,
-            progressive,
-        }) => vec![
-            format!("Q={quality}"),
-            format!("interlace={progressive}"),
-            format!("background={JPEG_BACKGROUND}"),
-        ],
+        // JPEG has no alpha: flatten transparency onto the chosen colour
+        // (white by default) rather than vips's default black.
+        CodecSettings::Jpeg(jpeg) => {
+            let [r, g, b] = jpeg.background_rgb();
+            vec![
+                format!("Q={}", jpeg.quality),
+                format!("interlace={}", jpeg.progressive),
+                format!("background={r} {g} {b}"),
+            ]
+        }
         CodecSettings::Png(PngSettings { compression }) => {
             vec![format!("compression={compression}")]
         }
@@ -440,15 +436,13 @@ fn magick(
     }
 
     match settings {
-        CodecSettings::Jpeg(JpegSettings {
-            quality,
-            progressive,
-        }) => {
-            // No alpha in JPEG: flatten onto white, not black.
-            args.flags(&["-background", "white", "-alpha", "remove", "-alpha", "off"]);
-            args.add("-quality").add(quality.to_string());
+        CodecSettings::Jpeg(jpeg) => {
+            // No alpha in JPEG: flatten onto the background, not black.
+            args.add("-background").add(&jpeg.background);
+            args.flags(&["-alpha", "remove", "-alpha", "off"]);
+            args.add("-quality").add(jpeg.quality.to_string());
             args.add("-interlace")
-                .add(if *progressive { "JPEG" } else { "None" });
+                .add(if jpeg.progressive { "JPEG" } else { "None" });
         }
         CodecSettings::Png(PngSettings { compression }) => {
             args.add("-define")
@@ -552,14 +546,14 @@ fn ffmpeg(
     // with `-update 1`.
     let single_image = ["-f", "image2", "-update", "1"];
     match settings {
-        CodecSettings::Jpeg(_) => {
-            // No alpha in JPEG: draw the image over a white copy of itself
-            // (drawbox fills the whole frame), instead of dropping alpha,
-            // which leaves transparent areas black.
-            args.flags(&[
-                "-filter_complex",
-                "[0:v]format=rgba,split[fg][base];[base]drawbox=t=fill:c=white[bg];[bg][fg]overlay=format=auto",
-            ]);
+        CodecSettings::Jpeg(jpeg) => {
+            // No alpha in JPEG: draw the image over a background-coloured
+            // copy of itself (drawbox fills the whole frame), instead of
+            // dropping alpha, which leaves transparent areas black.
+            let [r, g, b] = jpeg.background_rgb();
+            args.add("-filter_complex").add(format!(
+                "[0:v]format=rgba,split[fg][base];[base]drawbox=t=fill:c=0x{r:02x}{g:02x}{b:02x}[bg];[bg][fg]overlay=format=auto"
+            ));
             args.flags(&["-c:v", "mjpeg", "-q:v", "2"])
                 .flags(&single_image);
         }
@@ -779,7 +773,7 @@ mod tests {
     fn djxl_restores_or_reencodes_jpeg() {
         let jpeg = CodecSettings::Jpeg(JpegSettings {
             quality: 80,
-            progressive: true,
+            ..JpegSettings::factory()
         });
         let mut s = step(ToolId::Djxl, Format::Jxl, Format::Jpeg);
         let args = args_for(&s, Some(&jpeg), MetadataPolicy::PreserveAll);
@@ -979,14 +973,15 @@ mod tests {
             Some(&jpeg),
             MetadataPolicy::PreserveAll,
         );
-        assert!(vips[2].contains("background=255"), "{vips:?}");
+        assert!(vips[2].contains("background=255 255 255"), "{vips:?}");
         let magick = args_for(
             &step(ToolId::Magick, Format::Png, Format::Jpeg),
             Some(&jpeg),
             MetadataPolicy::PreserveAll,
         );
         assert!(
-            has_pair(&magick, ["-alpha", "remove"]) && has_pair(&magick, ["-background", "white"])
+            has_pair(&magick, ["-alpha", "remove"])
+                && has_pair(&magick, ["-background", "#ffffff"])
         );
         let ffmpeg = args_for(
             &step(ToolId::Ffmpeg, Format::Png, Format::Jpeg),
@@ -994,7 +989,9 @@ mod tests {
             MetadataPolicy::PreserveAll,
         );
         assert!(
-            ffmpeg.iter().any(|a| a.contains("drawbox=t=fill:c=white")),
+            ffmpeg
+                .iter()
+                .any(|a| a.contains("drawbox=t=fill:c=0xffffff")),
             "{ffmpeg:?}"
         );
     }

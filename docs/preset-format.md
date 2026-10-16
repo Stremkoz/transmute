@@ -116,6 +116,7 @@ The factory defaults were chosen by measuring size, speed and visual fidelity (S
 |---|---|---|---|---|
 | `jpeg` (alias `jpg`) | `quality` | 1–100 | 85 | |
 | | `progressive` | bool | true | |
+| | `background` | `#rrggbb` | `#ffffff` | What transparent areas become: JPEG has no transparency |
 | `png` | `compression` | 0–9 | 9 | Always lossless |
 | `webp` | `lossless` | bool | false | When true, `quality` is ignored |
 | | `quality` | 0–100 | 85 | |
@@ -128,7 +129,7 @@ The factory defaults were chosen by measuring size, speed and visual fidelity (S
 | | `quality` | 1–100 | 70 | |
 | | `effort` | 0–9 | 4 | Higher is much slower for little gain |
 | `heif` (alias `heic`) | `lossless` | bool | false | |
-| | `quality` | 1–100 | 60 | Not yet benchmarked |
+| | `quality` | 1–100 | 50 | libheif's scale, which runs higher than AVIF's: 50 here is about AVIF 70 |
 | `tiff` (alias `tif`) | `compression` | `none` `lzw` `deflate` `zstd` | `lzw` | |
 | `gif` | — | | | Palette is generated automatically |
 | `bmp` | — | | | |

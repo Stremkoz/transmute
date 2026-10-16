@@ -7,8 +7,9 @@
 //!
 //! Factory defaults come from the M9 benchmarks (`cargo dev bench`): lossy
 //! codecs aim for high quality on photos (SSIMULACRA2 ≈ 80; JPEG XL d1.5,
-//! WebP q85, JPEG q85, AVIF q70), at the effort where size stops improving.
-//! HEIF couldn't be measured (no HEVC encoder on the benchmark machine).
+//! WebP q85, JPEG q85, AVIF q70, HEIF q50), at the effort where size stops
+//! improving. HEIF was measured with libheif + x265 outside the harness
+//! (the benchmark machine's libvips has no HEVC encoder).
 
 use serde::{Deserialize, Serialize};
 
@@ -63,6 +64,30 @@ codec_settings! {
         quality: u8 = 85,
         /// Progressive scans: usually smaller, decodes incrementally on the web.
         progressive: bool = true,
+        /// What transparent areas become (`#rrggbb`): JPEG has no alpha.
+        background: String = JPEG_BACKGROUND.to_owned(),
+    }
+}
+
+/// White: what people expect transparency to turn into, not the black that
+/// dropping alpha reveals.
+pub const JPEG_BACKGROUND: &str = "#ffffff";
+
+/// Parses a `#rrggbb` colour into its red, green and blue values.
+pub fn parse_colour(text: &str) -> Option<[u8; 3]> {
+    let hex = text.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some([channel(0)?, channel(2)?, channel(4)?])
+}
+
+impl JpegSettings {
+    /// The background as red, green and blue. Validation guarantees it
+    /// parses; white stands in if an unvalidated value ever gets here.
+    pub fn background_rgb(&self) -> [u8; 3] {
+        parse_colour(&self.background).unwrap_or([255; 3])
     }
 }
 
@@ -119,8 +144,9 @@ codec_settings! {
     HeifSettings / HeifPatch {
         /// Lossless mode ignores `quality`.
         lossless: bool = false,
-        /// Quality, 1–100.
-        quality: u8 = 60,
+        /// Quality, 1–100 (libheif's scale). 50 matches the other lossy
+        /// defaults on photos; 60 was ~6 points higher at 75% more bytes.
+        quality: u8 = 50,
     }
 }
 
@@ -280,7 +306,9 @@ impl CodecSettings {
     /// some setting matters for this job.
     pub fn relevant_settings(&self, source: Format) -> Vec<&'static str> {
         match self {
-            Self::Jpeg(_) => vec!["quality", "progressive"],
+            // A JPEG source has no transparency to flatten.
+            Self::Jpeg(_) if source == Format::Jpeg => vec!["quality", "progressive"],
+            Self::Jpeg(_) => vec!["quality", "progressive", "background"],
             Self::Png(_) => vec!["compression"],
             Self::Webp(s) if s.lossless => vec!["lossless", "method"],
             Self::Webp(_) => vec!["lossless", "quality", "method"],
@@ -351,6 +379,14 @@ trait ValidateSettings {
 impl ValidateSettings for JpegSettings {
     fn validate(&self, v: &mut Validator) {
         v.check_range("quality", self.quality, 1..=100);
+        if parse_colour(&self.background).is_none() {
+            v.at("background", |v| {
+                v.issue(format!(
+                    "must be a colour like #ffffff (got \"{}\")",
+                    self.background
+                ));
+            });
+        }
     }
 }
 
@@ -456,6 +492,29 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn jpeg_background_is_a_hex_colour() {
+        assert_eq!(parse_colour("#3366cC"), Some([0x33, 0x66, 0xcc]));
+        for bad in ["", "white", "#fff", "3366cc", "#3366cg", "#3366cc0", "#ééé"] {
+            assert_eq!(parse_colour(bad), None, "{bad}");
+            let mut v = Validator::new();
+            let jpeg = JpegSettings {
+                background: bad.to_owned(),
+                ..JpegSettings::factory()
+            };
+            jpeg.validate(&mut v);
+            assert!(v.finish().is_err(), "{bad} was accepted");
+        }
+        assert_eq!(JpegSettings::factory().background_rgb(), [255; 3]);
+    }
+
+    #[test]
+    fn background_matters_only_for_sources_that_may_be_transparent() {
+        let jpeg = CodecSettings::factory(Format::Jpeg);
+        assert!(!jpeg.relevant_settings(Format::Jpeg).contains(&"background"));
+        assert!(jpeg.relevant_settings(Format::Png).contains(&"background"));
     }
 
     #[test]

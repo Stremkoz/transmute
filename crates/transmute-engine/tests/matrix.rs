@@ -404,10 +404,11 @@ fn r14_jpeg_round_trips_through_lossless_jxl() {
 }
 
 /// JPEG can't hold transparency. Every tool that writes JPEG must flatten
-/// it onto white: dropping the alpha channel shows the (usually black)
-/// colour underneath, which turns a logo's background black.
+/// it onto the chosen background, white by default: dropping the alpha
+/// channel shows the (usually black) colour underneath, which turns a
+/// logo's background black.
 #[test]
-fn transparency_becomes_white_in_jpeg() {
+fn transparency_becomes_the_background_in_jpeg() {
     if !enabled() {
         return;
     }
@@ -432,6 +433,11 @@ fn transparency_becomes_white_in_jpeg() {
     let reports = installed();
     let mut problems = Vec::new();
     let mut tried = 0;
+    // No background setting (white), then a chosen one.
+    let backgrounds = [
+        (None, [255, 255, 255]),
+        (Some("#3366cc"), [0x33, 0x66, 0xcc]),
+    ];
     for report in &reports {
         let Some(info) = report.info() else { continue };
         if !info.capabilities.converts(Format::Png, Format::Jpeg) {
@@ -440,34 +446,43 @@ fn transparency_becomes_white_in_jpeg() {
         tried += 1;
         let only = Toolbox::new([(report.tool, info.capabilities.clone())]);
         let name = report.tool.program_name();
-        let out = dir.path().join(format!("out-{name}"));
-        let preset = format!(
-            r#"{{"schemaVersion":1,"name":"jpeg","destination":{{"mode":"custom","root":{}}},"outputs":[{{"codec":{{"format":"jpeg"}}}}]}}"#,
-            serde_json::to_string(&out).unwrap()
-        );
-        let work = Arc::new(work_for(&input, &preset, &only));
-        let finished = execute(work.clone(), &reports, &dir.path().join("state"));
-        if !matches!(finished[..], [(_, JobOutcome::Converted { .. })]) {
-            problems.push(format!("{name}: {finished:?}"));
-            continue;
-        }
-        // Mean brightness of the transparent corner, 0–255.
-        let output = Command::new("magick")
-            .arg(&work.plan.jobs[0].output)
-            .args([
-                "-crop",
-                "8x8+0+0",
-                "-format",
-                "%[fx:int(255*mean)]",
-                "info:",
-            ])
-            .output()
-            .unwrap();
-        let corner = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-        if corner.parse::<u32>().map_or(true, |v| v < 250) {
-            problems.push(format!(
-                "{name}: the transparent corner became {corner}/255"
-            ));
+        for (i, (background, expected)) in backgrounds.iter().enumerate() {
+            let out = dir.path().join(format!("out-{name}-{i}"));
+            let setting = background.map_or(String::new(), |c| format!(r#","background":"{c}""#));
+            let preset = format!(
+                r#"{{"schemaVersion":1,"name":"jpeg","destination":{{"mode":"custom","root":{}}},"outputs":[{{"codec":{{"format":"jpeg"{setting}}}}}]}}"#,
+                serde_json::to_string(&out).unwrap()
+            );
+            let work = Arc::new(work_for(&input, &preset, &only));
+            let finished = execute(work.clone(), &reports, &dir.path().join("state"));
+            if !matches!(finished[..], [(_, JobOutcome::Converted { .. })]) {
+                problems.push(format!("{name}: {finished:?}"));
+                continue;
+            }
+            // Mean colour of the transparent corner, 0–255 per channel.
+            let output = Command::new("magick")
+                .arg(&work.plan.jobs[0].output)
+                .args([
+                    "-crop",
+                    "8x8+0+0",
+                    "-format",
+                    "%[fx:int(255*mean.r)],%[fx:int(255*mean.g)],%[fx:int(255*mean.b)]",
+                    "info:",
+                ])
+                .output()
+                .unwrap();
+            let corner = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            let channels: Vec<i32> = corner.split(',').filter_map(|c| c.parse().ok()).collect();
+            let close = channels.len() == 3
+                && channels
+                    .iter()
+                    .zip(expected)
+                    .all(|(c, e)| (c - e).abs() <= 6);
+            if !close {
+                problems.push(format!(
+                    "{name}: the transparent corner became {corner}, expected {expected:?}"
+                ));
+            }
         }
     }
     assert!(tried >= 2, "expected several JPEG-capable tools");
