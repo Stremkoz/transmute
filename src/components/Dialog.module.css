@@ -3,7 +3,7 @@
   z-index: var(--z-overlay);
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 0.55);
+  background: var(--color-scrim);
 }
 
 .dialog {

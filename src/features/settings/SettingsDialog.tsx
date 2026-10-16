@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { GearIcon } from "../../components/icons";
 import { useState } from "react";
-import type { UserDefaults } from "@bindings";
+import type { Theme, UserDefaults } from "@bindings";
 import dialog from "../../components/Dialog.module.css";
 import { InfoTip } from "../../components/InfoTip";
 import { defaultsFor, effective, settingsSummary } from "../../lib/codecs";
@@ -19,6 +19,36 @@ import { CollisionRow, FileNamesRow, MetadataRow, SaveToRow } from "../policies/
 import styles from "./SettingsDialog.module.css";
 
 const MAX_WORKERS = 256;
+
+const THEMES: { value: Theme | undefined; label: string }[] = [
+  { value: undefined, label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
+/** Light, dark, or as Windows is. Changes even while converting. */
+function Appearance() {
+  const theme = useSession((state) => state.settings.theme);
+  const setTheme = useSession((state) => state.setTheme);
+  return (
+    <section className={styles.section}>
+      <h3 className={styles.heading}>Appearance</h3>
+      <div className={styles.segmented} role="group" aria-label="Appearance">
+        {THEMES.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            aria-pressed={theme === option.value}
+            onClick={() => void setTheme(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {theme === undefined && <p className={styles.help}>Follows the Windows setting, and changes when it does.</p>}
+    </section>
+  );
+}
 
 function Workers({ disabled }: { disabled: boolean }) {
   const settings = useSession((state) => state.settings);
@@ -184,6 +214,7 @@ export function SettingsDialog() {
           <Dialog.Description className={dialog.description}>
             {locked ? "Locked while converting. Cancel, or wait for the run to finish, to change them." : "Saved as you change them."}
           </Dialog.Description>
+          <Appearance />
           <Workers disabled={locked} />
           <PolicyDefaults disabled={locked} />
           <CodecDefaults disabled={locked} />

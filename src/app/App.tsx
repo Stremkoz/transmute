@@ -9,6 +9,7 @@ import { ToolsDialog } from "../features/tools/ToolsDialog";
 import { BottomBar } from "../features/workspace/BottomBar";
 import { OutputsPanel } from "../features/workspace/OutputsPanel";
 import { usePlatform, useSession } from "../state/sessionContext";
+import { useTheme } from "./useTheme";
 import styles from "./App.module.css";
 
 // A stable empty list: a selector returning a fresh [] would re-render forever.
@@ -72,6 +73,7 @@ function useFileDrop(): boolean {
 
 /** The single conversion workspace (gui-plan: two columns plus a drawer). */
 export function App() {
+  useTheme();
   const status = useSession((state) => state.status);
   const overview = useSession((state) => state.overview);
   const tools = useSession((state) => state.tools);

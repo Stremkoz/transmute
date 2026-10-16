@@ -3,7 +3,6 @@
 //! (they copy their input), so this runs everywhere, CI included.
 // Tests run from a console, where a plain Command opens no window.
 #![allow(clippy::disallowed_methods)]
-
 // Test-only file: helpers panic on setup failures, which is what a test wants.
 #![allow(clippy::unwrap_used)]
 
@@ -25,6 +24,7 @@ use transmute_core::capability::{Capabilities, Toolbox};
 use transmute_core::format::Format;
 use transmute_core::output::{Destination, OutputTarget};
 use transmute_core::preset::Preset;
+use transmute_core::settings::{AppSettings, Theme};
 use transmute_core::store::Locations;
 use transmute_core::tool::ToolId;
 
@@ -336,6 +336,21 @@ async fn cancelling_through_the_facade() {
         ErrorCode::Busy
     );
     assert_eq!(api.plan().await.unwrap_err().code, ErrorCode::Busy);
+    // Only the theme may change: the run keeps the tools it started with.
+    let themed = AppSettings {
+        theme: Some(Theme::Dark),
+        ..api.settings()
+    };
+    api.set_settings(themed.clone()).await.unwrap();
+    assert_eq!(api.settings().theme, themed.theme);
+    let workers = AppSettings {
+        workers: std::num::NonZeroUsize::new(2),
+        ..themed
+    };
+    assert_eq!(
+        api.set_settings(workers).await.unwrap_err().code,
+        ErrorCode::Busy
+    );
     api.pause().unwrap();
     assert_eq!(api.overview().run.unwrap().state, RunState::Paused);
     api.resume().unwrap();

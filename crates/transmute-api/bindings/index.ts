@@ -61,6 +61,7 @@ export type * from "./Sample";
 export type * from "./StoredPreset";
 export type * from "./Tally";
 export type * from "./TargetTotals";
+export type * from "./Theme";
 export type * from "./TiffCompression";
 export type * from "./TiffPatch";
 export type * from "./TiffSettings";

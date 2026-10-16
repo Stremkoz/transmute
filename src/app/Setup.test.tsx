@@ -240,6 +240,27 @@ describe("Presets", () => {
 });
 
 describe("Settings", () => {
+  it("switches between light, dark and the system's theme", async () => {
+    const { api, platform } = renderApp();
+    const user = userEvent.setup();
+    // jsdom can't tell the system's preference, which reads as dark.
+    await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    const appearance = within(dialog).getByRole("group", { name: "Appearance" });
+    expect(within(appearance).getByRole("button", { name: "System", pressed: true })).toBeInTheDocument();
+
+    await user.click(within(appearance).getByRole("button", { name: "Light" }));
+    await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+    expect(platform.windowTheme).toBe("light");
+    await vi.waitFor(async () => expect((await api.settings()).theme).toBe("light"));
+
+    await user.click(within(appearance).getByRole("button", { name: "System" }));
+    await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+    expect(platform.windowTheme).toBeNull();
+    await vi.waitFor(async () => expect(await api.settings()).not.toHaveProperty("theme"));
+  });
+
   it("sets how many files convert at once and the default metadata", async () => {
     const { api } = renderApp();
     const user = userEvent.setup();

@@ -906,19 +906,28 @@ impl Api {
         loaded.value
     }
 
-    /// Stores the settings; new tool paths take effect at once.
+    /// Stores the settings; new tool paths take effect at once. A change of
+    /// theme alone is allowed during a run and doesn't look for the tools
+    /// again.
     pub async fn set_settings(&self, settings: AppSettings) -> ApiResult<()> {
         settings
             .validate()
             .map_err(|err| ApiError::new(ErrorCode::Invalid, err.to_string()))?;
-        self.session().ensure_idle()?;
+        let current = self.settings();
+        let theme_only = AppSettings {
+            theme: current.theme,
+            ..settings.clone()
+        } == current;
+        if !theme_only {
+            self.session().ensure_idle()?;
+        }
         let notices = self
             .inner
             .store
             .save_settings(&settings)
             .map_err(store_error)?;
         self.add_notices(&notices);
-        if !self.inner.fixed_backend {
+        if !theme_only && !self.inner.fixed_backend {
             self.refresh_tools().await?;
         }
         Ok(())

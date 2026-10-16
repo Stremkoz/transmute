@@ -1,7 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window: core events, drag and drop, and the open/save file pickers. Transmute's own commands need no permission entries; no file system or shell access is granted to the webview.",
-  "windows": ["main"],
-  "permissions": ["core:event:default", "dialog:allow-open", "dialog:allow-save"]
+  "description": "The main window: core events, drag and drop, the open/save file pickers, and the window frame's theme. Transmute's own commands need no permission entries; no file system or shell access is granted to the webview.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "core:window:allow-set-theme"
+  ]
 }

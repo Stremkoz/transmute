@@ -14,6 +14,7 @@ import type {
   Progress,
   RunState,
   StoredPreset,
+  Theme,
   ToolInfo,
   UserDefaults,
 } from "@bindings";
@@ -131,6 +132,8 @@ export interface SessionState {
   exportPreset(id: string, path: string): Promise<void>;
   setDefaults(defaults: UserDefaults): Promise<void>;
   setSettings(settings: AppSettings): Promise<void>;
+  /** Light, dark, or undefined to follow the system. Allowed during a run. */
+  setTheme(theme: Theme | undefined): Promise<void>;
   /** Looks for the tools again (after installing one, say). */
   refreshTools(): Promise<void>;
 
@@ -481,6 +484,18 @@ export function createSessionStore(api: TransmuteApi) {
         // New tool paths can change what's possible.
         await refresh();
         schedulePlan();
+      },
+      async setTheme(theme) {
+        // Following the system is the field left out, as the backend stores it.
+        const settings: AppSettings = { ...get().settings, theme };
+        if (!theme) delete settings.theme;
+        // Shown at once; the backend only stores it.
+        set({ settings });
+        try {
+          await api.setSettings(settings);
+        } catch (error) {
+          fail(error);
+        }
       },
       async refreshTools() {
         try {

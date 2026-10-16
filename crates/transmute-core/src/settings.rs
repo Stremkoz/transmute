@@ -28,6 +28,17 @@ pub struct AppSettings {
     /// Conversions to run at once. Absent means one per CPU core.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workers: Option<NonZeroUsize>,
+    /// The app's colours. Absent means following the system's setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<Theme>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub enum Theme {
+    Light,
+    Dark,
 }
 
 impl AppSettings {
@@ -68,9 +79,11 @@ mod tests {
         let settings = AppSettings {
             tool_paths: [(ToolId::Cjxl, PathBuf::from(root).join("cjxl"))].into(),
             workers: NonZeroUsize::new(4),
+            theme: Some(Theme::Light),
         };
         let json = save(&settings);
         assert!(json.contains("\"cjxl\""), "{json}");
+        assert!(json.contains("\"theme\": \"light\""), "{json}");
         assert_eq!(load::<AppSettings>(&json).unwrap(), settings);
     }
 

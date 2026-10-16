@@ -105,6 +105,7 @@ How Transmute runs, rather than what it produces:
 |---|---|---|
 | `toolPaths` | Executables to use instead of the ones found automatically, per tool (`cjxl`, `djxl`, `cwebp`, `dwebp`, `gif2webp`, `vips`, `vipsheader`, `magick`, `ffmpeg`, `ffprobe`). Absolute paths only | found automatically |
 | `workers` | Conversions to run at once, 1–256 | one per CPU core |
+| `theme` | `light` or `dark` | follows the system |
 
 ## Codecs
 

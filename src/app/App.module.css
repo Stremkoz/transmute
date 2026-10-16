@@ -68,7 +68,7 @@
   justify-content: center;
   border: 2px dashed var(--color-accent);
   border-radius: var(--radius-lg);
-  background: rgb(24 25 27 / 0.85);
+  background: var(--color-drop-bg);
   font-size: var(--text-xl);
   font-weight: 600;
   pointer-events: none;

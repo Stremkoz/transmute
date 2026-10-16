@@ -1,6 +1,8 @@
 /*
- * Design tokens. Transmute is dark-only for now (spec §8: restrained,
- * graphite, professional). Components use these, never raw values.
+ * Design tokens: restrained, graphite, professional. Dark is the base; the
+ * light theme below redefines the colours. `data-theme` on the root says
+ * which applies (src/app/useTheme.ts). Components use these, never raw
+ * values.
  */
 :root {
   color-scheme: dark;
@@ -27,7 +29,10 @@
 
   /* Accent and states */
   --color-accent: #d9a441;
+  /* Accent as text, links and toggled buttons. */
   --color-accent-strong: #e8b75a;
+  /* A primary button under the pointer. */
+  --color-accent-hover: #e8b75a;
   --color-on-accent: #1a1405;
   --color-ok: #8fd1a4;
   --color-ok-bg: #1d2a22;
@@ -36,6 +41,14 @@
   --color-error: #f29a9a;
   --color-error-bg: #2f1d1d;
   --color-focus: #8fb8ff;
+
+  /* Behind dialogs and drawers; the drop target; image labels; the
+     checkerboard behind transparent images. */
+  --color-scrim: rgb(0 0 0 / 0.55);
+  --color-drop-bg: rgb(24 25 27 / 0.85);
+  --color-label-bg: rgb(24 25 27 / 0.8);
+  --color-checker-a: #202125;
+  --color-checker-b: #1a1b1e;
 
   /* Type */
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -59,6 +72,7 @@
   --radius-lg: 10px;
 
   --shadow-overlay: 0 12px 40px rgb(0 0 0 / 0.5);
+  --shadow-drawer: -16px 0 40px rgb(0 0 0 / 0.45);
 
   /* Layers: the files list's sticky header sits at 1. */
   --z-overlay: 20;
@@ -66,6 +80,50 @@
   --z-menu: 30;
   --z-viewer: 25;
   --duration-fast: 120ms;
+}
+
+/* Light: the same graphite restraint on paper. Faint and muted text keep
+   4.5:1 on the background; accent text is a deeper amber for the same. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg: #f3f3f5;
+  --color-surface: #fafafb;
+  --color-surface-raised: #ffffff;
+  --color-surface-hover: #e8e9ec;
+  --color-surface-hover-subtle: #f0f1f3;
+  --color-surface-sunken: #ececef;
+  --color-selected: #f6eedb;
+  --color-border: #d8d9de;
+  --color-border-strong: #bcbfc6;
+  --color-border-subtle: #e4e5e8;
+  --color-row-line: #ebecef;
+
+  --color-text: #1c1d20;
+  --color-text-muted: #545961;
+  --color-text-faint: #676c74;
+  --color-text-chip: #33363b;
+
+  --color-accent: #d39a2e;
+  --color-accent-strong: #8a5a00;
+  --color-accent-hover: #e2ac46;
+  --color-on-accent: #1a1405;
+  --color-ok: #1d7a3e;
+  --color-ok-bg: #e2f3e7;
+  --color-warn: #8a5a00;
+  --color-warn-bg: #faf0d8;
+  --color-error: #b3261e;
+  --color-error-bg: #fbe7e5;
+  --color-focus: #2f6fd6;
+
+  --color-scrim: rgb(20 22 26 / 0.3);
+  --color-drop-bg: rgb(243 243 245 / 0.9);
+  --color-label-bg: rgb(255 255 255 / 0.85);
+  --color-checker-a: #ffffff;
+  --color-checker-b: #e6e7ea;
+
+  --shadow-overlay: 0 12px 40px rgb(20 22 26 / 0.18);
+  --shadow-drawer: -16px 0 40px rgb(20 22 26 / 0.15);
 }
 
 @media (prefers-reduced-motion: reduce) {

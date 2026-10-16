@@ -40,5 +40,7 @@ export function createBrowserPlatform(): Platform {
         window.removeEventListener("drop", drop);
       };
     },
+    // A browser tab has no frame of its own to colour.
+    setWindowTheme: async () => {},
   };
 }

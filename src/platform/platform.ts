@@ -1,3 +1,5 @@
+import type { Theme } from "@bindings";
+
 /**
  * What the shell offers besides the API: native pickers and file drops.
  * These are the only ways paths enter the app (docs/api.md: the frontend
@@ -20,6 +22,8 @@ export interface Platform {
   pickPresetExportPath(name: string): Promise<string | null>;
   /** Follows files dragged over and dropped on the window. */
   onFileDrop(handlers: FileDropHandlers): Promise<() => void>;
+  /** Draws the window's frame (title bar) in `theme`; null follows the system. */
+  setWindowTheme(theme: Theme | null): Promise<void>;
 }
 
 export interface FileDropHandlers {

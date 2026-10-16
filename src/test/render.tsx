@@ -1,3 +1,4 @@
+import type { Theme } from "@bindings";
 import { render } from "@testing-library/react";
 import { App } from "../app/App";
 import type { TransmuteApi } from "../api/client";
@@ -14,6 +15,8 @@ export interface TestPlatform extends Platform {
   presetFile: string | null;
   toolPath: string | null;
   presetExportPath: string | null;
+  /** The theme the window frame was last given (undefined: never set). */
+  windowTheme: Theme | null | undefined;
   /** Simulates files dropped on the window. */
   drop(paths: string[]): void;
   hover(hovering: boolean): void;
@@ -29,6 +32,7 @@ export function createTestPlatform(): TestPlatform {
     presetFile: "D:\\shared.json",
     toolPath: "D:\\Tools\\cwebp.exe",
     presetExportPath: "D:\\exported.json",
+    windowTheme: undefined,
     pickFiles: async () => platform.files,
     pickFolders: async () => platform.folders,
     pickDestination: async () => platform.destination,
@@ -36,6 +40,9 @@ export function createTestPlatform(): TestPlatform {
     pickPresetFile: async () => platform.presetFile,
     pickToolPath: async () => platform.toolPath,
     pickPresetExportPath: async () => platform.presetExportPath,
+    setWindowTheme: async (theme) => {
+      platform.windowTheme = theme;
+    },
     onFileDrop: async (next) => {
       handlers = next;
       return () => {

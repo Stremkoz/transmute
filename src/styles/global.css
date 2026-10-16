@@ -72,7 +72,7 @@ button {
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--color-accent-strong);
+  background: var(--color-accent-hover);
 }
 
 .button-primary:disabled {

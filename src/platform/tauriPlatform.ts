@@ -1,4 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Platform } from "./platform";
 
@@ -55,4 +56,5 @@ export const tauriPlatform: Platform = {
           return;
       }
     }),
+  setWindowTheme: (theme) => getCurrentWindow().setTheme(theme),
 };
