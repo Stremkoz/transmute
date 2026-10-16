@@ -254,6 +254,58 @@ fn jxl_recompressed_jpeg_is_recognised() {
     assert!(!inspect(&reencoded).jpeg_reconstruction);
 }
 
+/// A JPEG cut short (an interrupted download) still opens in every decoder,
+/// grey where the data ran out, so only the parser can tell. Baseline,
+/// progressive and restart-marker files from three encoders, each whole,
+/// cut short, and with data appended after the image.
+#[test]
+fn jpeg_cut_short_is_found_in_real_files() {
+    if !enabled() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let png = source_png(dir.path(), 320, 240);
+    let baseline = dir.path().join("baseline.jpg");
+    run("magick", &[&png, &baseline]);
+    let progressive = dir.path().join("progressive.jpg");
+    run("magick", &[&png, &"-interlace", &"JPEG", &progressive]);
+    let restarts = dir.path().join("restarts.jpg");
+    run(
+        "magick",
+        &[&png, &"-define", &"jpeg:restart-interval=2", &restarts],
+    );
+    let vips = dir.path().join("vips.jpg");
+    run(
+        "vips",
+        &[&"copy", &png, &format!("{}[Q=80]", vips.display())],
+    );
+    let ffmpeg = dir.path().join("ffmpeg.jpg");
+    run("ffmpeg", &[&"-loglevel", &"error", &"-i", &png, &ffmpeg]);
+
+    for whole in [baseline, progressive, restarts, vips, ffmpeg] {
+        inspect(&whole);
+        let bytes = std::fs::read(&whole).unwrap();
+
+        let mut appended = bytes.clone();
+        appended.extend(std::iter::repeat_n(0x42, 100_000));
+        let with_trailer = dir.path().join("trailer.jpg");
+        std::fs::write(&with_trailer, appended).unwrap();
+        inspect(&with_trailer);
+
+        let cut = dir.path().join("cut.jpg");
+        std::fs::write(&cut, &bytes[..bytes.len() * 2 / 3]).unwrap();
+        let inspection = inspect_path(&cut).unwrap();
+        assert_eq!(inspection.content, Content::Image(Format::Jpeg));
+        assert_eq!(
+            inspection.dimensions,
+            Some((320, 240)),
+            "{}",
+            whole.display()
+        );
+        assert!(inspection.problem.is_some(), "{}", whole.display());
+    }
+}
+
 /// Transparency as written by the real encoders. JPEG XL's effort choice
 /// relies on this: only `Absent` lets it use the faster effort.
 #[test]

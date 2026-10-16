@@ -116,8 +116,9 @@ pub struct Inspection {
     /// it as possibly transparent.
     #[serde(default)]
     pub alpha: Presence,
-    /// Set when the format was recognised but its header couldn't be fully
-    /// read (truncated or corrupt); conversion is likely to fail.
+    /// Set when the format was recognised but the file is damaged: a header
+    /// that couldn't be fully read (conversion is likely to fail), or image
+    /// data that stops early (the rest of the picture comes out grey).
     pub problem: Option<String>,
 }
 
@@ -131,6 +132,8 @@ struct Details {
     jpeg_reconstruction: bool,
     bit_depth: Option<u8>,
     alpha: Presence,
+    /// Damage found past the header, which the details are still good for.
+    problem: Option<String>,
 }
 
 /// Inspects the file at `path`. I/O errors opening or reading the file are
@@ -164,7 +167,7 @@ pub fn inspect_reader<R: Read + Seek>(
             jpeg_reconstruction: details.jpeg_reconstruction,
             bit_depth: details.bit_depth,
             alpha: details.alpha,
-            problem: None,
+            problem: details.problem,
         },
         Err(err) => Inspection {
             content,
