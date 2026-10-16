@@ -10,21 +10,31 @@
   --color-surface: #1f2023;
   --color-surface-raised: #26282c;
   --color-surface-hover: #2d2f34;
+  --color-surface-hover-subtle: #212327;
+  --color-surface-sunken: #1b1c1f;
+  --color-selected: #2a2a24;
   --color-border: #34363b;
   --color-border-strong: #45484f;
+  --color-border-subtle: #2a2c30;
+  --color-row-line: #222427;
 
   /* Text */
   --color-text: #e6e7e9;
   --color-text-muted: #a0a4ab;
-  --color-text-faint: #6f737b;
+  /* Still 4.5:1 on the darkest surface. */
+  --color-text-faint: #878b93;
+  --color-text-chip: #c6c9ce;
 
   /* Accent and states */
   --color-accent: #d9a441;
   --color-accent-strong: #e8b75a;
   --color-on-accent: #1a1405;
-  --color-ok: #6fbf8a;
-  --color-warn: #d9a441;
-  --color-error: #e06c6c;
+  --color-ok: #8fd1a4;
+  --color-ok-bg: #1d2a22;
+  --color-warn: #e8b75a;
+  --color-warn-bg: #2e2716;
+  --color-error: #f29a9a;
+  --color-error-bg: #2f1d1d;
   --color-focus: #8fb8ff;
 
   /* Type */

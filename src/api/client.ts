@@ -2,6 +2,10 @@ import type {
   ApiError,
   ApiEvent,
   AppSettings,
+  EntryDetails,
+  FileCounts,
+  FileFilter,
+  FilePage,
   InputsSummary,
   JobFilter,
   JobPage,
@@ -12,6 +16,7 @@ import type {
   PreviewTarget,
   Sample,
   StoredPreset,
+  TargetTotals,
   ToolInfo,
   TreeNode,
   UserDefaults,
@@ -33,6 +38,10 @@ export interface TransmuteApi {
   clearInputs(): Promise<InputsSummary>;
   tree(root: number, dir: string): Promise<TreeNode[]>;
   setExcluded(root: number, relativePath: string, excluded: boolean): Promise<InputsSummary>;
+  fileCounts(): Promise<FileCounts>;
+  files(filter: FileFilter, offset: number, limit: number): Promise<FilePage>;
+  entry(entry: number): Promise<EntryDetails>;
+  clearFinished(): Promise<InputsSummary>;
 
   preset(): Promise<Preset>;
   setPreset(preset: Preset): Promise<void>;
@@ -55,6 +64,10 @@ export interface TransmuteApi {
   resume(): Promise<void>;
   cancel(): Promise<void>;
   report(): Promise<string>;
+  saveReport(path: string): Promise<void>;
+  runTotals(): Promise<TargetTotals[]>;
+  /** Shows a source or a converted output in the file manager. */
+  reveal(target: PreviewTarget): Promise<void>;
 
   preview(target: PreviewTarget): Promise<Preview>;
   sample(entry: number, target: number): Promise<Sample>;

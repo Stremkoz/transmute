@@ -20,6 +20,7 @@ const EVENT_CHANNEL: &str = "transmute";
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let sink = Arc::new(move |event: ApiEvent| {
@@ -39,6 +40,10 @@ fn main() {
             commands::remove_root,
             commands::clear_inputs,
             commands::tree,
+            commands::file_counts,
+            commands::files,
+            commands::entry,
+            commands::clear_finished,
             commands::set_excluded,
             commands::preset,
             commands::set_preset,
@@ -59,6 +64,9 @@ fn main() {
             commands::resume,
             commands::cancel,
             commands::report,
+            commands::save_report,
+            commands::run_totals,
+            commands::reveal,
             commands::preview,
             commands::sample,
             commands::clear_previews,

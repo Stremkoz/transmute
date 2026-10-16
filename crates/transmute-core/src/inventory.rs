@@ -99,6 +99,66 @@ impl Inventory {
         changed
     }
 
+    /// Removes the entries `remove` picks (by index), keeping the rest in
+    /// order. With `drop_empty_roots`, a root left without any image
+    /// (excluded or not) goes too, with its remaining entries and warnings,
+    /// and later roots are renumbered. Returns the paths of dropped roots.
+    pub fn remove_entries(
+        &mut self,
+        remove: impl Fn(usize, &SourceEntry) -> bool,
+        drop_empty_roots: bool,
+    ) -> Vec<PathBuf> {
+        let mut index = 0;
+        self.entries.retain(|entry| {
+            let keep = !remove(index, entry);
+            index += 1;
+            keep
+        });
+        if !drop_empty_roots {
+            return Vec::new();
+        }
+        let mut has_image = vec![false; self.roots.len()];
+        for entry in &self.entries {
+            if matches!(entry.inspection.content, Content::Image(_)) {
+                has_image[entry.root] = true;
+            }
+        }
+        let dropped: Vec<PathBuf> = self
+            .roots
+            .iter()
+            .zip(&has_image)
+            .filter(|(_, has)| !**has)
+            .map(|(root, _)| root.path.clone())
+            .collect();
+        if dropped.is_empty() {
+            return dropped;
+        }
+        // Old root index → new one, for the roots that stay.
+        let mut renumber = vec![None; self.roots.len()];
+        let mut next = 0;
+        for (old, has) in has_image.iter().enumerate() {
+            if *has {
+                renumber[old] = Some(next);
+                next += 1;
+            }
+        }
+        self.entries.retain(|entry| has_image[entry.root]);
+        for entry in &mut self.entries {
+            if let Some(root) = renumber[entry.root] {
+                entry.root = root;
+            }
+        }
+        let mut old = 0;
+        self.roots.retain(|_| {
+            let keep = has_image[old];
+            old += 1;
+            keep
+        });
+        self.warnings
+            .retain(|w| !dropped.iter().any(|root| w.path.starts_with(root)));
+        dropped
+    }
+
     /// Entries that are convertible images and not excluded.
     pub fn convertible(&self) -> impl Iterator<Item = &SourceEntry> {
         self.entries
@@ -378,6 +438,49 @@ mod tests {
             .iter()
             .map(|e| e.relative_path.to_string_lossy().replace('\\', "/"))
             .collect()
+    }
+
+    #[test]
+    fn removing_entries_drops_roots_left_without_images_and_renumbers() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first");
+        let second = dir.path().join("second");
+        write(&first.join("a.png"), &test_images::png(2, 2, &[]));
+        write(&first.join("notes.txt"), b"not an image");
+        write(&second.join("b.png"), &test_images::png(2, 2, &[]));
+        write(&second.join("c.png"), &test_images::png(2, 2, &[]));
+        let mut inventory = scan_quietly(&[first.clone(), second.clone()], ScanOptions::default());
+        assert_eq!(
+            relative_paths(&inventory),
+            ["a.png", "notes.txt", "b.png", "c.png"]
+        );
+
+        // a.png and b.png are done; "first" keeps only a text file.
+        let dropped = inventory.remove_entries(
+            |_, e| e.relative_path == Path::new("a.png") || e.relative_path == Path::new("b.png"),
+            true,
+        );
+
+        assert_eq!(dropped.len(), 1);
+        assert!(dropped[0].ends_with("first"));
+        assert_eq!(inventory.roots.len(), 1);
+        assert!(inventory.roots[0].path.ends_with("second"));
+        assert_eq!(relative_paths(&inventory), ["c.png"]);
+        assert_eq!(inventory.entries[0].root, 0);
+    }
+
+    #[test]
+    fn removing_entries_can_keep_empty_roots() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("photos");
+        write(&root.join("a.png"), &test_images::png(2, 2, &[]));
+        let mut inventory = scan_quietly(std::slice::from_ref(&root), ScanOptions::default());
+
+        let dropped = inventory.remove_entries(|index, _| index == 0, false);
+
+        assert!(dropped.is_empty());
+        assert_eq!(inventory.roots.len(), 1);
+        assert!(inventory.entries.is_empty());
     }
 
     #[test]

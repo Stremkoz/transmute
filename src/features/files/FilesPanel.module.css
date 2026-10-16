@@ -1,0 +1,185 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-4);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.summary {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+}
+
+/* Spec §2: graphite with a subtle cutting-mat dot texture. */
+.dropZone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+  background-size: 16px 16px;
+  text-align: center;
+}
+
+.dropZone .actions {
+  margin-top: var(--space-3);
+}
+
+.dropTitle {
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.dropHint {
+  max-width: 30rem;
+  color: var(--color-text-muted);
+}
+
+.scan {
+  color: var(--color-text-muted);
+}
+
+.warnings {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--color-warn);
+  user-select: text;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.chip b {
+  color: var(--color-text-chip);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip:hover {
+  background: var(--color-surface-hover-subtle);
+}
+
+.on {
+  border-color: var(--color-text-faint);
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.ok {
+  color: var(--color-ok);
+}
+
+.run {
+  color: var(--color-accent-strong);
+}
+
+.fail {
+  color: var(--color-error);
+}
+
+.warn {
+  color: var(--color-warn);
+}
+
+.menu {
+  width: 19rem;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-overlay);
+}
+
+.menuItem {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.menuItem[data-highlighted] {
+  background: var(--color-surface-hover);
+}
+
+.menuItem[data-disabled] {
+  color: var(--color-text-faint);
+  cursor: default;
+}
+
+.menuNote {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.menuItem[data-disabled] .menuNote {
+  color: var(--color-text-faint);
+}
+
+.menuFoot {
+  margin: var(--space-1) var(--space-3) var(--space-2);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.faint {
+  color: var(--color-text-faint);
+}

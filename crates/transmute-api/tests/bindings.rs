@@ -31,6 +31,10 @@ fn export_all(dir: &Path) {
     PlanSummary::export_all(&cfg).unwrap();
     JobPage::export_all(&cfg).unwrap();
     JobFilter::export_all(&cfg).unwrap();
+    FileFilter::export_all(&cfg).unwrap();
+    FilePage::export_all(&cfg).unwrap();
+    EntryDetails::export_all(&cfg).unwrap();
+    TargetTotals::export_all(&cfg).unwrap();
     ApiEvent::export_all(&cfg).unwrap();
     ToolInfo::export_all(&cfg).unwrap();
     StoredPreset::export_all(&cfg).unwrap();

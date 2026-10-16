@@ -32,6 +32,8 @@ tauri = { version = "2", features = ["protocol-asset"] }
 tauri-build = "2"
 # Native pickers for Add files / Add folder and the custom destination.
 tauri-plugin-dialog = "2"
+# Shows sources and outputs in the file manager (called from Rust only).
+tauri-plugin-opener = "2"
 ssimulacra2 = "0.5"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "sync", "time", "io-util", "fs", "signal"] }

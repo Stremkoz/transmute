@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { RunPanel } from "../features/run/RunPanel";
+import { FileDrawer } from "../features/files/FileDrawer";
+import { FilesPanel } from "../features/files/FilesPanel";
 import { ToolsDialog } from "../features/tools/ToolsDialog";
-import { ConvertBar } from "../features/workspace/ConvertBar";
-import { InputsPanel } from "../features/workspace/InputsPanel";
+import { BottomBar } from "../features/workspace/BottomBar";
 import { OutputsPanel } from "../features/workspace/OutputsPanel";
 import { usePlatform, useSession } from "../state/sessionContext";
 import styles from "./App.module.css";
@@ -72,7 +72,6 @@ export function App() {
   const overview = useSession((state) => state.overview);
   const tools = useSession((state) => state.tools);
   const error = useSession((state) => state.error);
-  const run = useSession((state) => state.run);
   const hovering = useFileDrop();
 
   return (
@@ -92,10 +91,11 @@ export function App() {
       {status === "ready" && overview && (
         <>
           <main className={styles.workspace}>
-            {run ? <RunPanel run={run} /> : <InputsPanel inputs={overview.inputs} />}
+            <FilesPanel inputs={overview.inputs} />
             <OutputsPanel preset={overview.preset} />
           </main>
-          <ConvertBar overview={overview} />
+          <BottomBar overview={overview} />
+          <FileDrawer />
         </>
       )}
       {hovering && (

@@ -15,7 +15,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use transmute_api::{
-    Api, ApiEvent, Backend, ErrorCode, JobFilter, JobState, NodeKind, PreviewTarget, RunState,
+    Api, ApiEvent, Backend, ErrorCode, FileFilter, FileInfo, JobFilter, JobState, NodeKind,
+    PreviewTarget, RunState,
 };
 use transmute_backends::invoke::{Invocation, Invoker, StepRequest};
 use transmute_core::capability::{Capabilities, Toolbox};
@@ -189,16 +190,13 @@ async fn a_whole_session_through_the_facade() {
         ["sub", "a.png", "b.png", "notes.txt"],
         "folders first"
     );
-    assert!(matches!(
-        top[0].node,
-        NodeKind::Folder {
-            files: 1,
-            excluded: 0
-        }
-    ));
+    let NodeKind::Folder { counts } = &top[0].node else {
+        panic!("sub is a folder")
+    };
+    assert_eq!((counts.all, counts.excluded), (1, 0));
     let sub = api.tree(0, "sub").unwrap();
     assert_eq!(sub[0].relative_path, "sub/c.png");
-    let NodeKind::File { entry: a_entry, .. } = top[1].node else {
+    let NodeKind::File(FileInfo { entry: a_entry, .. }) = top[1].node else {
         panic!("a.png is a file")
     };
     assert_eq!(api.set_excluded(0, "b.png", true).unwrap().excluded, 1);
@@ -425,4 +423,110 @@ async fn first_launch_has_no_outputs_and_the_working_preset_is_remembered() {
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].codec.format(), Format::Webp);
     assert!(api.overview().notices.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_files_list_follows_the_plan_and_the_run() {
+    let mut fx = fixture(false);
+    let api = &fx.api;
+    let photos = fx.photos.display().to_string();
+    api.add_inputs(vec![photos.clone()], true).await.unwrap();
+    api.set_excluded(0, "b.png", true).unwrap();
+    api.set_preset(tiff_preset()).unwrap();
+
+    // Before planning, files carry no job states.
+    let counts = api.file_counts();
+    assert_eq!((counts.all, counts.excluded, counts.unsupported), (4, 1, 1));
+    assert_eq!(counts.ready, 0);
+
+    api.plan().await.unwrap();
+    let counts = api.overview().counts;
+    assert_eq!(counts.ready, 2, "a.png and sub/c.png");
+    let top = api.tree(0, "").unwrap();
+    let NodeKind::File(a) = &top[1].node else {
+        panic!("a.png is a file")
+    };
+    assert_eq!((a.width, a.height), (Some(1), Some(1)));
+    assert_eq!(a.outputs.len(), 1);
+    assert_eq!(a.outputs[0].state, JobState::Ready);
+    let NodeKind::Folder { counts: sub } = &top[0].node else {
+        panic!("sub is a folder")
+    };
+    assert_eq!(sub.ready, 1);
+    assert_eq!(api.overview().inputs.roots[0].counts.ready, 2);
+
+    api.start_run().await.unwrap();
+    until_finished(&mut fx.events).await;
+
+    // After the run: every image is done, and the details say how.
+    let counts = api.file_counts();
+    assert_eq!((counts.done, counts.ready, counts.failed), (2, 0, 0));
+    let done = api.files(FileFilter::Done, 0, 10);
+    assert_eq!(done.total, 2);
+    assert_eq!(done.files[1].relative_path, "sub/c.png");
+    let details = api.entry(a.entry).unwrap();
+    assert_eq!(details.name, "a.png");
+    assert_eq!(details.jobs.len(), 1);
+    assert!(matches!(details.jobs[0].state, JobState::Converted { .. }));
+    let totals = api.run_totals().unwrap();
+    assert_eq!((totals.len(), totals[0].converted), (1, 2));
+    assert!(totals[0].output_bytes > 0);
+    let output = api
+        .locate(PreviewTarget::Output {
+            job: details.jobs[0].id,
+        })
+        .unwrap();
+    assert!(output.is_file());
+    let report = fx.photos.join("report.txt");
+    api.save_report(&report.display().to_string()).unwrap();
+    assert!(fs::read_to_string(&report).unwrap().contains("2 converted"));
+    fs::remove_file(&report).unwrap();
+
+    // Clearing the finished files leaves the excluded image and the text
+    // file; the input stays, as it still holds an image.
+    let left = api.clear_finished().unwrap();
+    assert_eq!((left.roots.len(), left.files), (1, 2));
+    let names: Vec<String> = api
+        .tree(0, "")
+        .unwrap()
+        .into_iter()
+        .map(|n| n.name)
+        .collect();
+    assert_eq!(names, ["b.png", "notes.txt"]);
+    // They stay cleared when another input is added (which rescans
+    // everything, now finding the TIFF outputs too)...
+    let top_names = |api: &Api| -> Vec<String> {
+        api.tree(0, "")
+            .unwrap()
+            .into_iter()
+            .map(|n| n.name)
+            .collect()
+    };
+    let other = fx.photos.parent().unwrap().join("other.png");
+    fs::write(&other, png_bytes()).unwrap();
+    api.add_inputs(vec![other.display().to_string()], true)
+        .await
+        .unwrap();
+    assert!(!top_names(api).contains(&"a.png".to_owned()));
+    // ...and come back when their own input is added again.
+    api.add_inputs(vec![photos], true).await.unwrap();
+    assert!(top_names(api).contains(&"a.png".to_owned()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn clearing_finished_drops_inputs_left_without_images() {
+    let mut fx = fixture(false);
+    let api = &fx.api;
+    api.add_inputs(vec![fx.photos.display().to_string()], true)
+        .await
+        .unwrap();
+    api.set_preset(tiff_preset()).unwrap();
+    api.plan().await.unwrap();
+    api.start_run().await.unwrap();
+    until_finished(&mut fx.events).await;
+
+    let left = api.clear_finished().unwrap();
+    assert!(left.roots.is_empty(), "only notes.txt was left: {left:?}");
+    // Nothing more to clear: there's no current plan now.
+    assert_eq!(api.clear_finished().unwrap().files, 0);
 }

@@ -29,6 +29,8 @@ pub struct Overview {
     /// The current plan, if it's still valid for the inputs and preset.
     pub plan: Option<PlanSummary>,
     pub run: Option<RunStatus>,
+    /// How many files are in each state, for the files list's filters.
+    pub counts: FileCounts,
     /// Things the user should be told about stored files, tools and so on.
     pub notices: Vec<String>,
 }
@@ -55,6 +57,8 @@ pub struct RootInfo {
     pub path: String,
     pub is_folder: bool,
     pub files: u32,
+    /// Its files' states; job states only while a plan is current.
+    pub counts: FileCounts,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -83,23 +87,147 @@ pub struct TreeNode {
 )]
 pub enum NodeKind {
     Folder {
-        /// Files anywhere below.
-        files: u32,
-        excluded: u32,
+        /// The states of the files anywhere below.
+        counts: FileCounts,
     },
-    File {
-        entry: EntryId,
-        /// The detected image format; absent for files that aren't images
-        /// Transmute converts.
-        format: Option<Format>,
-        /// What the file is, e.g. "JPEG" or "Camera RAW (NEF)".
-        description: String,
-        size: u64,
-        excluded: bool,
-        animated: bool,
-        /// Set when the header is damaged.
-        problem: Option<String>,
-    },
+    File(FileInfo),
+}
+
+/// One file of the inputs, with what the current plan or run is doing to it.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileInfo {
+    pub entry: EntryId,
+    /// The detected image format; absent for files that aren't images
+    /// Transmute converts.
+    pub format: Option<Format>,
+    /// What the file is, e.g. "JPEG" or "Camera RAW (NEF)".
+    pub description: String,
+    pub size: u64,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub excluded: bool,
+    pub animated: bool,
+    /// Set when the header is damaged.
+    pub problem: Option<String>,
+    /// One per output target, while a plan is current; empty otherwise
+    /// (and for excluded files and files that aren't images).
+    pub outputs: Vec<FileOutput>,
+}
+
+/// What happens, or happened, to one file for one output.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileOutput {
+    pub job: JobId,
+    /// Index of the output target in the preset.
+    pub target: u32,
+    pub format: Format,
+    pub state: JobState,
+}
+
+/// How many files are in each state. A file counts in every state that
+/// applies (one output skipped and another ready counts in both), so the
+/// numbers don't add up to `all`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileCounts {
+    pub all: u32,
+    /// Some output waits to be converted.
+    pub ready: u32,
+    /// Some output was skipped or blocked when planning.
+    pub problems: u32,
+    pub excluded: u32,
+    /// Some output is being converted.
+    pub running: u32,
+    /// Every output was written or already existed, and at least one was
+    /// written.
+    pub done: u32,
+    /// Some output failed.
+    pub failed: u32,
+    /// Some output was cancelled.
+    pub cancelled: u32,
+    /// Not an image Transmute converts; left alone.
+    pub unsupported: u32,
+}
+
+/// Which files [`FilePage`] lists; see [`FileCounts`] for each meaning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FileFilter {
+    All,
+    Ready,
+    Problems,
+    Excluded,
+    Running,
+    Done,
+    Failed,
+    Cancelled,
+    Unsupported,
+}
+
+/// A file in a flat (filtered) listing, with where it lives.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileRow {
+    pub root: RootId,
+    pub name: String,
+    /// Relative to the root, with `/` separators.
+    pub relative_path: String,
+    pub file: FileInfo,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FilePage {
+    /// Files matching the filter, in all pages.
+    pub total: u32,
+    pub offset: u32,
+    pub files: Vec<FileRow>,
+}
+
+/// Everything known about one file, for its details panel.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryDetails {
+    pub root: RootId,
+    pub name: String,
+    pub relative_path: String,
+    /// The full path, for showing (never for passing back).
+    pub path: String,
+    pub file: FileInfo,
+    /// Bits per channel, where the header states it.
+    pub bit_depth: Option<u8>,
+    /// Transparency; absent where the header doesn't say cheaply.
+    pub alpha: Option<bool>,
+    /// For animations, when the header states it.
+    pub frames: Option<u32>,
+    /// For multi-page files (TIFF).
+    pub pages: Option<u32>,
+    /// Metadata blocks found, e.g. "EXIF", "ICC profile".
+    pub metadata: Vec<String>,
+    /// The extension names a different format than the content.
+    pub extension_mismatch: bool,
+    /// Its jobs in the current plan, one per output.
+    pub jobs: Vec<Job>,
+}
+
+/// What a run did for one output target, from the current plan's jobs.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetTotals {
+    pub target: u32,
+    pub format: Format,
+    pub converted: u32,
+    pub skipped: u32,
+    pub blocked: u32,
+    pub failed: u32,
+    pub cancelled: u32,
+    /// Not run yet.
+    pub ready: u32,
+    /// Originals of the converted jobs.
+    pub input_bytes: u64,
+    pub output_bytes: u64,
 }
 
 /// A message with a stable code, for icons, filters and future

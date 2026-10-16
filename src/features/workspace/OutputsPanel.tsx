@@ -1,6 +1,7 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import type { Destination, Preset } from "@bindings";
+import type { Destination, Preset, TargetTotals } from "@bindings";
 import { FORMAT_LABELS, OUTPUT_FORMATS, outputSummary, writableFormats } from "../../lib/formats";
+import { formatBytes, formatCount } from "../../lib/units";
 import { isRunActive } from "../../state/session";
 import { usePlatform, useSession } from "../../state/sessionContext";
 import styles from "./OutputsPanel.module.css";
@@ -112,6 +113,45 @@ function DestinationPicker({ preset, disabled }: { preset: Preset; disabled: boo
   );
 }
 
+function totalsLine(totals: TargetTotals): string {
+  const parts = [`${formatCount(totals.converted)} written`];
+  if (totals.converted > 0) parts.push(`${formatBytes(totals.inputBytes)} → ${formatBytes(totals.outputBytes)}`);
+  if (totals.skipped > 0) parts.push(`${formatCount(totals.skipped)} skipped`);
+  if (totals.failed > 0) parts.push(`${formatCount(totals.failed)} failed`);
+  if (totals.cancelled > 0) parts.push(`${formatCount(totals.cancelled)} cancelled`);
+  return parts.join(" · ");
+}
+
+/** What the finished run did per output, and its report. */
+function LastRun() {
+  const platform = usePlatform();
+  const totals = useSession((state) => state.totals);
+  const saveReport = useSession((state) => state.saveReport);
+  if (!totals) return null;
+  const save = async () => {
+    const path = await platform.pickReportPath();
+    if (path) await saveReport(path);
+  };
+  return (
+    <section className={styles.lastRun} aria-labelledby="last-run-heading">
+      <h3 id="last-run-heading" className={styles.subheading}>
+        Last run
+      </h3>
+      <dl className={styles.totals}>
+        {totals.map((total) => (
+          <div key={total.target}>
+            <dt>{FORMAT_LABELS[total.format]}</dt>
+            <dd>{totalsLine(total)}</dd>
+          </div>
+        ))}
+      </dl>
+      <button type="button" className="link" style={{ alignSelf: "flex-start" }} onClick={() => void save()}>
+        Save report…
+      </button>
+    </section>
+  );
+}
+
 /** The right column: one card per output, then where files will land. */
 export function OutputsPanel({ preset }: { preset: Preset }) {
   const removeOutput = useSession((state) => state.removeOutput);
@@ -122,6 +162,11 @@ export function OutputsPanel({ preset }: { preset: Preset }) {
       <h2 id="outputs-heading" className={styles.heading}>
         Outputs
       </h2>
+      {locked && (
+        <p className={styles.lock} role="note">
+          Settings are locked while converting. Cancel, or wait for the run to finish, to change them.
+        </p>
+      )}
       {preset.outputs.length === 0 ? (
         <p className={styles.empty}>Pick at least one format to convert to.</p>
       ) : (
@@ -148,7 +193,8 @@ export function OutputsPanel({ preset }: { preset: Preset }) {
           })}
         </ul>
       )}
-      <AddOutputMenu preset={preset} disabled={locked} />
+      {!locked && <AddOutputMenu preset={preset} disabled={locked} />}
+      <LastRun />
       <DestinationPicker preset={preset} disabled={locked} />
     </section>
   );

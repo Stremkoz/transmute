@@ -10,6 +10,7 @@ export interface TestPlatform extends Platform {
   files: string[];
   folders: string[];
   destination: string | null;
+  reportPath: string | null;
   /** Simulates files dropped on the window. */
   drop(paths: string[]): void;
   hover(hovering: boolean): void;
@@ -21,9 +22,11 @@ export function createTestPlatform(): TestPlatform {
     files: ["C:\\Pictures\\cat.png"],
     folders: ["C:\\Pictures\\Holiday"],
     destination: "D:\\Converted",
+    reportPath: "D:\\report.txt",
     pickFiles: async () => platform.files,
     pickFolders: async () => platform.folders,
     pickDestination: async () => platform.destination,
+    pickReportPath: async () => platform.reportPath,
     onFileDrop: async (next) => {
       handlers = next;
       return () => {

@@ -6,14 +6,15 @@ use std::path::{Component, Path};
 use transmute_backends::discovery::ToolSource;
 use transmute_backends::probe::{ToolReport, ToolStatus as ProbeStatus};
 use transmute_core::format::Format;
-use transmute_core::inspect::{Animation, Content};
-use transmute_core::inventory::{Inventory, RootKind, SourceEntry};
+use transmute_core::inspect::Content;
+use transmute_core::inventory::{Inventory, RootKind};
 use transmute_core::plan::{JobStatus, Plan, PlannedJob};
 use transmute_engine::run::{BatchProgress, JobOutcome, JobResult};
 
+use crate::files::{self, PlanView};
 use crate::types::{
-    FormatCount, InputsSummary, Job, JobState, Message, NodeKind, PlanSummary, Progress, RootInfo,
-    Tally, ToolInfo, ToolStatus, TreeNode,
+    FormatCount, InputsSummary, Job, JobState, Message, PlanSummary, Progress, RootInfo, Tally,
+    ToolInfo, ToolStatus,
 };
 
 /// `a/b/c` with forward slashes, whatever the platform.
@@ -27,7 +28,9 @@ pub fn slash_path(path: &Path) -> String {
         .join("/")
 }
 
-pub fn inputs_summary(inventory: &Inventory) -> InputsSummary {
+/// The inputs at a glance. With a current plan, each root's counts
+/// include its files' job states.
+pub fn inputs_summary(inventory: &Inventory, view: Option<PlanView>) -> InputsSummary {
     let mut by_format: BTreeMap<Format, u32> = BTreeMap::new();
     let mut summary = InputsSummary {
         roots: inventory
@@ -39,6 +42,7 @@ pub fn inputs_summary(inventory: &Inventory) -> InputsSummary {
                 path: root.path.display().to_string(),
                 is_folder: root.kind == RootKind::Folder,
                 files: inventory.entries.iter().filter(|e| e.root == id).count() as u32,
+                counts: files::counts(inventory, view, Some(id)),
             })
             .collect(),
         warnings: inventory
@@ -66,71 +70,6 @@ pub fn inputs_summary(inventory: &Inventory) -> InputsSummary {
         .map(|(format, count)| FormatCount { format, count })
         .collect();
     summary
-}
-
-fn describe_content(content: &Content) -> (Option<Format>, String) {
-    match content {
-        Content::Image(format) => (Some(*format), format.display_name().to_owned()),
-        Content::Other(other) => (None, other.display_name().to_owned()),
-        Content::Unknown => (None, "Unknown".to_owned()),
-    }
-}
-
-/// The children of `dir` (relative to root `root`): folders first, then
-/// files, each sorted by name without regard to case.
-pub fn tree_children(inventory: &Inventory, root: usize, dir: &Path) -> Vec<TreeNode> {
-    let prefix: Vec<_> = dir.components().collect();
-    let mut folders: BTreeMap<String, (String, u32, u32)> = BTreeMap::new();
-    let mut files = Vec::new();
-    for (id, entry) in inventory.entries.iter().enumerate() {
-        if entry.root != root {
-            continue;
-        }
-        let parts: Vec<_> = entry.relative_path.components().collect();
-        if parts.len() <= prefix.len() || parts[..prefix.len()] != prefix[..] {
-            continue;
-        }
-        let name = parts[prefix.len()]
-            .as_os_str()
-            .to_string_lossy()
-            .into_owned();
-        if parts.len() == prefix.len() + 1 {
-            files.push(file_node(id, entry, name));
-        } else {
-            let folder = folders.entry(name.to_lowercase()).or_insert((name, 0, 0));
-            folder.1 += 1;
-            if entry.excluded {
-                folder.2 += 1;
-            }
-        }
-    }
-    files.sort_by_key(|node: &TreeNode| node.name.to_lowercase());
-    folders
-        .into_values()
-        .map(|(name, files, excluded)| TreeNode {
-            relative_path: slash_path(&dir.join(&name)),
-            name,
-            node: NodeKind::Folder { files, excluded },
-        })
-        .chain(files)
-        .collect()
-}
-
-fn file_node(id: usize, entry: &SourceEntry, name: String) -> TreeNode {
-    let (format, description) = describe_content(&entry.inspection.content);
-    TreeNode {
-        relative_path: slash_path(&entry.relative_path),
-        name,
-        node: NodeKind::File {
-            entry: id as u32,
-            format,
-            description,
-            size: entry.size,
-            excluded: entry.excluded,
-            animated: matches!(entry.inspection.animation, Animation::Animated { .. }),
-            problem: entry.inspection.problem.clone(),
-        },
-    }
 }
 
 pub fn planned_state(status: &JobStatus) -> JobState {

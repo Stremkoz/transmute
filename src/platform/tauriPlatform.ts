@@ -1,5 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Platform } from "./platform";
 
 function asList(picked: string | string[] | null): string[] {
@@ -16,6 +16,12 @@ export const tauriPlatform: Platform = {
     const picked = await open({ directory: true, title: "Choose where converted files go" });
     return typeof picked === "string" ? picked : null;
   },
+  pickReportPath: () =>
+    save({
+      title: "Save the conversion report",
+      defaultPath: "transmute-report.txt",
+      filters: [{ name: "Text", extensions: ["txt"] }],
+    }),
   onFileDrop: (handlers) =>
     getCurrentWebview().onDragDropEvent(({ payload }) => {
       switch (payload.type) {

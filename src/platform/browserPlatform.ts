@@ -11,6 +11,7 @@ export function createBrowserPlatform(): Platform {
     pickFiles: async () => [`C:\\Users\\Demo\\Pictures\\holiday-${++picks}.jpg`],
     pickFolders: async () => [`C:\\Users\\Demo\\Pictures\\Shoot ${++picks}`],
     pickDestination: async () => "D:\\Converted",
+    pickReportPath: async () => "D:\\transmute-report.txt",
     onFileDrop: async (handlers) => {
       const over = (event: DragEvent) => {
         event.preventDefault();

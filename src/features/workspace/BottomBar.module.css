@@ -1,0 +1,95 @@
+.bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 64px;
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.status {
+  flex: 1;
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.state {
+  flex: none;
+  font-weight: 600;
+}
+
+.strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.warn {
+  color: var(--color-warn);
+}
+
+.bad {
+  color: var(--color-error);
+}
+
+.ok {
+  color: var(--color-ok);
+}
+
+.track {
+  flex: none;
+  width: 18rem;
+  max-width: 30%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-surface-hover);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transition: width var(--duration-fast) linear;
+}
+
+.stats {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sep {
+  color: var(--color-border-strong);
+}
+
+.badLink {
+  color: var(--color-error);
+}
+
+.primary {
+  height: 36px;
+  padding: 0 var(--space-5);
+}
+
+.tallButton {
+  height: 36px;
+}

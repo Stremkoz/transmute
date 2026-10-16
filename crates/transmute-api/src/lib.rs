@@ -18,6 +18,7 @@
 //! See `docs/api.md` for the command reference.
 
 mod convert;
+mod files;
 pub mod preview;
 pub mod types;
 
@@ -34,7 +35,7 @@ use transmute_backends::invoke::{Invoker, ToolInvoker};
 use transmute_backends::probe::{ToolReport, discover_tools, toolbox};
 use transmute_core::capability::Toolbox;
 use transmute_core::format::Format;
-use transmute_core::inspect::Content;
+use transmute_core::inspect::{Animation, Content};
 use transmute_core::inventory::{Inventory, ScanOptions, ScanProgress, scan};
 use transmute_core::output::{CollisionPolicy, Destination};
 use transmute_core::plan::{JobStatus, PlanContext, plan};
@@ -44,6 +45,7 @@ use transmute_core::store::{Locations, Notice, Store};
 use transmute_engine::concurrency::resolve_worker_count;
 use transmute_engine::run::{Event, JobOutcome, RunControl, RunOptions, Work, run};
 
+use files::{JobIndex, PlanView};
 pub use types::*;
 // The documents the frontend edits and sends back, so the shell needs no
 // dependency on core.
@@ -87,12 +89,34 @@ struct PlanState {
     /// A run has used this plan. Its outputs now exist, so running it
     /// again needs a fresh plan (which will see them).
     used: bool,
+    /// Each entry's jobs, for the files list.
+    index: JobIndex,
+    /// Each target's output format.
+    formats: Vec<Format>,
+}
+
+impl PlanState {
+    fn view(&self) -> PlanView<'_> {
+        PlanView {
+            index: &self.index,
+            states: &self.states,
+            jobs: &self.work.plan.jobs,
+            formats: &self.formats,
+        }
+    }
 }
 
 struct RunHandle {
     control: RunControl,
     state: RunState,
     progress: Progress,
+}
+
+/// A file taken off the list ("Clear finished"), kept off when the inputs
+/// are rescanned.
+struct Removal {
+    root: PathBuf,
+    relative: PathBuf,
 }
 
 /// A recorded exclusion, replayed when the inputs are rescanned.
@@ -107,6 +131,7 @@ struct Session {
     recursive: bool,
     inventory: Inventory,
     exclusions: Vec<Exclusion>,
+    removed: Vec<Removal>,
     preset: Preset,
     /// Bumped by every change that affects planning.
     revision: u64,
@@ -139,6 +164,11 @@ impl Session {
         self.revision += 1;
         self.plan = None;
         self.run = None;
+    }
+
+    /// The current plan as the files list sees it, if there is one.
+    fn view(&self) -> Option<PlanView<'_>> {
+        self.current_plan().ok().map(PlanState::view)
     }
 
     fn current_plan(&self) -> ApiResult<&PlanState> {
@@ -236,6 +266,7 @@ impl Api {
                     recursive: true,
                     inventory: Inventory::default(),
                     exclusions: Vec::new(),
+                    removed: Vec::new(),
                     preset,
                     revision: 0,
                     plan: None,
@@ -296,7 +327,8 @@ impl Api {
     pub fn overview(&self) -> Overview {
         let session = self.session();
         Overview {
-            inputs: convert::inputs_summary(&session.inventory),
+            inputs: convert::inputs_summary(&session.inventory, session.view()),
+            counts: files::counts(&session.inventory, session.view(), None),
             preset: session.preset.clone(),
             plan: session.current_plan().ok().map(|p| p.summary.clone()),
             run: session.run.as_ref().map(|run| RunStatus {
@@ -326,6 +358,9 @@ impl Api {
             session.ensure_idle()?;
             for path in paths {
                 let path = PathBuf::from(path);
+                // Adding an input again brings back files cleared from it.
+                let absolute = std::path::absolute(&path).unwrap_or_else(|_| path.clone());
+                session.removed.retain(|r| r.root != absolute);
                 if !session.inputs.contains(&path) {
                     session.inputs.push(path);
                 }
@@ -350,6 +385,7 @@ impl Api {
                 std::path::absolute(input).unwrap_or_else(|_| input.clone()) != path
             });
             session.exclusions.retain(|e| e.root != path);
+            session.removed.retain(|r| r.root != path);
             (session.inputs.clone(), session.recursive)
         };
         self.rescan(inputs, recursive).await
@@ -360,9 +396,10 @@ impl Api {
         session.ensure_idle()?;
         session.inputs.clear();
         session.exclusions.clear();
+        session.removed.clear();
         session.inventory = Inventory::default();
         session.changed();
-        Ok(convert::inputs_summary(&session.inventory))
+        Ok(convert::inputs_summary(&session.inventory, None))
     }
 
     async fn rescan(&self, inputs: Vec<PathBuf>, recursive: bool) -> ApiResult<InputsSummary> {
@@ -395,8 +432,20 @@ impl Api {
         let Session {
             inventory,
             exclusions,
+            removed,
             ..
         } = &mut *session;
+        if !removed.is_empty() {
+            let roots: Vec<PathBuf> = inventory.roots.iter().map(|r| r.path.clone()).collect();
+            inventory.remove_entries(
+                |_, entry| {
+                    removed
+                        .iter()
+                        .any(|r| r.relative == entry.relative_path && r.root == roots[entry.root])
+                },
+                false,
+            );
+        }
         for exclusion in exclusions.iter() {
             if let Some(root) = inventory
                 .roots
@@ -407,7 +456,7 @@ impl Api {
             }
         }
         session.changed();
-        Ok(convert::inputs_summary(&session.inventory))
+        Ok(convert::inputs_summary(&session.inventory, None))
     }
 
     /// The children of a folder in one input, for the tree view. `dir` is
@@ -420,11 +469,131 @@ impl Api {
                 format!("no input {root}"),
             ));
         }
-        Ok(convert::tree_children(
+        Ok(files::tree_children(
             &session.inventory,
             root as usize,
             Path::new(dir),
+            session.view(),
         ))
+    }
+
+    // ---------------------------------------------------------- files list
+
+    /// How many files are in each state (also in [`Overview::counts`]).
+    pub fn file_counts(&self) -> FileCounts {
+        let session = self.session();
+        files::counts(&session.inventory, session.view(), None)
+    }
+
+    /// A page of the files matching `filter`, across every input, in
+    /// order. For the filtered views of the files list; the unfiltered one
+    /// browses [`Api::tree`].
+    pub fn files(&self, filter: FileFilter, offset: u32, limit: u32) -> FilePage {
+        let session = self.session();
+        files::page(
+            &session.inventory,
+            session.view(),
+            filter,
+            offset,
+            limit.min(MAX_PAGE),
+        )
+    }
+
+    /// Everything known about one file, with its jobs in the current plan.
+    pub fn entry(&self, entry: EntryId) -> ApiResult<EntryDetails> {
+        let session = self.session();
+        let id = entry as usize;
+        let source = session
+            .inventory
+            .entries
+            .get(id)
+            .ok_or_else(|| ApiError::new(ErrorCode::NotFound, format!("no file {entry}")))?;
+        let jobs = match session.current_plan() {
+            Ok(plan) => plan
+                .index
+                .jobs(id)
+                .iter()
+                .map(|&job| {
+                    let job = job as usize;
+                    let planned = &plan.work.plan.jobs[job];
+                    convert::job(
+                        job,
+                        planned,
+                        &plan.work.inventory,
+                        plan.formats[planned.target],
+                        &plan.states[job],
+                    )
+                })
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        Ok(EntryDetails {
+            root: source.root as u32,
+            name: source
+                .relative_path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            relative_path: convert::slash_path(&source.relative_path),
+            path: source.path.display().to_string(),
+            file: files::file_info(id, source, session.view()),
+            bit_depth: source.inspection.bit_depth,
+            alpha: files::alpha(source),
+            frames: match source.inspection.animation {
+                Animation::Animated { frames } => frames,
+                _ => None,
+            },
+            pages: source.inspection.pages,
+            metadata: files::metadata_names(source),
+            extension_mismatch: source.extension_mismatch(),
+            jobs,
+        })
+    }
+
+    /// Takes the finished files off the list: those whose outputs were all
+    /// written or already existed. Failed, cancelled, waiting and excluded
+    /// files stay, and so does anything without a current plan. An input
+    /// left with no images goes too. Nothing on disk changes, and the files
+    /// stay off when the inputs are rescanned (until that input is added
+    /// again).
+    pub fn clear_finished(&self) -> ApiResult<InputsSummary> {
+        let mut session = self.session();
+        session.ensure_idle()?;
+        let done: Vec<bool> = match session.view() {
+            Some(view) => session
+                .inventory
+                .entries
+                .iter()
+                .enumerate()
+                .map(|(id, entry)| files::is_done(id, entry, view))
+                .collect(),
+            None => Vec::new(),
+        };
+        if !done.contains(&true) {
+            return Ok(convert::inputs_summary(&session.inventory, session.view()));
+        }
+        let removals: Vec<Removal> = session
+            .inventory
+            .entries
+            .iter()
+            .zip(&done)
+            .filter(|(_, done)| **done)
+            .map(|(entry, _)| Removal {
+                root: session.inventory.roots[entry.root].path.clone(),
+                relative: entry.relative_path.clone(),
+            })
+            .collect();
+        session.removed.extend(removals);
+        let dropped = session.inventory.remove_entries(|id, _| done[id], true);
+        for root in &dropped {
+            session.inputs.retain(|input| {
+                std::path::absolute(input).unwrap_or_else(|_| input.clone()) != *root
+            });
+            session.exclusions.retain(|e| e.root != *root);
+            session.removed.retain(|r| r.root != *root);
+        }
+        session.changed();
+        Ok(convert::inputs_summary(&session.inventory, None))
     }
 
     /// Excludes (or re-includes) a file or a whole folder of one input.
@@ -454,7 +623,7 @@ impl Api {
             });
             session.changed();
         }
-        Ok(convert::inputs_summary(&session.inventory))
+        Ok(convert::inputs_summary(&session.inventory, None))
     }
 
     // ------------------------------------------------- configuration
@@ -637,6 +806,8 @@ impl Api {
                 },
             );
             let summary = convert::plan_summary(&plan, config.targets.len());
+            let index = JobIndex::new(&plan, inventory.entries.len());
+            let formats: Vec<Format> = config.targets.iter().map(|t| t.settings.format()).collect();
             let states = plan
                 .jobs
                 .iter()
@@ -650,6 +821,8 @@ impl Api {
                 },
                 states,
                 summary,
+                index,
+                formats,
             )
         })
         .await
@@ -662,13 +835,15 @@ impl Api {
                 "the inputs or settings changed while planning; plan again",
             ));
         }
-        let (work, states, summary) = planned;
+        let (work, states, summary, index, formats) = planned;
         session.plan = Some(PlanState {
             revision,
             work: Arc::new(work),
             states,
             summary: summary.clone(),
             used: false,
+            index,
+            formats,
         });
         session.run = None;
         Ok(summary)
@@ -950,6 +1125,55 @@ impl Api {
             );
         }
         Ok(out)
+    }
+
+    /// Writes [`Api::report`] to `path`, a file the user picked.
+    pub fn save_report(&self, path: &str) -> ApiResult<()> {
+        let text = self.report()?;
+        transmute_core::store::write_atomically(Path::new(path), &text)
+            .map_err(|err| ApiError::new(ErrorCode::Io, format!("couldn't save the report: {err}")))
+    }
+
+    /// What the current plan's jobs came to, per output target.
+    pub fn run_totals(&self) -> ApiResult<Vec<TargetTotals>> {
+        let session = self.session();
+        Ok(files::target_totals(session.current_plan()?.view()))
+    }
+
+    /// Where a source or a converted output is on disk, for showing it in
+    /// the file manager. Fails with `unavailable` if it's gone.
+    pub fn locate(&self, target: PreviewTarget) -> ApiResult<PathBuf> {
+        let session = self.session();
+        let path = match target {
+            PreviewTarget::Source { entry } => session
+                .inventory
+                .entries
+                .get(entry as usize)
+                .map(|e| e.path.clone())
+                .ok_or_else(|| ApiError::new(ErrorCode::NotFound, format!("no file {entry}")))?,
+            PreviewTarget::Output { job } => {
+                let plan = session.current_plan()?;
+                let planned =
+                    plan.work.plan.jobs.get(job as usize).ok_or_else(|| {
+                        ApiError::new(ErrorCode::NotFound, format!("no job {job}"))
+                    })?;
+                if !matches!(plan.states[job as usize], JobState::Converted { .. }) {
+                    return Err(ApiError::new(
+                        ErrorCode::Invalid,
+                        "this job hasn't produced an output",
+                    ));
+                }
+                planned.output.clone()
+            }
+        };
+        if path.exists() {
+            Ok(path)
+        } else {
+            Err(ApiError::new(
+                ErrorCode::Unavailable,
+                format!("{} has been moved or deleted", path.display()),
+            ))
+        }
     }
 
     // ------------------------------------------------------------ previews

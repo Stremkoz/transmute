@@ -10,6 +10,8 @@ export interface Platform {
   pickFolders(): Promise<string[]>;
   /** One folder for converted files to land in; null when cancelled. */
   pickDestination(): Promise<string | null>;
+  /** Where to save the run report; null when cancelled. */
+  pickReportPath(): Promise<string | null>;
   /** Follows files dragged over and dropped on the window. */
   onFileDrop(handlers: FileDropHandlers): Promise<() => void>;
 }

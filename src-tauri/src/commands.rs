@@ -8,9 +8,10 @@
 
 use tauri::{AppHandle, State};
 use transmute_api::{
-    Api, ApiError, ApiResult, AppSettings, EntryId, ErrorCode, InputsSummary, JobFilter, JobPage,
-    Overview, PlanSummary, Preset, Preview, PreviewTarget, RootId, Sample, StoredPreset, ToolInfo,
-    TreeNode, UserDefaults,
+    Api, ApiError, ApiResult, AppSettings, EntryDetails, EntryId, ErrorCode, FileCounts,
+    FileFilter, FilePage, InputsSummary, JobFilter, JobPage, Overview, PlanSummary, Preset,
+    Preview, PreviewTarget, RootId, Sample, StoredPreset, TargetTotals, ToolInfo, TreeNode,
+    UserDefaults,
 };
 
 /// Lets the webview load one file the API chose to show. The asset
@@ -55,6 +56,31 @@ pub async fn clear_inputs(api: State<'_, Api>) -> ApiResult<InputsSummary> {
 #[tauri::command]
 pub async fn tree(api: State<'_, Api>, root: RootId, dir: String) -> ApiResult<Vec<TreeNode>> {
     api.tree(root, &dir)
+}
+
+#[tauri::command]
+pub async fn file_counts(api: State<'_, Api>) -> ApiResult<FileCounts> {
+    Ok(api.file_counts())
+}
+
+#[tauri::command]
+pub async fn files(
+    api: State<'_, Api>,
+    filter: FileFilter,
+    offset: u32,
+    limit: u32,
+) -> ApiResult<FilePage> {
+    Ok(api.files(filter, offset, limit))
+}
+
+#[tauri::command]
+pub async fn entry(api: State<'_, Api>, entry: EntryId) -> ApiResult<EntryDetails> {
+    api.entry(entry)
+}
+
+#[tauri::command]
+pub async fn clear_finished(api: State<'_, Api>) -> ApiResult<InputsSummary> {
+    api.clear_finished()
 }
 
 #[tauri::command]
@@ -169,6 +195,25 @@ pub async fn cancel(api: State<'_, Api>) -> ApiResult<()> {
 #[tauri::command]
 pub async fn report(api: State<'_, Api>) -> ApiResult<String> {
     api.report()
+}
+
+#[tauri::command]
+pub async fn save_report(api: State<'_, Api>, path: String) -> ApiResult<()> {
+    api.save_report(&path)
+}
+
+#[tauri::command]
+pub async fn run_totals(api: State<'_, Api>) -> ApiResult<Vec<TargetTotals>> {
+    api.run_totals()
+}
+
+/// Shows a source or an output in the file manager. Done here, not by the
+/// webview, so the webview needs no access to paths.
+#[tauri::command]
+pub async fn reveal(api: State<'_, Api>, target: PreviewTarget) -> ApiResult<()> {
+    let path = api.locate(target)?;
+    tauri_plugin_opener::reveal_item_in_dir(path)
+        .map_err(|err| ApiError::new(ErrorCode::Io, format!("couldn't open the folder: {err}")))
 }
 
 #[tauri::command]

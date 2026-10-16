@@ -88,3 +88,23 @@ button {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* A button that reads as a link, for inline actions in text. */
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-accent-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.link:disabled {
+  color: var(--color-text-faint);
+  cursor: default;
+  text-decoration: none;
+}

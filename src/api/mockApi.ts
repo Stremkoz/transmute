@@ -2,18 +2,27 @@ import type {
   ApiError,
   ApiEvent,
   AppSettings,
+  EntryDetails,
   ErrorCode,
+  FileCounts,
+  FileFilter,
+  FileInfo,
+  FileRow,
   Format,
   InputsSummary,
+  Job,
+  JobState,
+  JobUpdate,
   Overview,
   PlanSummary,
   Preset,
   Progress,
-  RootInfo,
   RunStatus,
   StoredPreset,
   Tally,
+  TargetTotals,
   ToolInfo,
+  TreeNode,
   UserDefaults,
 } from "@bindings";
 import { writableFormats } from "../lib/formats";
@@ -23,10 +32,11 @@ import type { TransmuteApi } from "./client";
  * An in-memory stand-in for `transmute-api`, so the UI runs in a plain
  * browser (`npm run dev`) and in tests without the Tauri shell.
  *
- * It mirrors the real session's rules where the UI depends on them (a plan
+ * It mirrors the real session's rules where the UI depends on them: a plan
  * is invalidated by any edit, a run needs a fresh plan, edits are refused
- * while running) and fakes the rest plausibly. It grows with each GUI
- * phase; commands it doesn't fake yet reject with an `internal` error.
+ * while running, files are counted in every state that applies, and
+ * clearing finished files keeps failures. Everything else is faked
+ * plausibly. Commands it doesn't fake yet reject with an `internal` error.
  */
 export interface MockApi extends TransmuteApi {
   /** Pushes an event to every listener, as the shell would. */
@@ -39,6 +49,8 @@ export interface MockSeed {
   notices?: string[];
   /** Milliseconds between simulated run steps. */
   runStepMs?: number;
+  /** Every nth job fails (0: none). */
+  failEvery?: number;
 }
 
 /** A first launch: nothing picked yet. */
@@ -83,13 +95,7 @@ function available(
 ): ToolInfo {
   return {
     tool,
-    status: {
-      status: "available",
-      path: `C:\\Tools\\${tool}.exe`,
-      version,
-      source: "path",
-      outdated: false,
-    },
+    status: { status: "available", path: `C:\\Tools\\${tool}.exe`, version, source: "path", outdated: false },
     reads,
     writes,
     notes: [],
@@ -111,22 +117,67 @@ const EXTENSIONS: Record<string, Format> = {
   bmp: "bmp",
 };
 
-/** The mix of formats in a made-up folder. */
-const FOLDER_MIX: Array<[Format, number]> = [
-  ["jpeg", 0.6],
-  ["png", 0.25],
-  ["webp", 0.1],
-  ["heif", 0.05],
-];
+const DESCRIPTIONS: Record<Format, string> = {
+  jpeg: "JPEG",
+  png: "PNG",
+  webp: "WebP",
+  jxl: "JPEG XL",
+  avif: "AVIF",
+  heif: "HEIF",
+  tiff: "TIFF",
+  gif: "GIF",
+  bmp: "BMP",
+};
+
+const EXTENSION_OF: Record<Format, string> = {
+  jpeg: "jpg",
+  png: "png",
+  webp: "webp",
+  jxl: "jxl",
+  avif: "avif",
+  heif: "heic",
+  tiff: "tiff",
+  gif: "gif",
+  bmp: "bmp",
+};
+
+/** Formats in a made-up folder, in turn. */
+const FOLDER_FORMATS: Format[] = ["jpeg", "jpeg", "jpeg", "png", "png", "webp", "heif", "jpeg"];
+/** Subfolders of a made-up folder; "" is its top level. */
+const SUBFOLDERS = ["", "Day 1", "Day 2"];
+
+interface MockEntry {
+  id: number;
+  root: number;
+  /** `/`-separated, relative to the root. */
+  relativePath: string;
+  format: Format | null;
+  description: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  excluded: boolean;
+}
 
 interface MockRoot {
-  info: RootInfo;
-  formats: Map<Format, number>;
-  unsupported: number;
+  id: number;
+  path: string;
+  isFolder: boolean;
+}
+
+interface MockJob {
+  id: number;
+  entry: number;
+  target: number;
+  format: Format;
+  output: string;
+  state: JobState;
 }
 
 interface MockPlan {
   summary: PlanSummary;
+  jobs: MockJob[];
+  byEntry: Map<number, MockJob[]>;
   used: boolean;
 }
 
@@ -156,61 +207,54 @@ function hash(text: string): number {
   return value;
 }
 
-function makeRoot(id: number, path: string): MockRoot {
-  const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase();
-  if (extension !== undefined) {
-    const format = EXTENSIONS[extension];
-    return {
-      info: { id, path, isFolder: false, files: 1 },
-      formats: new Map(format ? [[format, 1]] : []),
-      unsupported: format ? 0 : 1,
-    };
-  }
-  const images = 40 + (hash(path) % 400);
-  const formats = new Map<Format, number>();
-  let counted = 0;
-  FOLDER_MIX.forEach(([format, share], index) => {
-    const count = index === FOLDER_MIX.length - 1 ? images - counted : Math.round(images * share);
-    counted += count;
-    formats.set(format, count);
-  });
-  return { info: { id, path, isFolder: true, files: images + 3 }, formats, unsupported: 3 };
+function baseName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
-function summarize(roots: MockRoot[]): InputsSummary {
-  const byFormat = new Map<Format, number>();
-  let unsupported = 0;
-  for (const root of roots) {
-    root.formats.forEach((count, format) => byFormat.set(format, (byFormat.get(format) ?? 0) + count));
-    unsupported += root.unsupported;
+function message(code: string, text: string) {
+  return { code, text };
+}
+
+function emptyCounts(): FileCounts {
+  return { all: 0, ready: 0, problems: 0, excluded: 0, running: 0, done: 0, failed: 0, cancelled: 0, unsupported: 0 };
+}
+
+/** Which job-dependent states a file is in (as `transmute-api` decides). */
+function jobFlags(states: JobState[]) {
+  let converted = false;
+  let unfinished = false;
+  const flags = { ready: false, problems: false, running: false, done: false, failed: false, cancelled: false };
+  for (const { state } of states) {
+    if (state === "ready") flags.ready = unfinished = true;
+    else if (state === "skipped") flags.problems = true;
+    else if (state === "blocked") flags.problems = unfinished = true;
+    else if (state === "running") flags.running = unfinished = true;
+    else if (state === "converted") converted = true;
+    else if (state === "failed") flags.failed = unfinished = true;
+    else if (state === "cancelled") flags.cancelled = unfinished = true;
   }
-  const convertible = [...byFormat.values()].reduce((sum, count) => sum + count, 0);
-  return {
-    roots: roots.map((root) => copy(root.info)),
-    files: convertible + unsupported,
-    convertible,
-    excluded: 0,
-    unsupported,
-    byFormat: [...byFormat].map(([format, count]) => ({ format, count })),
-    warnings: [],
-  };
+  flags.done = converted && !unfinished;
+  return flags;
 }
 
 export function createMockApi(seed: MockSeed = {}): MockApi {
   const listeners = new Set<(event: ApiEvent) => void>();
   const presets = new Map<string, Preset>();
   const runStepMs = seed.runStepMs ?? 100;
+  const failEvery = seed.failEvery ?? 50;
   let preset = copy(seed.preset ?? MOCK_PRESET);
   let tools = copy(seed.tools ?? MOCK_TOOLS);
   let notices = [...(seed.notices ?? [])];
   let defaults: UserDefaults = { codecs: [] };
   let settings: AppSettings = { toolPaths: {} };
   let roots: MockRoot[] = [];
+  let entries: MockEntry[] = [];
   let nextRoot = 0;
+  let nextEntry = 0;
   let plan: MockPlan | null = null;
   let run: MockRun | null = null;
-  // Outputs earlier runs wrote, by format: the next plan skips them.
-  const written = new Map<Format, number>();
+  // Outputs earlier runs wrote (entry:target): the next plan skips them.
+  const written = new Set<string>();
 
   const emit = (event: ApiEvent) => listeners.forEach((listener) => listener(event));
 
@@ -220,93 +264,257 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
     }
   };
 
-  /** Any edit invalidates the plan, as in the real session. */
+  /** Any edit invalidates the plan and the run, as in the real session. */
   const changed = () => {
     plan = null;
+    run = null;
   };
 
-  const overview = (): Overview => ({
-    inputs: summarize(roots),
-    preset: copy(preset),
-    plan: plan ? copy(plan.summary) : null,
-    run: run ? { state: run.state, progress: copy(run.progress) } : null,
-    notices: [...notices],
+  const addRoot = (path: string) => {
+    const root = nextRoot++;
+    const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase();
+    const add = (relativePath: string, format: Format | null, index: number) =>
+      entries.push({
+        id: nextEntry++,
+        root,
+        relativePath,
+        format,
+        description: format ? DESCRIPTIONS[format] : "Text",
+        size: 400_000 + ((hash(relativePath) + index * 7919) % 4_000_000),
+        width: format ? 1920 + (index % 4) * 640 : null,
+        height: format ? 1080 + (index % 3) * 360 : null,
+        excluded: false,
+      });
+    if (extension !== undefined) {
+      roots.push({ id: root, path, isFolder: false });
+      add(baseName(path), EXTENSIONS[extension] ?? null, 0);
+      return;
+    }
+    roots.push({ id: root, path, isFolder: true });
+    const images = 12 + (hash(path) % 30);
+    for (let i = 0; i < images; i++) {
+      const format = FOLDER_FORMATS[i % FOLDER_FORMATS.length] ?? "jpeg";
+      const folder = SUBFOLDERS[i % SUBFOLDERS.length] ?? "";
+      const name = `photo-${String(i + 1).padStart(3, "0")}.${EXTENSION_OF[format]}`;
+      add(folder ? `${folder}/${name}` : name, format, i);
+    }
+    add("notes.txt", null, images);
+    entries.sort((a, b) => a.root - b.root || a.relativePath.localeCompare(b.relativePath));
+  };
+
+  const isImage = (entry: MockEntry) => entry.format !== null;
+
+  const fileInfo = (entry: MockEntry): FileInfo => ({
+    entry: entry.id,
+    format: entry.format,
+    description: entry.description,
+    size: entry.size,
+    width: entry.width,
+    height: entry.height,
+    excluded: entry.excluded,
+    animated: false,
+    problem: null,
+    outputs: entry.excluded
+      ? []
+      : (plan?.byEntry.get(entry.id) ?? []).map((job) => ({
+          job: job.id,
+          target: job.target,
+          format: job.format,
+          state: copy(job.state),
+        })),
   });
 
-  const makePlan = (): PlanSummary => {
-    const sources = summarize(roots).convertible;
-    const writable = writableFormats(tools);
-    const problems: Tally[] = [];
-    let ready = 0;
-    let skipped = 0;
-    let blocked = 0;
-    for (const output of preset.outputs) {
-      const format = output.codec.format;
-      if (!writable.has(format)) {
-        blocked += sources;
-        continue;
+  const flagsOf = (entry: MockEntry) =>
+    jobFlags(entry.excluded || !isImage(entry) ? [] : (plan?.byEntry.get(entry.id) ?? []).map((j) => j.state));
+
+  const addTo = (counts: FileCounts, entry: MockEntry) => {
+    counts.all++;
+    if (entry.excluded) counts.excluded++;
+    else if (!isImage(entry)) counts.unsupported++;
+    else {
+      const flags = flagsOf(entry);
+      for (const key of ["ready", "problems", "running", "done", "failed", "cancelled"] as const) {
+        if (flags[key]) counts[key]++;
       }
-      const exists = Math.min(written.get(format) ?? 0, sources);
-      skipped += exists;
-      ready += sources - exists;
     }
-    if (skipped > 0) problems.push({ code: "output-exists", text: "The output already exists", count: skipped });
-    if (blocked > 0) {
-      problems.push({ code: "no-route", text: "No installed tool can write this format", count: blocked });
+  };
+
+  const countsOf = (filter?: (entry: MockEntry) => boolean) => {
+    const counts = emptyCounts();
+    for (const entry of entries) if (!filter || filter(entry)) addTo(counts, entry);
+    return counts;
+  };
+
+  const matches = (filter: FileFilter, entry: MockEntry) => {
+    if (filter === "all") return true;
+    if (filter === "excluded") return entry.excluded;
+    if (filter === "unsupported") return !entry.excluded && !isImage(entry);
+    return flagsOf(entry)[filter];
+  };
+
+  const summarize = (): InputsSummary => {
+    const byFormat = new Map<Format, number>();
+    let convertible = 0;
+    let excluded = 0;
+    for (const entry of entries) {
+      if (entry.excluded) excluded++;
+      if (entry.format) {
+        convertible++;
+        byFormat.set(entry.format, (byFormat.get(entry.format) ?? 0) + 1);
+      }
     }
     return {
-      jobs: sources * preset.outputs.length,
-      ready,
-      skipped,
-      blocked,
-      sources,
-      outputsPerSource: preset.outputs.length,
-      previousOutputs: 0,
-      filteredOut: 0,
-      unsupported: summarize(roots).unsupported,
-      problems,
-      notes: [],
+      roots: roots.map((root, index) => ({
+        id: index,
+        path: root.path,
+        isFolder: root.isFolder,
+        files: entries.filter((e) => e.root === root.id).length,
+        counts: countsOf((e) => e.root === root.id),
+      })),
+      files: entries.length,
+      convertible,
+      excluded,
+      unsupported: entries.length - convertible,
+      byFormat: [...byFormat].map(([format, count]) => ({ format, count })),
+      warnings: [],
     };
   };
 
-  const finishRun = (current: MockRun) => {
+  /** Roots are addressed by position, as the real API does. */
+  const rootAt = (index: number) => {
+    const root = roots[index];
+    if (!root) throw failure("notFound", `no input ${index}`);
+    return root;
+  };
+
+  const overview = (): Overview => ({
+    inputs: summarize(),
+    preset: copy(preset),
+    plan: plan ? copy(plan.summary) : null,
+    run: run ? { state: run.state, progress: copy(run.progress) } : null,
+    counts: countsOf(),
+    notices: [...notices],
+  });
+
+  const makePlan = (): MockPlan => {
+    const writable = writableFormats(tools);
+    const jobs: MockJob[] = [];
+    const byEntry = new Map<number, MockJob[]>();
+    const problems = new Map<string, Tally>();
+    const tally = (code: string, text: string) => {
+      const item = problems.get(code) ?? { code, text, count: 0 };
+      item.count++;
+      problems.set(code, item);
+    };
+    let ready = 0;
+    let skipped = 0;
+    let blocked = 0;
+    const sources = entries.filter((e) => isImage(e) && !e.excluded);
+    for (const entry of sources) {
+      preset.outputs.forEach((output, target) => {
+        const format = output.codec.format;
+        const root = roots.find((r) => r.id === entry.root);
+        const stem = entry.relativePath.replace(/\.[^.]+$/, "");
+        let state: JobState;
+        if (!writable.has(format)) {
+          state = { state: "blocked", reason: message("no-route", "no installed tool can write this format") };
+          tally("no-route", "blocked: no installed tool can write this format");
+          blocked++;
+        } else if (written.has(`${entry.id}:${target}`)) {
+          state = { state: "skipped", reason: message("output-exists", "the output already exists") };
+          tally("output-exists", "skipped: the output already exists");
+          skipped++;
+        } else {
+          state = { state: "ready" };
+          ready++;
+        }
+        const job: MockJob = {
+          id: jobs.length,
+          entry: entry.id,
+          target,
+          format,
+          output: `${root?.isFolder ? root.path : ""}\\${stem}.${EXTENSION_OF[format]}`,
+          state,
+        };
+        jobs.push(job);
+        byEntry.set(entry.id, [...(byEntry.get(entry.id) ?? []), job]);
+      });
+    }
+    return {
+      jobs,
+      byEntry,
+      used: false,
+      summary: {
+        jobs: jobs.length,
+        ready,
+        skipped,
+        blocked,
+        sources: sources.length,
+        outputsPerSource: preset.outputs.length,
+        previousOutputs: 0,
+        filteredOut: 0,
+        unsupported: entries.length - entries.filter(isImage).length,
+        problems: [...problems.values()].sort((a, b) => b.count - a.count),
+        notes: [],
+      },
+    };
+  };
+
+  const finishRun = (current: MockRun, updates: JobUpdate[]) => {
     clearInterval(current.timer);
+    for (const job of plan?.jobs ?? []) {
+      if (job.state.state === "ready" || job.state.state === "running") {
+        job.state = { state: "cancelled" };
+        updates.push({ id: job.id, state: job.state });
+      }
+    }
+    current.progress.cancelled = (plan?.jobs ?? []).filter((j) => j.state.state === "cancelled").length;
     current.state = "finished";
     current.progress.running = 0;
     current.progress.remainingMs = null;
-    // Credit the formats written, so re-planning skips them.
-    const sources = summarize(roots).convertible;
-    for (const output of preset.outputs) {
-      const format = output.codec.format;
-      if (writableFormats(tools).has(format) && current.progress.cancelled === 0) {
-        written.set(format, sources);
-      }
-    }
+    if (updates.length > 0) emit({ type: "jobsChanged", jobs: copy(updates) });
     emit({ type: "runFinished", progress: copy(current.progress) });
   };
 
   const step = (current: MockRun) => {
-    if (current.state === "paused") return;
+    if (current.state === "paused" || !plan) return;
     const { progress } = current;
     progress.elapsedMs += runStepMs;
+    const updates: JobUpdate[] = [];
+    // The jobs started last step finish now.
+    for (const job of plan.jobs.filter((j) => j.state.state === "running")) {
+      const entry = entries.find((e) => e.id === job.entry);
+      const input = entry?.size ?? 1_000_000;
+      if (failEvery > 0 && (job.id + 1) % failEvery === 0) {
+        job.state = { state: "failed", message: `${job.format === "webp" ? "cwebp" : "the encoder"} stopped with an error` };
+        progress.failed++;
+      } else {
+        const output = Math.round(input * (job.format === "jxl" ? 0.13 : 0.2));
+        job.state = { state: "converted", inputBytes: input, outputBytes: output, seconds: 0.4 + (job.id % 5) / 10 };
+        written.add(`${job.entry}:${job.target}`);
+        progress.converted++;
+        progress.inputBytes += input;
+        progress.outputBytes += output;
+      }
+      updates.push({ id: job.id, state: copy(job.state) });
+    }
     if (current.state === "cancelling") {
-      progress.cancelled = progress.total - progress.converted - progress.failed;
-      finishRun(current);
+      finishRun(current, updates);
       return;
     }
-    const done = progress.converted + progress.failed;
-    const batch = Math.min(Math.max(1, Math.ceil(progress.total / 30)), progress.total - done);
-    // One job in fifty fails, so failure counts show up.
-    const failures = Math.floor((done + batch) / 50) - Math.floor(done / 50);
-    progress.failed += failures;
-    progress.converted += batch - failures;
-    progress.inputBytes += (batch - failures) * 2_400_000;
-    progress.outputBytes += (batch - failures) * 610_000;
-    progress.running = Math.min(8, progress.total - progress.converted - progress.failed);
+    const batch = Math.max(1, Math.ceil(progress.total / 25));
+    const next = plan.jobs.filter((j) => j.state.state === "ready").slice(0, batch);
+    for (const job of next) {
+      job.state = { state: "running" };
+      updates.push({ id: job.id, state: { state: "running" } });
+    }
+    progress.running = next.length;
     const finished = progress.converted + progress.failed;
-    progress.remainingMs = finished > 0 ? Math.round((progress.elapsedMs / finished) * (progress.total - finished)) : null;
+    progress.remainingMs =
+      finished >= 5 ? Math.round((progress.elapsedMs / finished) * (progress.total - finished)) : null;
+    if (updates.length > 0) emit({ type: "jobsChanged", jobs: copy(updates) });
     emit({ type: "progress", progress: copy(progress) });
-    if (finished >= progress.total) finishRun(current);
+    if (next.length === 0) finishRun(current, []);
   };
 
   const presetId = (name: string): string => {
@@ -314,6 +522,24 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
     let id = base;
     for (let n = 2; presets.has(id); n++) id = `${base}-${n}`;
     return id;
+  };
+
+  const job = (mock: MockJob): Job => {
+    const entry = entries.find((e) => e.id === mock.entry);
+    const tool = mock.format === "jxl" ? "cjxl" : mock.format === "webp" ? "cwebp" : "vips";
+    return {
+      id: mock.id,
+      entry: mock.entry,
+      source: entry?.relativePath ?? "",
+      target: mock.target,
+      format: mock.format,
+      output: mock.output,
+      state: copy(mock.state),
+      route: `${tool} writes ${DESCRIPTIONS[mock.format]} directly`,
+      tools: [tool],
+      notes: [],
+      replacesExisting: false,
+    };
   };
 
   return {
@@ -326,30 +552,109 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
 
     addInputs: async (paths) => {
       ensureIdle();
-      const known = new Set(roots.map((root) => root.info.path));
-      for (const path of paths) {
-        if (!known.has(path)) roots.push(makeRoot(nextRoot++, path));
-      }
-      const summary = summarize(roots);
+      const known = new Set(roots.map((root) => root.path));
+      for (const path of paths) if (!known.has(path)) addRoot(path);
+      const summary = summarize();
       emit({ type: "scanProgress", discovered: summary.files, inspected: summary.files });
       changed();
-      return summary;
+      return summarize();
     },
-    removeRoot: async (root) => {
+    removeRoot: async (index) => {
       ensureIdle();
-      if (!roots.some((r) => r.info.id === root)) throw failure("notFound", `no input ${root}`);
-      roots = roots.filter((r) => r.info.id !== root);
+      const root = rootAt(index);
+      roots = roots.filter((r) => r !== root);
+      entries = entries.filter((e) => e.root !== root.id);
       changed();
-      return summarize(roots);
+      return summarize();
     },
     clearInputs: async () => {
       ensureIdle();
       roots = [];
+      entries = [];
       changed();
-      return summarize(roots);
+      return summarize();
     },
-    tree: () => notYet("tree"),
-    setExcluded: () => notYet("setExcluded"),
+    tree: async (index, dir) => {
+      const root = rootAt(index);
+      const prefix = dir ? `${dir}/` : "";
+      const folders = new Map<string, FileCounts>();
+      const files: TreeNode[] = [];
+      for (const entry of entries) {
+        if (entry.root !== root.id || !entry.relativePath.startsWith(prefix)) continue;
+        const rest = entry.relativePath.slice(prefix.length).split("/");
+        const [name = ""] = rest;
+        if (rest.length === 1) {
+          files.push({ name, relativePath: entry.relativePath, node: { kind: "file", ...fileInfo(entry) } });
+        } else {
+          const counts = folders.get(name) ?? emptyCounts();
+          addTo(counts, entry);
+          folders.set(name, counts);
+        }
+      }
+      return [
+        ...[...folders].map(([name, counts]): TreeNode => ({
+          name,
+          relativePath: `${prefix}${name}`,
+          node: { kind: "folder", counts },
+        })),
+        ...files.sort((a, b) => a.name.localeCompare(b.name)),
+      ];
+    },
+    setExcluded: async (index, relativePath, excluded) => {
+      ensureIdle();
+      const root = rootAt(index);
+      for (const entry of entries) {
+        const below =
+          relativePath === "" ||
+          entry.relativePath === relativePath ||
+          entry.relativePath.startsWith(`${relativePath}/`);
+        if (entry.root === root.id && below) entry.excluded = excluded;
+      }
+      changed();
+      return summarize();
+    },
+    fileCounts: async () => countsOf(),
+    files: async (filter, offset, limit) => {
+      const matching = entries.filter((entry) => matches(filter, entry));
+      const files: FileRow[] = matching.slice(offset, offset + limit).map((entry) => ({
+        root: roots.findIndex((r) => r.id === entry.root),
+        name: baseName(entry.relativePath),
+        relativePath: entry.relativePath,
+        file: fileInfo(entry),
+      }));
+      return { total: matching.length, offset, files };
+    },
+    entry: async (id): Promise<EntryDetails> => {
+      const entry = entries.find((e) => e.id === id);
+      if (!entry) throw failure("notFound", `no file ${id}`);
+      const root = roots.find((r) => r.id === entry.root);
+      return {
+        root: roots.findIndex((r) => r.id === entry.root),
+        name: baseName(entry.relativePath),
+        relativePath: entry.relativePath,
+        path: root?.isFolder ? `${root.path}\\${entry.relativePath.replaceAll("/", "\\")}` : (root?.path ?? ""),
+        file: fileInfo(entry),
+        bitDepth: null,
+        alpha: entry.format === "png" ? null : false,
+        frames: null,
+        pages: null,
+        metadata: entry.format === "jpeg" ? ["EXIF", "ICC profile"] : [],
+        extensionMismatch: false,
+        jobs: (plan?.byEntry.get(entry.id) ?? []).map(job),
+      };
+    },
+    clearFinished: async () => {
+      ensureIdle();
+      const done = entries.filter((e) => isImage(e) && !e.excluded && flagsOf(e).done);
+      if (done.length === 0) return summarize();
+      const gone = new Set(done.map((e) => e.id));
+      entries = entries.filter((e) => !gone.has(e.id));
+      // An input left with no images goes too.
+      roots = roots.filter((root) => entries.some((e) => e.root === root.id && isImage(e)));
+      entries = entries.filter((e) => roots.some((r) => r.id === e.root));
+      changed();
+      return summarize();
+    },
 
     preset: async () => copy(preset),
     setPreset: async (next) => {
@@ -358,8 +663,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       preset = copy(next);
       changed();
     },
-    storedPresets: async (): Promise<StoredPreset[]> =>
-      [...presets].map(([id, stored]) => ({ id, preset: copy(stored) })),
+    storedPresets: async (): Promise<StoredPreset[]> => [...presets].map(([id, stored]) => ({ id, preset: copy(stored) })),
     loadPreset: async (id) => {
       const stored = presets.get(id);
       if (!stored) throw failure("notFound", `no preset "${id}"`);
@@ -402,7 +706,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
     plan: async () => {
       ensureIdle();
       if (preset.outputs.length === 0) throw failure("invalid", "pick at least one output format to convert to");
-      plan = { summary: makePlan(), used: false };
+      plan = makePlan();
       run = null;
       return copy(plan.summary);
     },
@@ -442,7 +746,40 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       if (!run || run.state === "finished") throw failure("invalid", "nothing is running");
       run.state = "cancelling";
     },
-    report: () => notYet("report"),
+    report: async () => {
+      if (!plan) throw failure("noPlan", "nothing has been planned yet");
+      return `Transmute report\n\n${plan.summary.jobs} job(s)`;
+    },
+    saveReport: async () => {
+      if (!plan) throw failure("noPlan", "nothing has been planned yet");
+    },
+    runTotals: async (): Promise<TargetTotals[]> => {
+      if (!plan) throw failure("noPlan", "nothing has been planned yet");
+      return preset.outputs.map((output, target) => {
+        const totals: TargetTotals = {
+          target,
+          format: output.codec.format,
+          converted: 0,
+          skipped: 0,
+          blocked: 0,
+          failed: 0,
+          cancelled: 0,
+          ready: 0,
+          inputBytes: 0,
+          outputBytes: 0,
+        };
+        for (const { state } of (plan?.jobs ?? []).filter((j) => j.target === target)) {
+          if (state.state === "converted") {
+            totals.converted++;
+            totals.inputBytes += state.inputBytes;
+            totals.outputBytes += state.outputBytes;
+          } else if (state.state === "running") totals.ready++;
+          else totals[state.state]++;
+        }
+        return totals;
+      });
+    },
+    reveal: async () => {},
 
     preview: () => notYet("preview"),
     sample: () => notYet("sample"),
