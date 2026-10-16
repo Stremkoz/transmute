@@ -13,11 +13,14 @@ function blocker({ inputs, preset }: Overview): string | null {
   return null;
 }
 
-function savedText(progress: RunView["progress"]): string | null {
+/** What the converted files saved, or by how much they grew (not shown as a saving). */
+function savedText(progress: RunView["progress"]): { text: string; larger: boolean } | null {
   if (progress.converted === 0 || progress.inputBytes === 0) return null;
   const saved = progress.inputBytes - progress.outputBytes;
   const percent = Math.round((saved / progress.inputBytes) * 100);
-  return saved >= 0 ? `saved ${formatBytes(saved)} (${percent}%)` : `${formatBytes(-saved)} larger (${-percent}%)`;
+  return saved >= 0
+    ? { text: `saved ${formatBytes(saved)} (${percent}%)`, larger: false }
+    : { text: `${formatBytes(-saved)} larger (${-percent}%)`, larger: true };
 }
 
 function PlanLine({ plan }: { plan: PlanSummary }) {
@@ -112,7 +115,7 @@ function Running({ run }: { run: RunView }) {
         {saved && (
           <>
             <span className={styles.sep}>·</span>
-            <span className={styles.ok}>{saved}</span>
+            <span className={saved.larger ? styles.warn : styles.ok}>{saved.text}</span>
           </>
         )}
         {progress.failed > 0 && (
@@ -160,7 +163,7 @@ function Finished({ run, plan }: { run: RunView; plan: PlanSummary | null }) {
         {saved && (
           <>
             <span className={styles.sep}>·</span>
-            <span className={styles.ok}>{saved}</span>
+            <span className={saved.larger ? styles.warn : styles.ok}>{saved.text}</span>
           </>
         )}
         {plan && plan.skipped > 0 && (

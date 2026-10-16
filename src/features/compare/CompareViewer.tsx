@@ -34,10 +34,15 @@ function useLoad<T>(key: string | null, load: () => Promise<T>): Loaded<T> | nul
   return result?.key === key ? result : null;
 }
 
-function change(input: number, output: number): string {
-  if (input === 0) return "";
+/** "87% smaller" in green, or "172% larger" in amber: a bigger file isn't a saving. */
+function Change({ input, output }: { input: number; output: number }) {
+  if (input === 0) return null;
   const percent = Math.round((1 - output / input) * 100);
-  return percent >= 0 ? `${percent}% smaller` : `${-percent}% larger`;
+  return percent >= 0 ? (
+    <span className={styles.saving}>({percent}% smaller)</span>
+  ) : (
+    <span className={styles.larger}>({-percent}% larger)</span>
+  );
 }
 
 function dims(width: number | null, height: number | null): string {
@@ -256,7 +261,7 @@ function Viewer({ viewer }: { viewer: ViewerState }) {
                 <>
                   {outputName}
                   {trialTag} · {formatBytes(result.bytes)}{" "}
-                  <span className={styles.saving}>({change(info?.file.size ?? 0, result.bytes)})</span>
+                  <Change input={info?.file.size ?? 0} output={result.bytes} />
                 </>
               ) : (
                 `${outputName}${trialTag}`
@@ -297,7 +302,7 @@ function Viewer({ viewer }: { viewer: ViewerState }) {
               <td>
                 {result ? (
                   <>
-                    {formatBytes(result.bytes)} <span className={styles.saving}>({change(info?.file.size ?? 0, result.bytes)})</span>
+                    {formatBytes(result.bytes)} <Change input={info?.file.size ?? 0} output={result.bytes} />
                     {result.seconds !== null && <span className={styles.muted}> · made in {result.seconds.toFixed(1)} s</span>}
                   </>
                 ) : (

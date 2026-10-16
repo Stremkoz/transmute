@@ -126,6 +126,29 @@ export const MOCK_FACTORY: CodecSettings[] = [
   { format: "bmp" },
 ];
 
+/**
+ * Documents as the real backend sends them: serde leaves out an input
+ * filter of "all", empty codec defaults and empty tool paths (G5: the
+ * frontend crashed on exactly these, which the mock used to always send).
+ */
+function wirePreset(preset: Preset): Preset {
+  const out = copy(preset);
+  if (out.inputFilter?.mode === "all") delete out.inputFilter;
+  return out;
+}
+
+function wireDefaults(defaults: UserDefaults): UserDefaults {
+  const out = copy(defaults);
+  if (out.codecs?.length === 0) delete out.codecs;
+  return out;
+}
+
+function wireSettings(settings: AppSettings): AppSettings {
+  const out = copy(settings);
+  if (out.toolPaths && Object.keys(out.toolPaths).length === 0) delete out.toolPaths;
+  return out;
+}
+
 /** Deep equality of JSON-like values, ignoring absent and undefined fields. */
 function sameValue(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -441,7 +464,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
 
   const overview = (): Overview => ({
     inputs: summarize(),
-    preset: copy(preset),
+    preset: wirePreset(preset),
     loaded: loaded
       ? { id: loaded.id, name: loaded.stored.name, edited: !sameValue(loaded.stored, preset) }
       : null,
@@ -716,14 +739,14 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       return summarize();
     },
 
-    preset: async () => copy(preset),
+    preset: async () => wirePreset(preset),
     setPreset: async (next) => {
       ensureIdle();
       if (!next.name.trim()) throw failure("invalid", "invalid preset: name: must not be empty");
       preset = copy(next);
       changed();
     },
-    storedPresets: async (): Promise<StoredPreset[]> => [...presets].map(([id, stored]) => ({ id, preset: copy(stored) })),
+    storedPresets: async (): Promise<StoredPreset[]> => [...presets].map(([id, stored]) => ({ id, preset: wirePreset(stored) })),
     loadPreset: async (id) => {
       const stored = presets.get(id);
       if (!stored) throw failure("notFound", `no preset "${id}"`);
@@ -731,7 +754,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       preset = copy(stored);
       loaded = { id, stored: copy(stored) };
       changed();
-      return copy(preset);
+      return wirePreset(preset);
     },
     savePreset: async (id, next) => {
       if (next.outputs.length === 0) {
@@ -751,7 +774,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       preset = copy(MOCK_PRESET);
       loaded = null;
       changed();
-      return copy(preset);
+      return wirePreset(preset);
     },
     saveWorking: async (id, name, description) => {
       if (!name.trim()) throw failure("invalid", "invalid preset: name: must not be empty");
@@ -774,24 +797,24 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       };
       const id = presetId(imported.name);
       presets.set(id, copy(imported));
-      return { id, preset: imported };
+      return { id, preset: wirePreset(imported) };
     },
     exportPreset: async (id) => {
       if (!presets.has(id)) throw failure("notFound", `no preset "${id}"`);
     },
     codecs: async (): Promise<CodecDefaults[]> =>
       MOCK_FACTORY.map((factory) => {
-        const patch: CodecPatch | undefined = defaults.codecs.find((c) => c.format === factory.format);
+        const patch: CodecPatch | undefined = (defaults.codecs ?? []).find((c) => c.format === factory.format);
         return { format: factory.format, factory: copy(factory), inherited: { ...copy(factory), ...copy(patch) } as CodecSettings };
       }),
 
-    defaults: async () => copy(defaults),
+    defaults: async () => wireDefaults(defaults),
     setDefaults: async (next) => {
       ensureIdle();
       defaults = copy(next);
       changed();
     },
-    settings: async () => copy(settings),
+    settings: async () => wireSettings(settings),
     setSettings: async (next) => {
       ensureIdle();
       settings = copy(next);

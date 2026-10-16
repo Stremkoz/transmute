@@ -72,7 +72,9 @@ pub struct Preset {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    // Left out of the JSON when empty, so optional in TypeScript too.
     #[serde(default, skip_serializing_if = "is_default")]
+    #[cfg_attr(feature = "typescript", ts(as = "Option<InputFilter>", optional))]
     pub input_filter: InputFilter,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub destination: Option<Destination>,
@@ -143,6 +145,8 @@ fn validate_name(name: &str, v: &mut Validator) {
 pub struct UserDefaults {
     /// Per-format codec settings; at most one entry per format.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    // Left out of the JSON when empty, so optional in TypeScript too.
+    #[cfg_attr(feature = "typescript", ts(as = "Option<Vec<CodecPatch>>", optional))]
     pub codecs: Vec<CodecPatch>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub destination: Option<Destination>,

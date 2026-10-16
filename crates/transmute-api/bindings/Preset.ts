@@ -9,4 +9,4 @@ import type { OutputTarget } from "./OutputTarget";
 /**
  * A saved (or unsaved, in-session) multi-output configuration.
  */
-export type Preset = { name: string, description?: string, inputFilter: InputFilter, destination?: Destination, naming?: NamingRule, metadata?: MetadataPolicy, collision?: CollisionPolicy, outputs: Array<OutputTarget>, };
+export type Preset = { name: string, description?: string, inputFilter?: InputFilter, destination?: Destination, naming?: NamingRule, metadata?: MetadataPolicy, collision?: CollisionPolicy, outputs: Array<OutputTarget>, };

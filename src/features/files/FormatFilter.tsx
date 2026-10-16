@@ -6,6 +6,8 @@ import { formatCount } from "../../lib/units";
 import { useSession } from "../../state/sessionContext";
 import styles from "./FilesPanel.module.css";
 
+const ALL: InputFilter = { mode: "all" };
+
 /** The formats an input filter leaves out. */
 function excludedBy(filter: InputFilter): Set<Format> {
   switch (filter.mode) {
@@ -31,7 +33,8 @@ function label(excluded: Set<Format>, present: Format[]): string {
  * a format leaves it out; formats added later are still included.
  */
 export function FormatFilter({ inputs, disabled }: { inputs: InputsSummary; disabled: boolean }) {
-  const filter = useSession((state) => state.overview?.preset.inputFilter ?? { mode: "all" as const });
+  // Absent means all; the fallback is made outside the selector, which must return stable values.
+  const filter = useSession((state) => state.overview?.preset.inputFilter) ?? ALL;
   const setPolicies = useSession((state) => state.setPolicies);
   const excluded = excludedBy(filter);
   const present = OUTPUT_FORMATS.filter((format) => inputs.byFormat.some((count) => count.format === format));

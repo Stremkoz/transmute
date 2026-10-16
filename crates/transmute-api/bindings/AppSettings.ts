@@ -5,7 +5,7 @@ export type AppSettings = {
 /**
  * Executables to use instead of the ones found automatically.
  */
-toolPaths: { [key in ToolId]?: string }, 
+toolPaths?: { [key in ToolId]?: string }, 
 /**
  * Conversions to run at once. Absent means one per CPU core.
  */

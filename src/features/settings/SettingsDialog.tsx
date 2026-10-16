@@ -123,17 +123,18 @@ function CodecDefaults({ disabled }: { disabled: boolean }) {
   const defaults = useSession((state) => state.defaults);
   const codecs = useSession((state) => state.codecs);
   const setDefaults = useSession((state) => state.setDefaults);
+  const patches = defaults.codecs ?? [];
   return (
     <section className={styles.section}>
       <h3 className={styles.heading}>Format defaults</h3>
-      {defaults.codecs.length === 0 ? (
+      {patches.length === 0 ? (
         <p className={styles.help}>
           Every format uses Transmute's own settings. To change one, open an output's settings and choose Make these my
           defaults.
         </p>
       ) : (
         <ul className={styles.codecs}>
-          {defaults.codecs.map((patch) => {
+          {patches.map((patch) => {
             const codec = defaultsFor(codecs, patch.format);
             return (
               <li key={patch.format} className={styles.codec}>
@@ -152,7 +153,7 @@ function CodecDefaults({ disabled }: { disabled: boolean }) {
                   className="button"
                   disabled={disabled}
                   onClick={() =>
-                    void setDefaults({ ...defaults, codecs: defaults.codecs.filter((c) => c.format !== patch.format) })
+                    void setDefaults({ ...defaults, codecs: patches.filter((c) => c.format !== patch.format) })
                   }
                 >
                   Use factory settings

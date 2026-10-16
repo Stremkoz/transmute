@@ -19,7 +19,7 @@ import { outputDetails } from "./presetText";
 
 function formatsIn(preset: Preset): string {
   const filter = preset.inputFilter;
-  if (filter.mode === "all") return "All images";
+  if (!filter || filter.mode === "all") return "All images";
   const names = filter.formats.map((format) => FORMAT_LABELS[format]).join(", ");
   return filter.mode === "only" ? `Only ${names}` : `All but ${names}`;
 }

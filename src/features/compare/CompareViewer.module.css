@@ -183,6 +183,10 @@
   color: var(--color-ok);
 }
 
+.larger {
+  color: var(--color-warn);
+}
+
 .muted {
   color: var(--color-text-muted);
 }

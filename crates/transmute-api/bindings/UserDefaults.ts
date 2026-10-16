@@ -12,4 +12,4 @@ export type UserDefaults = {
 /**
  * Per-format codec settings; at most one entry per format.
  */
-codecs: Array<CodecPatch>, destination?: Destination, naming?: NamingRule, metadata?: MetadataPolicy, collision?: CollisionPolicy, };
+codecs?: Array<CodecPatch>, destination?: Destination, naming?: NamingRule, metadata?: MetadataPolicy, collision?: CollisionPolicy, };

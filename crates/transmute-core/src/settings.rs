@@ -19,6 +19,11 @@ pub const MAX_WORKERS: usize = 256;
 pub struct AppSettings {
     /// Executables to use instead of the ones found automatically.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    // Left out of the JSON when empty, so optional in TypeScript too.
+    #[cfg_attr(
+        feature = "typescript",
+        ts(as = "Option<BTreeMap<ToolId, PathBuf>>", optional)
+    )]
     pub tool_paths: BTreeMap<ToolId, PathBuf>,
     /// Conversions to run at once. Absent means one per CPU core.
     #[serde(default, skip_serializing_if = "Option::is_none")]

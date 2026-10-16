@@ -50,7 +50,7 @@ function ToolRow({ info, tools }: { info: ToolInfo; tools: ToolInfo[] }) {
   const locked = useSession((state) => isRunActive(state.run));
   const status = statusText(info);
   const source = TOOL_SOURCES[info.tool];
-  const chosen = settings.toolPaths[info.tool];
+  const chosen = settings.toolPaths?.[info.tool];
   const only = info.status.status === "available" ? onlyWriter(info, tools) : [];
 
   const choose = async () => {

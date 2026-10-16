@@ -419,12 +419,13 @@ export function createSessionStore(api: TransmuteApi) {
         const output = overview?.preset.outputs[index];
         if (!output) return;
         const { format } = output.codec;
-        const current = defaults.codecs.find((codec) => codec.format === format);
+        const patches = defaults.codecs ?? [];
+        const current = patches.find((codec) => codec.format === format);
         const merged = { ...current, ...output.codec } as CodecPatch;
         try {
           await api.setDefaults({
             ...defaults,
-            codecs: [...defaults.codecs.filter((codec) => codec.format !== format), merged],
+            codecs: [...patches.filter((codec) => codec.format !== format), merged],
           });
         } catch (error) {
           fail(error);
