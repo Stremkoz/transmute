@@ -16,10 +16,12 @@ jobs:
       fail-fast: false
       matrix:
         # Windows is the target platform; Ubuntu is cheaper and keeps the core portable.
-        os: [windows-latest, ubuntu-latest]
+        # Ubuntu is pinned so a runner-image move can't rename the WebKitGTK
+        # packages below unannounced; bump it deliberately.
+        os: [windows-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # rustup reads rust-toolchain.toml and installs the pinned version and components.
       - name: Install toolchain
@@ -48,9 +50,9 @@ jobs:
     name: Frontend
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: npm
