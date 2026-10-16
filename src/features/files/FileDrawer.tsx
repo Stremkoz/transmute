@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { EntryDetails, Job } from "@bindings";
 import { errorMessage } from "../../api/client";
 import { Drawer, DrawerSection } from "../../components/Drawer";
+import { losslessChoiceText } from "../../lib/codecs";
 import { FORMAT_LABELS, TOOL_LABELS } from "../../lib/formats";
 import { formatBytes } from "../../lib/units";
 import { isRunActive } from "../../state/session";
@@ -49,6 +50,7 @@ function OutputCard({ job, onReveal }: { job: Job; onReveal(): void }) {
       {state.state === "converted" && (
         <span className={styles.muted}>
           Made with {tools} in {state.seconds.toFixed(1)} s
+          {state.losslessChoice && ` · ${losslessChoiceText(state.losslessChoice)}`}
         </span>
       )}
       {state.state === "ready" && tools && <span className={styles.muted}>Will be made with {tools}</span>}

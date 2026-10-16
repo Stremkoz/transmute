@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { FieldSpec, Fields } from "../../lib/codecs";
+import { modeOf, type FieldSpec, type Fields, type Mode } from "../../lib/codecs";
 import styles from "./CodecDrawer.module.css";
 
 interface FieldProps {
@@ -81,22 +81,23 @@ function Control(props: FieldProps) {
   const { spec, settings, disabled, onSet } = props;
   const value = settings[spec.key];
   switch (spec.kind) {
-    case "mode":
+    case "mode": {
+      const current = modeOf(settings, spec);
+      const modes: [Mode, string, unknown][] = [
+        ["lossy", "Lossy", false],
+        ["lossless", "Lossless", true],
+        ...(spec.autoKey ? [["auto", "Auto", "auto"] as [Mode, string, unknown]] : []),
+      ];
       return (
         <div className={styles.segmented} role="group" aria-label={spec.label}>
-          {[false, true].map((lossless) => (
-            <button
-              key={String(lossless)}
-              type="button"
-              aria-pressed={value === lossless}
-              disabled={disabled}
-              onClick={() => onSet(lossless)}
-            >
-              {lossless ? "Lossless" : "Lossy"}
+          {modes.map(([mode, label, set]) => (
+            <button key={mode} type="button" aria-pressed={current === mode} disabled={disabled} onClick={() => onSet(set)}>
+              {label}
             </button>
           ))}
         </div>
       );
+    }
     case "bool":
       return (
         <label className={styles.switch}>

@@ -92,6 +92,8 @@ Delivered through the sink given to the `Api` at construction. The shell emits e
 
 A job's `state` goes `ready` → `running` → `converted` / `failed` / `cancelled`. Jobs that planning skipped or blocked stay `skipped` / `blocked`, with a `reason`.
 
+When WebP's automatic lossless encoded an image both ways, its `converted` state (and a `Sample`) has `losslessChoice { keptLossless, lossyBytes, losslessBytes }`. It's left out otherwise.
+
 ## Previews
 
 The webview decodes JPEG, PNG, WebP, GIF, BMP and AVIF itself, so `preview` returns those files' own paths (`rendered: false`). JPEG XL, HEIF and TIFF are rendered to a lossless PNG of the first frame (`rendered: true`), using the same tools as conversions.

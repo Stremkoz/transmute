@@ -16,6 +16,7 @@ import type {
   Job,
   JobState,
   JobUpdate,
+  LosslessChoice,
   NamingRule,
   Overview,
   PlanSummary,
@@ -118,7 +119,7 @@ function available(
 export const MOCK_FACTORY: CodecSettings[] = [
   { format: "jpeg", quality: 85, progressive: true, background: "#ffffff" },
   { format: "png", compression: 9 },
-  { format: "webp", lossless: false, quality: 85, method: 4 },
+  { format: "webp", lossless: false, autoLossless: false, quality: 85, method: 4 },
   { format: "jxl", lossless: false, distance: 1.5, reconstructJpeg: true },
   { format: "avif", lossless: false, quality: 70, effort: 4 },
   { format: "heif", lossless: false, quality: 50 },
@@ -270,6 +271,19 @@ function copy<T>(value: T): T {
 }
 
 /** A stable small number from a string, so made-up folders don't change. */
+/**
+ * Automatic lossless, roughly: WebP outputs set to Auto try both on sources
+ * that started lossless. PNGs stand for graphics (lossless wins), the rest
+ * for photos saved losslessly (it doesn't).
+ */
+function mockChoice(codec: CodecPatch, source: Format | null, lossyBytes: number): LosslessChoice | undefined {
+  const { lossless, autoLossless } = codec as { lossless?: boolean; autoLossless?: boolean };
+  if (codec.format !== "webp" || lossless === true || autoLossless !== true) return undefined;
+  if (!source || !["png", "gif", "bmp", "tiff"].includes(source)) return undefined;
+  const losslessBytes = Math.round(lossyBytes * (source === "png" ? 0.9 : 3));
+  return { keptLossless: losslessBytes <= lossyBytes * 1.25, lossyBytes, losslessBytes };
+}
+
 function hash(text: string): number {
   let value = 0;
   for (const char of text) value = (value * 31 + char.charCodeAt(0)) >>> 0;
@@ -581,8 +595,17 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
         job.state = { state: "failed", message: `${job.format === "webp" ? "cwebp" : "the encoder"} stopped with an error` };
         progress.failed++;
       } else {
-        const output = Math.round(input * (job.format === "jxl" ? 0.13 : 0.2));
-        job.state = { state: "converted", inputBytes: input, outputBytes: output, seconds: 0.4 + (job.id % 5) / 10 };
+        const lossy = Math.round(input * (job.format === "jxl" ? 0.13 : 0.2));
+        const codec = preset.outputs[job.target]?.codec;
+        const choice = codec && mockChoice(codec, entry?.format ?? null, lossy);
+        const output = choice?.keptLossless ? choice.losslessBytes : lossy;
+        job.state = {
+          state: "converted",
+          inputBytes: input,
+          outputBytes: output,
+          seconds: 0.4 + (job.id % 5) / 10,
+          ...(choice && { losslessChoice: choice }),
+        };
         written.add(`${job.entry}:${job.target}`);
         progress.converted++;
         progress.inputBytes += input;
@@ -932,7 +955,9 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       if (job?.state.state !== "converted") throw failure("invalid", "this job hasn't produced an output");
       const entry = entries.find((e) => e.id === job.entry);
       if (!entry) throw failure("unavailable", "the output is no longer there (moved or deleted?)");
-      const lossless = (preset.outputs[job.target]?.codec as { lossless?: boolean } | undefined)?.lossless === true;
+      const lossless =
+        (preset.outputs[job.target]?.codec as { lossless?: boolean } | undefined)?.lossless === true ||
+        job.state.losslessChoice?.keptLossless === true;
       return {
         path: picture(entry.relativePath, entry.width ?? 1600, entry.height ?? 900, lossless ? 0 : 0.6),
         width: entry.width,
@@ -950,8 +975,13 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       if (!writableFormats(tools).has(output.codec.format)) {
         throw failure("invalid", "no installed tool can write this format");
       }
-      const lossless = (output.codec as { lossless?: boolean }).lossless === true;
-      const outputBytes = Math.round(entry.size * (lossless ? 0.55 : output.codec.format === "jxl" ? 0.13 : 0.2));
+      const choice = mockChoice(output.codec, entry.format, Math.round(entry.size * 0.2));
+      const lossless = (output.codec as { lossless?: boolean }).lossless === true || choice?.keptLossless === true;
+      const outputBytes = choice
+        ? choice.keptLossless
+          ? choice.losslessBytes
+          : choice.lossyBytes
+        : Math.round(entry.size * (lossless ? 0.55 : output.codec.format === "jxl" ? 0.13 : 0.2));
       await new Promise((resolve) => setTimeout(resolve, runStepMs));
       return {
         preview: {
@@ -966,6 +996,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
         outputBytes,
         seconds: 0.4 + (hash(entry.relativePath) % 7) / 10,
         notes: [],
+        ...(choice && { losslessChoice: choice }),
       };
     },
     thumbnail: async (id): Promise<Preview> => {

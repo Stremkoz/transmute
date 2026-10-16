@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use transmute_core::codec::CodecSettings;
+use transmute_core::codec::{CodecSettings, LosslessChoice};
 use transmute_core::format::Format;
 use transmute_core::preset::Preset;
 use transmute_core::tool::ToolId;
@@ -348,6 +348,10 @@ pub enum JobState {
         input_bytes: u64,
         output_bytes: u64,
         seconds: f64,
+        /// Which copy automatic lossless kept, when it made both.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        lossless_choice: Option<LosslessChoice>,
     },
     Failed {
         message: String,
@@ -520,6 +524,10 @@ pub struct Sample {
     pub output_bytes: u64,
     pub seconds: f64,
     pub notes: Vec<Message>,
+    /// Which copy automatic lossless kept, when it made both.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub lossless_choice: Option<LosslessChoice>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]

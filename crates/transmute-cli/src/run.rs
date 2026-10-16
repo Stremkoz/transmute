@@ -90,11 +90,22 @@ fn print_event(work: &Work, event: &Event) {
         JobOutcome::Converted {
             input_bytes,
             output_bytes,
+            lossless_choice,
         } => println!(
-            "  ✓ {} → {output}  {}  {:.2}s",
+            "  ✓ {} → {output}  {}  {:.2}s{}",
             source.display(),
             size_change(*input_bytes, *output_bytes),
-            result.elapsed.as_secs_f64()
+            result.elapsed.as_secs_f64(),
+            lossless_choice.map_or_else(String::new, |choice| format!(
+                "  (auto: kept {}; lossy {} B, lossless {} B)",
+                if choice.kept_lossless {
+                    "lossless"
+                } else {
+                    "lossy"
+                },
+                choice.lossy_bytes,
+                choice.lossless_bytes
+            ))
         ),
         JobOutcome::Failed { message } => {
             println!("  ✗ {} → {output}: {message}", source.display())

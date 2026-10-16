@@ -14,6 +14,7 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use transmute_backends::invoke::{Invoker, StepRequest};
+use transmute_core::codec::LosslessChoice;
 use transmute_core::inventory::Inventory;
 use transmute_core::metadata;
 use transmute_core::plan::{JobStatus, Plan};
@@ -93,6 +94,8 @@ pub enum JobOutcome {
         /// Size of the original source, never of an intermediate (R8).
         input_bytes: u64,
         output_bytes: u64,
+        /// Set when automatic lossless encoded the image both ways.
+        lossless_choice: Option<LosslessChoice>,
     },
     Failed {
         message: String,
@@ -234,6 +237,7 @@ fn record(progress: &mut BatchProgress, done: Result<JobResult, tokio::task::Joi
         Ok(JobOutcome::Converted {
             input_bytes,
             output_bytes,
+            ..
         }) => {
             progress.converted += 1;
             progress.input_bytes += input_bytes;
@@ -324,6 +328,7 @@ async fn execute_job(
         }
     }
 
+    let mut last_input = input.clone();
     for (step_index, step) in route.steps.iter().enumerate() {
         let is_last = step_index + 1 == route.steps.len();
         let output = temp_path(
@@ -333,12 +338,9 @@ async fn execute_job(
             step_index,
             step.to.output_extension(),
         );
-        if let Err(err) = journal.record(&output) {
-            return failed(format!("could not record a temporary file: {err}"));
-        }
-        match TempPath::try_from_path(&output) {
+        match prepare_temp(journal, &output) {
             Ok(temp) => temps.push(temp),
-            Err(err) => return failed(format!("could not prepare a temporary file: {err}")),
+            Err(outcome) => return outcome,
         }
 
         let request = StepRequest {
@@ -349,22 +351,8 @@ async fn execute_job(
             metadata: job.metadata.tool_policy,
             auto_orient: job.metadata.auto_orient,
         };
-        let invocation = match invoker.invocation(&request) {
-            Ok(invocation) => invocation,
-            Err(message) => return failed(message),
-        };
-        match run_supervised(&invocation, cancel).await {
-            Ok(ProcessEnd::Cancelled) => return JobOutcome::Cancelled,
-            Ok(ProcessEnd::Exited { code: Some(0), .. }) => {}
-            Ok(ProcessEnd::Exited { code, output }) => {
-                return failed(describe_failure(step.tool.program_name(), code, &output));
-            }
-            Err(err) => {
-                return failed(format!(
-                    "{} could not start: {err}",
-                    step.tool.program_name()
-                ));
-            }
+        if let Err(outcome) = run_step(invoker, &request, cancel).await {
+            return outcome;
         }
         if !is_last && !Path::new(&output).is_file() {
             return failed(format!(
@@ -372,12 +360,57 @@ async fn execute_job(
                 step.tool.program_name()
             ));
         }
-        input = output;
+        last_input = std::mem::replace(&mut input, output);
     }
 
-    let Some(final_temp) = temps.pop() else {
+    let Some(mut final_temp) = temps.pop() else {
         return failed("the route has no steps".into());
     };
+
+    // Automatic lossless: encode the last step again losslessly, and keep
+    // whichever copy the rule picks. The other deletes itself when dropped.
+    let mut lossless_choice = None;
+    if let (Some(alternative), Some(step)) = (
+        settings.lossless_alternative(&entry.inspection),
+        route.steps.last(),
+    ) {
+        // Numbered after the steps and the clean copy, so it shares no name.
+        let output = temp_path(
+            dir,
+            journal.tag(),
+            index,
+            route.steps.len() + 1,
+            step.to.output_extension(),
+        );
+        let temp = match prepare_temp(journal, &output) {
+            Ok(temp) => temp,
+            Err(outcome) => return outcome,
+        };
+        let request = StepRequest {
+            step,
+            input: &last_input,
+            output: &output,
+            settings: Some(&alternative),
+            metadata: job.metadata.tool_policy,
+            auto_orient: job.metadata.auto_orient,
+        };
+        if let Err(outcome) = run_step(invoker, &request, cancel).await {
+            return outcome;
+        }
+        let size = |path: &Path| std::fs::metadata(path).map(|m| m.len());
+        let choice = match (size(&final_temp), size(&temp)) {
+            (Ok(lossy), Ok(lossless)) => LosslessChoice::between(lossy, lossless),
+            (Err(err), _) | (_, Err(err)) => {
+                return failed(format!(
+                    "could not compare the lossy and lossless copies: {err}"
+                ));
+            }
+        };
+        if choice.kept_lossless {
+            final_temp = temp;
+        }
+        lossless_choice = Some(choice);
+    }
     if job.metadata.fix_output {
         let (output, policy, source) = (
             final_temp.to_path_buf(),
@@ -398,8 +431,40 @@ async fn execute_job(
         Ok(output_bytes) => JobOutcome::Converted {
             input_bytes: entry.size,
             output_bytes,
+            lossless_choice,
         },
         Err(err) => failed(err.to_string()),
+    }
+}
+
+/// Records a temporary file in the journal and claims it, so it's deleted
+/// when dropped.
+fn prepare_temp(journal: &Journal, path: &Path) -> Result<TempPath, JobOutcome> {
+    let failed = |message: String| JobOutcome::Failed { message };
+    journal
+        .record(path)
+        .map_err(|err| failed(format!("could not record a temporary file: {err}")))?;
+    TempPath::try_from_path(path)
+        .map_err(|err| failed(format!("could not prepare a temporary file: {err}")))
+}
+
+/// Runs one tool invocation to completion; the error is the job's outcome.
+async fn run_step(
+    invoker: &dyn Invoker,
+    request: &StepRequest<'_>,
+    cancel: &CancellationToken,
+) -> Result<(), JobOutcome> {
+    let failed = |message: String| Err(JobOutcome::Failed { message });
+    let tool = request.step.tool.program_name();
+    let invocation = match invoker.invocation(request) {
+        Ok(invocation) => invocation,
+        Err(message) => return failed(message),
+    };
+    match run_supervised(&invocation, cancel).await {
+        Ok(ProcessEnd::Cancelled) => Err(JobOutcome::Cancelled),
+        Ok(ProcessEnd::Exited { code: Some(0), .. }) => Ok(()),
+        Ok(ProcessEnd::Exited { code, output }) => failed(describe_failure(tool, code, &output)),
+        Err(err) => failed(format!("{tool} could not start: {err}")),
     }
 }
 

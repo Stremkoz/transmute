@@ -1,8 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
-import type { EntryDetails, Job, OutputTarget, Preview, Sample } from "@bindings";
+import type { EntryDetails, Job, LosslessChoice, OutputTarget, Preview, Sample } from "@bindings";
 import { errorMessage, isApiError } from "../../api/client";
-import { defaultsFor, effective, settingsSummary } from "../../lib/codecs";
+import { chosenSettings, defaultsFor, effective, losslessChoiceText, settingsSummary } from "../../lib/codecs";
 import { FORMAT_LABELS } from "../../lib/formats";
 import { formatBytes, formatCount } from "../../lib/units";
 import type { ViewerState } from "../../state/session";
@@ -74,6 +74,8 @@ interface OutputSide {
   bytes: number;
   seconds: number | null;
   notes: string[];
+  /** What Auto chose, when it encoded both ways. */
+  choice: LosslessChoice | null;
 }
 
 function Viewer({ viewer }: { viewer: ViewerState }) {
@@ -108,12 +110,24 @@ function Viewer({ viewer }: { viewer: ViewerState }) {
     if (!choice) throw new Error("nothing to compare");
     if (mode === "trial") {
       const sample: Sample = await api.sample(entry, choice.target);
-      return { preview: sample.preview, bytes: sample.outputBytes, seconds: sample.seconds, notes: sample.notes.map((n) => n.text) };
+      return {
+        preview: sample.preview,
+        bytes: sample.outputBytes,
+        seconds: sample.seconds,
+        notes: sample.notes.map((n) => n.text),
+        choice: sample.losslessChoice ?? null,
+      };
     }
     const job = choice.job;
     if (!job || job.state.state !== "converted") throw new Error("not converted");
     const preview = await api.preview({ kind: "output", job: job.id });
-    return { preview, bytes: job.state.outputBytes, seconds: job.state.seconds, notes: job.notes.map((n) => n.text) };
+    return {
+      preview,
+      bytes: job.state.outputBytes,
+      seconds: job.state.seconds,
+      notes: job.notes.map((n) => n.text),
+      choice: job.state.losslessChoice ?? null,
+    };
   });
 
   const go = (step: number) => {
@@ -158,7 +172,7 @@ function Viewer({ viewer }: { viewer: ViewerState }) {
   const trialTag = mode === "trial" ? " (trial)" : "";
   const settings = (() => {
     const codec = output && defaultsFor(codecs, output.codec.format);
-    return codec && output ? settingsSummary(effective(codec.inherited, output.codec)) : "";
+    return codec && output ? settingsSummary(chosenSettings(effective(codec.inherited, output.codec), result?.choice)) : "";
   })();
 
   const outputMessage = (() => {
@@ -289,7 +303,10 @@ function Viewer({ viewer }: { viewer: ViewerState }) {
             <tr>
               <th scope="row">Format</th>
               <td>{info?.file.description ?? "—"}</td>
-              <td>{output ? `${outputName}, ${settings.charAt(0).toLowerCase()}${settings.slice(1)}` : "—"}</td>
+              <td>
+                {output ? `${outputName}, ${settings.charAt(0).toLowerCase()}${settings.slice(1)}` : "—"}
+                {result?.choice && <span className={styles.muted}> · {losslessChoiceText(result.choice)}</span>}
+              </td>
             </tr>
             <tr>
               <th scope="row">Dimensions</th>

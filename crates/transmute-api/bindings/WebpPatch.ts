@@ -9,6 +9,13 @@ export type WebpPatch = {
  */
 lossless?: boolean, 
 /**
+ * Automatic lossless, with `lossless` off: images that started out
+ * lossless (see [`started_lossless`]) are also encoded losslessly,
+ * and that copy is kept when it's at most
+ * [`AUTO_LOSSLESS_MAX_GROWTH`] times the lossy one's size.
+ */
+autoLossless?: boolean, 
+/**
  * cwebp quality, 0–100.
  */
 quality?: number, 

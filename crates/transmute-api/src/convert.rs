@@ -95,10 +95,12 @@ pub fn finished_state(result: &JobResult) -> JobState {
         JobOutcome::Converted {
             input_bytes,
             output_bytes,
+            lossless_choice,
         } => JobState::Converted {
             input_bytes: *input_bytes,
             output_bytes: *output_bytes,
             seconds: result.elapsed.as_secs_f64(),
+            lossless_choice: *lossless_choice,
         },
         JobOutcome::Failed { message } => JobState::Failed {
             message: message.clone(),

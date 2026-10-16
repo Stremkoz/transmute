@@ -119,6 +119,7 @@ The factory defaults were chosen by measuring size, speed and visual fidelity (S
 | | `background` | `#rrggbb` | `#ffffff` | What transparent areas become: JPEG has no transparency |
 | `png` | `compression` | 0–9 | 9 | Always lossless |
 | `webp` | `lossless` | bool | false | When true, `quality` is ignored |
+| | `autoLossless` | bool | false | Automatic lossless, with `lossless` off: images that started out lossless (PNG, GIF, BMP, TIFF) are encoded both ways, and the lossless copy is kept when it's at most 25% larger. Other sources are encoded once, lossy |
 | | `quality` | 0–100 | 85 | |
 | | `method` | 0–6 | 4 | Higher is slower and smaller |
 | `jxl` | `lossless` | bool | false | When true, `distance` is ignored |

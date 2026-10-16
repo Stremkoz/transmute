@@ -79,6 +79,7 @@ fn grid(quick: bool) -> Vec<Setting> {
                 lossless: false,
                 quality,
                 method: 4,
+                auto_lossless: false,
             }),
         );
     }
@@ -90,6 +91,7 @@ fn grid(quick: bool) -> Vec<Setting> {
                     lossless: false,
                     quality,
                     method: 6,
+                    auto_lossless: false,
                 }),
             );
         }
@@ -100,6 +102,7 @@ fn grid(quick: bool) -> Vec<Setting> {
             lossless: true,
             quality: 75,
             method: 4,
+            auto_lossless: false,
         }),
     );
 

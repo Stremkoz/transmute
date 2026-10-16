@@ -1,4 +1,4 @@
-import type { CodecDefaults, CodecPatch, CodecSettings, Format, OutputTarget } from "@bindings";
+import type { CodecDefaults, CodecPatch, CodecSettings, Format, LosslessChoice, OutputTarget } from "@bindings";
 
 /**
  * What each codec's settings are, for the codec drawer and the output
@@ -19,7 +19,8 @@ interface FieldBase {
 
 export type FieldSpec = FieldBase &
   (
-    | { kind: "mode" }
+    /** Lossy or lossless; with `autoKey`, also Auto (that field on). */
+    | { kind: "mode"; autoKey?: string }
     | { kind: "bool" }
     | { kind: "number"; min: number; max: number; step: number; marks?: [number, string][] }
     /** A number, or absent for "Automatic". */
@@ -37,6 +38,25 @@ const MODE: FieldSpec = {
   kind: "mode",
   help: "Lossy is far smaller and looks the same at normal sizes. Lossless keeps every pixel exactly.",
 };
+
+/** The share a lossless copy may be larger and still be kept (the backend's rule). */
+const AUTO_LOSSLESS_GROWTH = "25%";
+
+const WEBP_MODE: FieldSpec = {
+  key: "lossless",
+  label: "Mode",
+  kind: "mode",
+  autoKey: "autoLossless",
+  help: `Lossy is far smaller and looks the same at normal sizes. Lossless keeps every pixel exactly. Auto also tries lossless on graphics (PNG, GIF, BMP, TIFF) and keeps it when it's at most ${AUTO_LOSSLESS_GROWTH} larger; photos stay lossy. Graphics take about twice as long.`,
+};
+
+export type Mode = "lossy" | "lossless" | "auto";
+
+/** Which mode the settings are in. */
+export function modeOf(settings: Fields, spec: FieldSpec): Mode {
+  if (settings.lossless === true) return "lossless";
+  return spec.kind === "mode" && spec.autoKey && settings[spec.autoKey] === true ? "auto" : "lossy";
+}
 
 export const CODEC_FIELDS: Record<Format, FieldSpec[]> = {
   jpeg: [
@@ -79,7 +99,7 @@ export const CODEC_FIELDS: Record<Format, FieldSpec[]> = {
     },
   ],
   webp: [
-    MODE,
+    WEBP_MODE,
     {
       key: "quality",
       label: "Quality",
@@ -239,7 +259,10 @@ export function effective(inherited: CodecSettings, patch: CodecPatch): Fields {
 
 /** True when the patch sets this field itself. */
 export function isSet(patch: CodecPatch, key: string): boolean {
-  return (patch as Fields)[key] !== undefined;
+  const fields = patch as Fields;
+  // WebP's mode is two fields.
+  if (key === "lossless" && fields.autoLossless !== undefined) return true;
+  return fields[key] !== undefined;
 }
 
 /** The patch with one field set, or removed (inherited) when `value` is undefined. */
@@ -251,6 +274,15 @@ export function withField(patch: CodecPatch, key: string, value: unknown): Codec
   if (next.format === "jxl" && key === "distance" && value === 0) {
     delete next.distance;
     next.lossless = true;
+  }
+  // WebP's mode sets both fields, so a mode inherited as Auto can be left.
+  if (next.format === "webp" && key === "lossless") {
+    // Lossless overrides Auto, so only Lossy needs to turn it off.
+    if (value === undefined || value === true) delete next.autoLossless;
+    else {
+      next.lossless = false;
+      next.autoLossless = value === "auto";
+    }
   }
   return next as CodecPatch;
 }
@@ -280,9 +312,8 @@ export function settingsSummary(settings: Fields): string {
     case "png":
       return `Lossless · compression ${trimNumber(settings.compression)}`;
     case "webp":
-      return settings.lossless === true
-        ? `Lossless · method ${trimNumber(settings.method)}`
-        : `Lossy · quality ${trimNumber(settings.quality)} · method ${trimNumber(settings.method)}`;
+      if (settings.lossless === true) return `Lossless · method ${trimNumber(settings.method)}`;
+      return `${settings.autoLossless === true ? "Auto lossless" : "Lossy"} · quality ${trimNumber(settings.quality)} · method ${trimNumber(settings.method)}`;
     case "jxl":
       return settings.lossless === true
         ? [mode, effort(settings.effort), ...(settings.reconstructJpeg === true ? ["keep JPEGs exactly"] : [])].join(" · ")
@@ -312,4 +343,18 @@ export function overrideNotes(target: OutputTarget): string[] {
   if (target.naming) notes.push("own file names");
   if (target.metadata) notes.push("own metadata");
   return notes;
+}
+
+/** The settings an image was actually encoded with, once Auto has chosen. */
+export function chosenSettings(settings: Fields, choice: LosslessChoice | null | undefined): Fields {
+  return choice ? { ...settings, lossless: choice.keptLossless, autoLossless: false } : settings;
+}
+
+/** What Auto found, in a few words: "Auto kept lossless: 6% larger than lossy". */
+export function losslessChoiceText(choice: LosslessChoice): string {
+  const { keptLossless, lossyBytes, losslessBytes } = choice;
+  if (!keptLossless) return `Auto kept lossy: lossless was ${(losslessBytes / Math.max(lossyBytes, 1)).toFixed(1)}× the size`;
+  const change = Math.round((losslessBytes / Math.max(lossyBytes, 1) - 1) * 100);
+  if (change > 0) return `Auto kept lossless: ${change}% larger than lossy`;
+  return change < 0 ? `Auto kept lossless: ${-change}% smaller than lossy` : "Auto kept lossless: the same size as lossy";
 }

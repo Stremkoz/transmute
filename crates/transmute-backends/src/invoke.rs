@@ -386,6 +386,8 @@ fn vips(
             lossless,
             quality,
             method,
+            // The engine's choice between two encodes, not the tool's.
+            auto_lossless: _,
         }) => vec![
             format!("lossless={lossless}"),
             format!("Q={quality}"),
@@ -501,6 +503,8 @@ fn magick(
             lossless,
             quality,
             method,
+            // The engine's choice between two encodes, not the tool's.
+            auto_lossless: _,
         }) => {
             args.add("-quality").add(quality.to_string());
             args.add("-define").add(format!("webp:lossless={lossless}"));
@@ -620,6 +624,8 @@ fn ffmpeg(
             lossless,
             quality,
             method,
+            // The engine's choice between two encodes, not the tool's.
+            auto_lossless: _,
         }) => {
             let codec = if step.animated {
                 "libwebp_anim"
@@ -711,6 +717,7 @@ mod tests {
             lossless: false,
             quality: 72,
             method: 5,
+            auto_lossless: false,
         });
         let args = args_for(
             &step(ToolId::Cwebp, Format::Png, Format::Webp),

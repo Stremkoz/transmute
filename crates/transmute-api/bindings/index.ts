@@ -40,6 +40,7 @@ export type * from "./JpegSettings";
 export type * from "./JxlPatch";
 export type * from "./JxlSettings";
 export type * from "./LoadedPreset";
+export type * from "./LosslessChoice";
 export type * from "./Message";
 export type * from "./MetadataPolicy";
 export type * from "./NamingRule";

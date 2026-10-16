@@ -194,7 +194,10 @@ fn toolbox() -> Toolbox {
     Toolbox::new([
         (
             ToolId::Magick,
-            caps(&[Format::Png], &[Format::Tiff, Format::Png, Format::Jxl]),
+            caps(
+                &[Format::Png],
+                &[Format::Tiff, Format::Png, Format::Jxl, Format::Webp],
+            ),
         ),
         (ToolId::Vips, caps(&[Format::Heif], &[Format::Png])),
     ])
@@ -381,7 +384,8 @@ async fn r08_two_step_sizes_describe_source_and_final_output() {
         outcomes(&events)[0],
         JobOutcome::Converted {
             input_bytes: source_size,
-            output_bytes: output_size
+            output_bytes: output_size,
+            lossless_choice: None,
         }
     );
     assert!(
@@ -620,4 +624,138 @@ async fn jpeg_xl_effort_follows_each_sources_transparency() {
         .into();
         assert_eq!(seen, expected, "{codec}");
     }
+}
+
+/// A WebP (lossless bitstream header, 1×1) padded to `len` bytes, so the
+/// two encodes of automatic lossless can be told apart by size.
+fn webp_of_len(len: usize) -> Vec<u8> {
+    let mut chunk = vec![0x2F, 0, 0, 0, 0];
+    chunk.resize(len - 20, 0);
+    let mut bytes = b"RIFF".to_vec();
+    bytes.extend_from_slice(&((12 + chunk.len()) as u32).to_le_bytes());
+    bytes.extend_from_slice(b"WEBPVP8L");
+    bytes.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(&chunk);
+    bytes
+}
+
+/// Encodes WebP by copying a fake file: `lossy` or `lossless` by the
+/// settings asked for. Records which final encodes ran.
+struct WebpEncoder {
+    inner: StubInvoker,
+    lossy: PathBuf,
+    lossless: PathBuf,
+    seen: std::sync::Mutex<Vec<bool>>,
+}
+
+impl Invoker for WebpEncoder {
+    fn invocation(&self, request: &StepRequest<'_>) -> Result<Invocation, String> {
+        let mut invocation = self.inner.invocation(request)?;
+        if let Some(transmute_core::codec::CodecSettings::Webp(webp)) = request.settings {
+            self.seen.lock().unwrap().push(webp.lossless);
+            let fake = if webp.lossless {
+                &self.lossless
+            } else {
+                &self.lossy
+            };
+            invocation.args[0] = fake.clone().into_os_string();
+        }
+        Ok(invocation)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_lossless_keeps_lossless_only_when_its_barely_larger() {
+    const AUTO: &str = r#"{"schemaVersion":1,"name":"t","outputs":[{"codec":{"format":"webp","autoLossless":true}}]}"#;
+    // Lossless 1.2× the lossy size is kept; 2× isn't.
+    for (lossless_len, kept_lossless) in [(1200, true), (2000, false)] {
+        let fx = fixture(&[("logo.png", png_bytes())]);
+        let (lossy, lossless) = (fx.stubs.join("lossy.webp"), fx.stubs.join("lossless.webp"));
+        fs::write(&lossy, webp_of_len(1000)).unwrap();
+        fs::write(&lossless, webp_of_len(lossless_len)).unwrap();
+        let encoder = Arc::new(WebpEncoder {
+            inner: StubInvoker {
+                stubs: [(ToolId::Magick, write_stub(&fx.stubs, Behaviour::Copy))].into(),
+                sentinel: fx.sentinel.clone(),
+            },
+            lossy,
+            lossless,
+            seen: std::sync::Mutex::new(Vec::new()),
+        });
+        let work = work_with(&fx, AUTO);
+        let (progress, events) =
+            run_to_end(&fx, work, encoder.clone(), RunControl::default(), 1).await;
+
+        assert_eq!(progress.converted, 1, "{lossless_len}");
+        assert_eq!(
+            *encoder.seen.lock().unwrap(),
+            [false, true],
+            "lossy, then lossless"
+        );
+        let JobOutcome::Converted {
+            output_bytes,
+            lossless_choice: Some(choice),
+            ..
+        } = outcomes(&events)[0]
+        else {
+            panic!("expected a choice: {:?}", outcomes(&events));
+        };
+        assert_eq!(choice.kept_lossless, kept_lossless);
+        assert_eq!(
+            (choice.lossy_bytes, choice.lossless_bytes),
+            (1000, lossless_len as u64)
+        );
+        let written = fs::metadata(fx.input.join("logo.webp")).unwrap().len();
+        assert_eq!(written, output_bytes);
+        assert_eq!(
+            written,
+            if kept_lossless {
+                lossless_len as u64
+            } else {
+                1000
+            }
+        );
+        assert!(
+            leftover_temps(&fx.input).is_empty(),
+            "the other copy is gone"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_lossless_encodes_lossy_sources_once() {
+    // HEIF goes through vips to PNG first; it started lossy, so only the
+    // usual lossy encode runs.
+    let fx = fixture(&[("photo.heic", heif_bytes())]);
+    let (lossy, lossless) = (fx.stubs.join("lossy.webp"), fx.stubs.join("lossless.webp"));
+    fs::write(&lossy, webp_of_len(1000)).unwrap();
+    fs::write(&lossless, webp_of_len(900)).unwrap();
+    let encoder = Arc::new(WebpEncoder {
+        inner: StubInvoker {
+            stubs: [
+                (ToolId::Magick, write_stub(&fx.stubs, Behaviour::Copy)),
+                (ToolId::Vips, write_stub(&fx.stubs, Behaviour::Copy)),
+            ]
+            .into(),
+            sentinel: fx.sentinel.clone(),
+        },
+        lossy,
+        lossless,
+        seen: std::sync::Mutex::new(Vec::new()),
+    });
+    let work = work_with(
+        &fx,
+        r#"{"schemaVersion":1,"name":"t","outputs":[{"codec":{"format":"webp","autoLossless":true}}]}"#,
+    );
+    let (progress, events) = run_to_end(&fx, work, encoder.clone(), RunControl::default(), 1).await;
+
+    assert_eq!(progress.converted, 1);
+    assert_eq!(*encoder.seen.lock().unwrap(), [false]);
+    assert!(matches!(
+        outcomes(&events)[0],
+        JobOutcome::Converted {
+            lossless_choice: None,
+            ..
+        }
+    ));
 }

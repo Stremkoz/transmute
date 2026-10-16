@@ -14,7 +14,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::format::Format;
-use crate::inspect::{Inspection, Presence};
+use crate::inspect::{Content, Inspection, Presence};
 use crate::validation::Validator;
 
 /// Defines a settings struct, its patch twin, `factory()` and `apply()`.
@@ -103,6 +103,11 @@ codec_settings! {
     WebpSettings / WebpPatch {
         /// Lossless mode ignores `quality`.
         lossless: bool = false,
+        /// Automatic lossless, with `lossless` off: images that started out
+        /// lossless (see [`started_lossless`]) are also encoded losslessly,
+        /// and that copy is kept when it's at most
+        /// [`AUTO_LOSSLESS_MAX_GROWTH`] times the lossy one's size.
+        auto_lossless: bool = false,
         /// cwebp quality, 0–100.
         quality: u8 = 85,
         /// cwebp method, 0 (fastest) – 6 (smallest). 6 saves ~5% at up to
@@ -300,6 +305,23 @@ impl CodecSettings {
         }
     }
 
+    /// The lossless encode to try as well, for automatic lossless: the
+    /// engine makes both and keeps one ([`LosslessChoice`]). `None` when
+    /// there's only the one encode.
+    pub fn lossless_alternative(&self, source: &Inspection) -> Option<Self> {
+        match self {
+            Self::Webp(webp)
+                if webp.auto_lossless && !webp.lossless && started_lossless(source) =>
+            {
+                Some(Self::Webp(WebpSettings {
+                    lossless: true,
+                    ..webp.clone()
+                }))
+            }
+            _ => None,
+        }
+    }
+
     /// The settings (by their preset field name) that shape the output when
     /// converting from `source`. Lossless mode makes quality irrelevant, for
     /// example. Routing uses this to tell whether a tool that can't apply
@@ -400,6 +422,44 @@ impl ValidateSettings for WebpSettings {
     fn validate(&self, v: &mut Validator) {
         v.check_range("quality", self.quality, 0..=100);
         v.check_range("method", self.method, 0..=6);
+    }
+}
+
+/// How much larger than the lossy copy a lossless one may be and still be
+/// kept, for automatic lossless. In the M9 benchmarks lossless WebP was 6%
+/// larger than q85 on illustrations and 18% on transparent graphics, but
+/// 6.8× on photos: a quarter keeps the first two and never the third.
+pub const AUTO_LOSSLESS_MAX_GROWTH: f64 = 1.25;
+
+/// Whether `source` was stored losslessly, so it may be a graphic that a
+/// lossless encode keeps perfect for about the lossy size. Lossy sources
+/// (JPEG, HEIF, AVIF) never are: a lossless copy would keep their artefacts
+/// at several times the size. WebP and JPEG XL can be either, and the scan
+/// doesn't tell them apart, so they don't count.
+pub fn started_lossless(source: &Inspection) -> bool {
+    matches!(
+        source.content,
+        Content::Image(Format::Png | Format::Gif | Format::Bmp | Format::Tiff)
+    )
+}
+
+/// Which copy automatic lossless kept for one image, and both sizes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct LosslessChoice {
+    pub kept_lossless: bool,
+    pub lossy_bytes: u64,
+    pub lossless_bytes: u64,
+}
+
+impl LosslessChoice {
+    pub fn between(lossy_bytes: u64, lossless_bytes: u64) -> Self {
+        Self {
+            kept_lossless: lossless_bytes as f64 <= lossy_bytes as f64 * AUTO_LOSSLESS_MAX_GROWTH,
+            lossy_bytes,
+            lossless_bytes,
+        }
     }
 }
 
@@ -645,6 +705,63 @@ mod tests {
             ..JxlSettings::factory()
         };
         assert_eq!(chosen.effort_for(Presence::Absent), 9);
+    }
+
+    #[test]
+    fn automatic_lossless_tries_both_only_for_sources_that_started_lossless() {
+        let image = |format| Inspection {
+            content: Content::Image(format),
+            ..Inspection::default()
+        };
+        let mut settings = CodecSettings::factory(Format::Webp);
+        assert_eq!(
+            settings.lossless_alternative(&image(Format::Png)),
+            None,
+            "off by default"
+        );
+
+        settings.apply(&CodecPatch::Webp(WebpPatch {
+            auto_lossless: Some(true),
+            ..WebpPatch::default()
+        }));
+        for format in [Format::Png, Format::Gif, Format::Bmp, Format::Tiff] {
+            let Some(CodecSettings::Webp(alternative)) =
+                settings.lossless_alternative(&image(format))
+            else {
+                panic!("{format:?} should get a lossless try");
+            };
+            assert!(alternative.lossless);
+        }
+        for format in [
+            Format::Jpeg,
+            Format::Heif,
+            Format::Avif,
+            Format::Webp,
+            Format::Jxl,
+        ] {
+            assert_eq!(
+                settings.lossless_alternative(&image(format)),
+                None,
+                "{format:?}"
+            );
+        }
+
+        // Plain lossless needs no second try, and other codecs don't have it.
+        settings.apply(&CodecPatch::Webp(WebpPatch {
+            lossless: Some(true),
+            ..WebpPatch::default()
+        }));
+        assert_eq!(settings.lossless_alternative(&image(Format::Png)), None);
+        let jxl = CodecSettings::factory(Format::Jxl);
+        assert_eq!(jxl.lossless_alternative(&image(Format::Png)), None);
+    }
+
+    #[test]
+    fn lossless_is_kept_up_to_a_quarter_larger() {
+        assert!(LosslessChoice::between(1000, 900).kept_lossless);
+        assert!(LosslessChoice::between(1000, 1250).kept_lossless);
+        assert!(!LosslessChoice::between(1000, 1251).kept_lossless);
+        assert!(!LosslessChoice::between(1000, 6800).kept_lossless);
     }
 
     #[test]

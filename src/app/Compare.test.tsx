@@ -103,6 +103,46 @@ describe("Try on one file", () => {
   });
 });
 
+/** A dialog's name, from the title it's labelled by. */
+function accessibleName(dialog: HTMLElement): string {
+  const id = dialog.getAttribute("aria-labelledby");
+  return (id && document.getElementById(id)?.textContent) || "";
+}
+
+describe("Automatic lossless", () => {
+  it("says which copy Auto kept for each file", async () => {
+    renderApp(mockApi({ runStepMs: 5 }));
+    const user = userEvent.setup();
+    await addFolderAndWebp(user);
+    await user.click(screen.getByRole("button", { name: "Edit WebP settings" }));
+    const drawer = await screen.findByRole("dialog", { name: "WebP settings" });
+    await user.click(within(drawer).getByRole("button", { name: "Auto" }));
+    expect(await within(drawer).findByRole("button", { name: "Auto", pressed: true })).toBeInTheDocument();
+    expect(await screen.findByText("Auto lossless · quality 85 · method 4")).toBeInTheDocument();
+
+    // The example is a JPEG: a photo, encoded once, lossy.
+    // Choosing Auto re-plans; the button waits for that.
+    const tryIt = await within(drawer).findByRole("button", { name: "Try on one file…" }, WAIT);
+    await vi.waitFor(() => expect(tryIt).toBeEnabled(), WAIT);
+    await user.click(tryIt);
+    let viewer = await screen.findByRole("dialog", { description: /trial/ }, WAIT);
+    expect(await within(viewer).findByRole("img", { name: "Output" }, WAIT)).toBeInTheDocument();
+    expect(within(viewer).queryByText(/Auto kept/)).not.toBeInTheDocument();
+
+    // A PNG is tried both ways: step through the files to one.
+    const trial = () => screen.getByRole("dialog", { description: /trial/ });
+    for (let i = 0; i < 20 && !/\.png$/.test(accessibleName(trial())); i++) {
+      const before = accessibleName(trial());
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      await vi.waitFor(() => expect(accessibleName(trial())).not.toBe(before), WAIT);
+    }
+    viewer = trial();
+    expect(accessibleName(viewer)).toMatch(/\.png$/);
+    expect(await within(viewer).findByText(/Auto kept lossless: 10% smaller than lossy/, undefined, WAIT)).toBeInTheDocument();
+    expect(within(viewer).getByText(/^WebP, lossless · method 4/)).toBeInTheDocument();
+  });
+});
+
 describe("Thumbnails", () => {
   it("shows small previews when switched on, and remembers the choice", async () => {
     const api = mockApi();

@@ -1545,7 +1545,9 @@ impl Api {
             JobOutcome::Converted {
                 input_bytes,
                 output_bytes,
+                lossless_choice,
             } => Ok(Sample {
+                lossless_choice: *lossless_choice,
                 preview: self.render(job.output.clone(), format).await?,
                 input_bytes: *input_bytes,
                 output_bytes: *output_bytes,

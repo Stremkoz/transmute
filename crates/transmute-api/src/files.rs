@@ -390,6 +390,7 @@ mod tests {
             input_bytes: 10,
             output_bytes: 4,
             seconds: 0.1,
+            lossless_choice: None,
         }
     }
 
