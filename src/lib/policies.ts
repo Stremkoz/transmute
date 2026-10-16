@@ -94,8 +94,13 @@ export function namePartProblem(text: string): string | null {
   return null;
 }
 
+/** The rule with both name parts present: the backend leaves out empty ones. */
+export function withNameParts(rule: NamingRule): Required<NamingRule> {
+  return { ...rule, prefix: rule.prefix ?? "", suffix: rule.suffix ?? "" };
+}
+
 export function isIdentityNaming(rule: NamingRule | undefined): boolean {
-  return !rule || (rule.prefix === "" && rule.suffix === "");
+  return !rule || (!rule.prefix && !rule.suffix);
 }
 
 function sampleDate(style: DateStyle): string {
@@ -119,12 +124,14 @@ function expand(text: string, rule: NamingRule, format: Format, originalExt: str
 export function previewName(rule: NamingRule | undefined, name: string, originalExt: string, format: Format): string {
   const ext = EXTENSIONS[format];
   if (!rule) return `${name}.${ext}`;
-  return `${expand(rule.prefix, rule, format, originalExt)}${name}${expand(rule.suffix, rule, format, originalExt)}.${ext}`;
+  const { prefix, suffix } = withNameParts(rule);
+  return `${expand(prefix, rule, format, originalExt)}${name}${expand(suffix, rule, format, originalExt)}.${ext}`;
 }
 
 export function namingLabel(rule: NamingRule | undefined): string {
   if (!rule || isIdentityNaming(rule)) return "Unchanged";
-  return `${rule.prefix}‹name›${rule.suffix}`;
+  const { prefix, suffix } = withNameParts(rule);
+  return `${prefix}‹name›${suffix}`;
 }
 
 export const EMPTY_NAMING: NamingRule = { prefix: "", suffix: "", dateStyle: "compact", dateSource: "batchStart" };

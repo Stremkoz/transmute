@@ -23,9 +23,12 @@ use crate::validation::Validator;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(optional_fields))]
 pub struct NamingRule {
+    // Left out of the JSON when empty, so optional in TypeScript too.
     #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[cfg_attr(feature = "typescript", ts(as = "Option<String>", optional))]
     pub prefix: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[cfg_attr(feature = "typescript", ts(as = "Option<String>", optional))]
     pub suffix: String,
     #[serde(default)]
     pub date_style: DateStyle,

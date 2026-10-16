@@ -2,4 +2,4 @@
 import type { DateSource } from "./DateSource";
 import type { DateStyle } from "./DateStyle";
 
-export type NamingRule = { prefix: string, suffix: string, dateStyle: DateStyle, dateSource: DateSource, };
+export type NamingRule = { prefix?: string, suffix?: string, dateStyle: DateStyle, dateSource: DateSource, };

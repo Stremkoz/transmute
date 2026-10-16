@@ -16,13 +16,14 @@ import type {
   Job,
   JobState,
   JobUpdate,
+  NamingRule,
   Overview,
   PlanSummary,
-  Sample,
   Preset,
   Preview,
   Progress,
   RunStatus,
+  Sample,
   StoredPreset,
   Tally,
   TargetTotals,
@@ -134,13 +135,21 @@ export const MOCK_FACTORY: CodecSettings[] = [
 function wirePreset(preset: Preset): Preset {
   const out = copy(preset);
   if (out.inputFilter?.mode === "all") delete out.inputFilter;
+  wireNaming(out.naming);
+  for (const output of out.outputs) wireNaming(output.naming);
   return out;
 }
 
 function wireDefaults(defaults: UserDefaults): UserDefaults {
   const out = copy(defaults);
   if (out.codecs?.length === 0) delete out.codecs;
+  wireNaming(out.naming);
   return out;
+}
+
+function wireNaming(rule: NamingRule | undefined) {
+  if (rule?.prefix === "") delete rule.prefix;
+  if (rule?.suffix === "") delete rule.suffix;
 }
 
 function wireSettings(settings: AppSettings): AppSettings {

@@ -111,6 +111,44 @@ describe("Where and how", () => {
     await vi.waitFor(async () => expect((await api.preset()).naming?.suffix).toBe("_{date}"));
   });
 
+  // The backend leaves an empty prefix or suffix out of the preset, which
+  // once crashed the window as soon as the editor opened again.
+  it("reopens the file names with one part left empty", async () => {
+    const { api } = renderApp();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "File names: Unchanged" }));
+    await user.type(await screen.findByRole("textbox", { name: "Before the name" }), "{{date}_");
+    const suffix = screen.getByRole("textbox", { name: "After the name" });
+    await user.type(suffix, "x");
+    await user.clear(suffix);
+    await vi.waitFor(async () => expect((await api.preset()).naming).not.toHaveProperty("suffix"));
+    await user.keyboard("{Escape}");
+
+    await user.click(await screen.findByRole("button", { name: "File names: {date}_‹name›" }));
+    expect(await screen.findByRole("textbox", { name: "After the name" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Before the name" })).toHaveValue("{date}_");
+  });
+
+  it("reopens an output's own file names with one part left empty", async () => {
+    const { api } = renderApp();
+    const user = userEvent.setup();
+    await addOutput(user, /^WebP/);
+    const edit = await within(outputs()).findByRole("button", { hidden: true, name: "Edit WebP settings" });
+    await user.click(edit);
+    let drawer = await screen.findByRole("dialog", { name: "WebP settings" });
+    await user.click(within(drawer).getByRole("button", { name: /^File names:/ }));
+    await user.click(await screen.findByRole("checkbox", { name: "Same as all outputs" }));
+    await user.type(screen.getByRole("textbox", { name: "Before the name" }), "web_");
+    await vi.waitFor(async () => expect((await api.preset()).outputs[0]?.naming).not.toHaveProperty("suffix"));
+    await user.keyboard("{Escape}");
+    await user.keyboard("{Escape}");
+
+    await user.click(edit);
+    drawer = await screen.findByRole("dialog", { name: "WebP settings" });
+    await user.click(within(drawer).getByRole("button", { name: "File names: web_‹name›" }));
+    expect(await screen.findByRole("textbox", { name: "After the name" })).toHaveValue("");
+  });
+
   it("chooses what happens to existing files and metadata", async () => {
     const { api } = renderApp();
     const user = userEvent.setup();

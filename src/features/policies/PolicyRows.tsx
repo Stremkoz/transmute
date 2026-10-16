@@ -16,6 +16,7 @@ import {
   namePartProblem,
   namingLabel,
   previewName,
+  withNameParts,
 } from "../../lib/policies";
 import { usePlatform } from "../../state/sessionContext";
 import styles from "./PolicyRows.module.css";
@@ -231,12 +232,12 @@ interface NamesProps extends EditorProps<NamingRule> {
 /** Prefix and suffix fields with tokens, and the name they make. */
 function NamesEditor({ value, fallback, inheritLabel, onChange, example, format }: NamesProps) {
   const following = inheritLabel !== undefined && value === undefined;
-  const [draft, setDraft] = useState<NamingRule>(value ?? fallback);
+  const [draft, setDraft] = useState(() => withNameParts(value ?? fallback));
   const [focused, setFocused] = useState<"prefix" | "suffix">("suffix");
   const problem = namePartProblem(draft.prefix) ?? namePartProblem(draft.suffix);
 
   // Half-typed tokens stay in the fields until they make sense.
-  const commit = (next: NamingRule) => {
+  const commit = (next: Required<NamingRule>) => {
     setDraft(next);
     if (!(namePartProblem(next.prefix) ?? namePartProblem(next.suffix))) onChange(next);
   };
