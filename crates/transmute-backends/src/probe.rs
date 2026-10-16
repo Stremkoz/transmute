@@ -147,6 +147,10 @@ pub fn probe_tool(tool: ToolId, path: &Path, source: ToolSource) -> ToolStatus {
             .is_ok_and(|output| output.exit_code == Some(0) && !output.stdout.is_empty());
         catalog::apply_probe(&mut capabilities, probe, works);
     }
+    for &(probe, sample, extension, args) in catalog::read_probes(tool) {
+        let works = read_probe_works(path, sample, extension, args);
+        catalog::apply_probe(&mut capabilities, probe, works);
+    }
     capabilities
         .notes
         .extend(catalog::build_notes(tool, &output));
@@ -172,6 +176,37 @@ pub fn probe_tool(tool: ToolId, path: &Path, source: ToolSource) -> ToolStatus {
         outdated,
         capabilities,
     }))
+}
+
+/// Decodes `sample` with `program` (written to a temporary file first) and
+/// says whether anything came out. A probe that can't even run counts as
+/// failed: a wrong "no" sends files to another tool, a wrong "yes" fails them.
+fn read_probe_works(program: &Path, sample: &[u8], extension: &str, args: &[&str]) -> bool {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let file = std::env::temp_dir().join(format!(
+        "transmute-probe-{}-{nanos}.{extension}",
+        std::process::id()
+    ));
+    if std::fs::write(&file, sample).is_err() {
+        return false;
+    }
+    let path = file.to_string_lossy().into_owned();
+    let args: Vec<&str> = args
+        .iter()
+        .map(|&arg| {
+            if arg == catalog::SAMPLE {
+                path.as_str()
+            } else {
+                arg
+            }
+        })
+        .collect();
+    let works = run_captured(program, &args, LISTING_TIMEOUT)
+        .is_ok_and(|output| output.exit_code == Some(0) && !output.stdout.is_empty());
+    let _ = std::fs::remove_file(&file);
+    works
 }
 
 #[cfg(test)]

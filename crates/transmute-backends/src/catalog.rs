@@ -37,6 +37,40 @@ pub enum Probe {
     /// depth in both directions. A wrong guess only sends such files to
     /// another tool.
     DeepReads(Format),
+    /// The format can actually be read: a sample file is decoded.
+    Reads(Format),
+}
+
+/// Stands for the sample file's path in [`read_probes`] arguments.
+pub const SAMPLE: &str = "{sample}";
+
+/// A 16×16 HEIF coded with HEVC (libheif 1.23 + x265), 458 bytes.
+pub const HEVC_SAMPLE: &[u8] = include_bytes!("../probes/hevc-16x16.heic");
+
+/// A sample to decode, its file extension, and the command that decodes it
+/// to stdout (with [`SAMPLE`] for its path).
+pub type ReadProbe = (Probe, &'static [u8], &'static str, &'static [&'static str]);
+
+/// Reading a format a listing claims, tested on a real file. libheif lists
+/// HEIF whenever it's present, but decoding HEVC needs libde265, which many
+/// builds (both libvips Windows builds, for one) leave out: every HEIC
+/// photo then fails mid-run instead of going to a tool that can read it.
+pub fn read_probes(tool: ToolId) -> &'static [ReadProbe] {
+    match tool {
+        ToolId::Vips => &[(
+            Probe::Reads(Format::Heif),
+            HEVC_SAMPLE,
+            "heic",
+            &["copy", SAMPLE, ".png"],
+        )],
+        ToolId::Magick => &[(
+            Probe::Reads(Format::Heif),
+            HEVC_SAMPLE,
+            "heic",
+            &[SAMPLE, "png:-"],
+        )],
+        _ => &[],
+    }
 }
 
 /// Features a format listing can't vouch for. vips lists `heifsave` whenever
@@ -74,6 +108,16 @@ pub fn apply_probe(caps: &mut Capabilities, probe: Probe, works: bool) {
             caps.animated_writes.remove(&format);
             caps.notes.push(format!(
                 "Can't write {}: this build has no encoder for it.",
+                format.display_name()
+            ));
+        }
+        Probe::Reads(format) if caps.reads.contains(&format) => {
+            caps.reads.remove(&format);
+            caps.animated_reads.remove(&format);
+            caps.first_frame_reads.remove(&format);
+            caps.shallow_reads.remove(&format);
+            caps.notes.push(format!(
+                "Can't read {}: this build has no decoder for it.",
                 format.display_name()
             ));
         }
@@ -636,6 +680,24 @@ Decoders:
         assert!(caps.shallow_reads.is_empty());
         apply_probe(&mut caps, Probe::DeepReads(Format::Avif), false);
         assert_eq!(caps.shallow_reads, [Format::Avif].into());
+
+        assert!(caps.reads.contains(&Format::Heif));
+        apply_probe(&mut caps, Probe::Reads(Format::Heif), false);
+        assert!(!caps.reads.contains(&Format::Heif));
+        assert!(caps.notes.iter().any(|n| n.starts_with("Can't read HEIF")));
+    }
+
+    #[test]
+    fn the_hevc_sample_is_a_heif_file() {
+        // An ISO-BMFF `ftyp` box with the `heic` brand.
+        assert_eq!(&HEVC_SAMPLE[4..12], b"ftypheic");
+        for (_, sample, _, args) in read_probes(ToolId::Vips)
+            .iter()
+            .chain(read_probes(ToolId::Magick))
+        {
+            assert!(!sample.is_empty());
+            assert!(args.contains(&SAMPLE));
+        }
     }
 
     #[test]
