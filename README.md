@@ -2,7 +2,7 @@
 
 **A fast, approachable, Windows-first converter for image, video and audio files, including very large batches.**
 
-> **Status: pre-alpha.** This is a ground-up overhaul of Transmute 1.x (C#/.NET). The backend is in progress: a developer CLI can already plan and convert image batches. There is no GUI yet.
+> **Status: pre-alpha.** This is a ground-up overhaul of Transmute 1.x (C#/.NET). The backend is in progress: a developer CLI can already plan and convert image batches. The desktop app is being scaffolded.
 
 ---
 
@@ -69,17 +69,14 @@ transmute/
 ├── examples/       # Example presets and sample workflows
 ├── scripts/        # Build and utility scripts
 ├── crates/         # Rust workspace crates (backend)
-├── src/            # Frontend source (later)
+├── src-tauri/      # Desktop shell (Tauri 2): forwards commands and events to transmute-api
+├── src/            # Frontend (React + TypeScript, Vite)
 └── tests/          # Shared test fixtures and corpora
 ```
 
-The Tauri shell will be added as `src-tauri/`, with its React frontend in `src/`, once the backend API is ready.
-
 ## Development
 
-The Rust backend is built first; the desktop GUI comes later.
-
-**Prerequisites:** [rustup](https://rustup.rs/). The pinned toolchain in `rust-toolchain.toml` installs automatically. To actually convert files you'll also need the external encoders on `PATH`: cjxl/djxl, cwebp/dwebp, libvips, ImageMagick, ffmpeg.
+**Prerequisites:** [rustup](https://rustup.rs/) and [Node.js](https://nodejs.org/) (LTS). The pinned toolchain in `rust-toolchain.toml` installs automatically. On Linux, Tauri also needs the [WebKitGTK system libraries](https://v2.tauri.app/start/prerequisites/). To actually convert files you'll also need the external encoders on `PATH`: cjxl/djxl, cwebp/dwebp, libvips, ImageMagick, ffmpeg.
 
 ```sh
 cargo build --workspace        # build everything
@@ -90,12 +87,24 @@ cargo fmt --all                # format
 cargo dev --help               # run the developer CLI (transmute-dev)
 ```
 
+The desktop app:
+
+```sh
+npm install                    # once
+npm run tauri dev              # run the app with live reload
+npm run dev                    # the frontend alone in a browser, against a mock backend
+npm run lint                   # also: typecheck, test, build (what CI runs)
+npm run tauri build            # installer, in target/release/bundle/
+```
+
 | Crate | Purpose |
 |-------|---------|
 | `transmute-core` | Domain types, settings/preset schemas, inventory, planner, path and collision policy. Spawns no processes. |
 | `transmute-backends` | External tool discovery, capability probing, per-tool adapters, metadata I/O |
 | `transmute-engine` | Scheduling, process supervision, safe file finalisation, progress events |
+| `transmute-api` | The facade the desktop app talks to: commands, events, generated TypeScript types ([docs/api.md](docs/api.md)) |
 | `transmute-cli` | `transmute-dev`, an internal CLI for driving the backend before the GUI exists |
+| `src-tauri` (`transmute-app`) | The desktop shell; no logic of its own |
 
 ## Contributing
 

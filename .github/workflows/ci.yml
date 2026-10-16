@@ -27,6 +27,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # The desktop shell (src-tauri) is a workspace member; on Linux, Tauri
+      # builds against WebKitGTK.
+      - name: Install Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
       - name: Format
         run: cargo fmt --all -- --check
 
@@ -36,46 +44,28 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
-  # Skips its steps until package.json exists, so CI stays green before the
-  # Tauri frontend is scaffolded.
   frontend:
     name: Frontend
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check for package.json
-        id: node
-        shell: bash
-        run: |
-          if [ -f package.json ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No package.json yet; skipping frontend checks."
-          fi
-
       - uses: actions/setup-node@v4
-        if: steps.node.outputs.present
         with:
           node-version: lts/*
           cache: npm
 
       - name: Install
-        if: steps.node.outputs.present
         run: npm ci
 
       - name: Lint
-        if: steps.node.outputs.present
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Type check
-        if: steps.node.outputs.present
-        run: npm run typecheck --if-present
+        run: npm run typecheck
 
       - name: Test
-        if: steps.node.outputs.present
-        run: npm test --if-present
+        run: npm test
 
       - name: Build
-        if: steps.node.outputs.present
-        run: npm run build --if-present
+        run: npm run build

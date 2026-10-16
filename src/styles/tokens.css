@@ -1,0 +1,59 @@
+/*
+ * Design tokens. Transmute is dark-only for now (spec §8: restrained,
+ * graphite, professional). Components use these, never raw values.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces, darkest to lightest */
+  --color-bg: #18191b;
+  --color-surface: #1f2023;
+  --color-surface-raised: #26282c;
+  --color-surface-hover: #2d2f34;
+  --color-border: #34363b;
+  --color-border-strong: #45484f;
+
+  /* Text */
+  --color-text: #e6e7e9;
+  --color-text-muted: #a0a4ab;
+  --color-text-faint: #6f737b;
+
+  /* Accent and states */
+  --color-accent: #d9a441;
+  --color-accent-strong: #e8b75a;
+  --color-on-accent: #1a1405;
+  --color-ok: #6fbf8a;
+  --color-warn: #d9a441;
+  --color-error: #e06c6c;
+  --color-focus: #8fb8ff;
+
+  /* Type */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+
+  /* Space */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --shadow-overlay: 0 12px 40px rgb(0 0 0 / 0.5);
+  --duration-fast: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+  }
+}

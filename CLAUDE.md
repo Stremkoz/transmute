@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This repo is the **overhaul** of Transmute, a Windows-first media converter. The backend is a Rust Cargo workspace under `crates/`; milestones M0–M9 and M11 are done, and M10 (video/audio) is paused while the user decides whether Transmute stays images-only. **The M11 gate is open**: the desktop app (Tauri 2 + React/TypeScript) talks only to `crates/transmute-api` (`docs/api.md`), but it hasn't been planned or scaffolded yet. Plan GUI work with the user before writing it. Reference material:
+This repo is the **overhaul** of Transmute, a Windows-first media converter. The backend is a Rust Cargo workspace under `crates/`; milestones M0–M9 and M11 are done, and M10 (video/audio) is paused while the user decides whether Transmute stays images-only. The desktop app (Tauri 2 shell in `src-tauri/`, React/TypeScript in `src/`) talks only to `crates/transmute-api` (`docs/api.md`). Its phases G0–G5 are in `docs/internal/gui-plan.md`; check which is current, and agree layout or behaviour changes with the user before building them. Reference material:
 
 - `docs/sourcefiles/Transmute_Overhaul_Specification.md`: the working-draft product spec for the overhaul. Read it before starting design or implementation work. It is a proposed direction, not a final contract. Section 12 lists decisions that are still open. It is an **internal design document**: never commit it, quote it in release material, or move it out of the ignored folder.
 - `docs/sourcefiles/transmute/`: a full clone of the **existing** Transmute app (C#/.NET 9, upstream `github.com/Stremkoz/transmute-legacy` (archived), v1.1.0). It has its own `.git`. Treat it as **read-only reference**: audit it, but don't edit it. The goal is an overhaul, not a port. Keep what works and don't feel bound by its design.
 
 - `docs/internal/backend-plan.md`: **the active plan.** Backend-first: Rust workspace milestones M0–M11, architecture decisions, testing strategy, open decisions and a decision log. Check which milestone is current before starting work, and record decisions in its log.
+- `docs/internal/gui-plan.md`: the desktop app's plan (phases G0–G5, layout and architecture decisions agreed with the user). GUI decisions also go in the backend plan's decision log.
 - `docs/internal/legacy-audit.md`: the Phase 0 audit of 1.x, with confirmed defects, keep/change/drop recommendations, and the regression cases the overhaul's tests must cover. Read it before designing the job planner, file safety, metadata or routing.
 
 `docs/sourcefiles/` (user-provided reference) and `docs/internal/` (generated design notes) are both gitignored and stay local only. Put new internal design documents in `docs/internal/`. The repo is hosted privately at `github.com/Stremkoz/transmute`. The old 1.x repo is archived as `Stremkoz/transmute-legacy`. `CURRENT_SESSION.md` (session-continuity notes required by the workspace rules) is also gitignored and must never be committed.
 
-The frontend CI job stays a no-op until `package.json` exists. It then runs the `npm` lint/typecheck/test/build scripts if they're defined, so use those script names.
+CI's frontend job runs `npm run lint`, `typecheck`, `test` and `build`; keep those script names.
 
 ## Commands
 
@@ -36,6 +37,15 @@ python scripts/bench_corpus.py                       # fetch/generate the codec 
 cargo run --release -p transmute-cli -- bench        # codec grid: size, speed, SSIMULACRA2 (≈ 30 min); then scripts/bench_report.py <csvs>
 ```
 
+Desktop app (run from the repo root):
+
+```sh
+npm run tauri dev           # the app, with live reload of the frontend
+npm run dev                 # the frontend alone in a browser, against the mock backend (src/api/mockApi.ts)
+npm run lint && npm run typecheck && npm test && npm run build   # what CI's frontend job runs
+npx tauri build --debug --no-bundle   # build target/debug/transmute.exe without an installer
+```
+
 The toolchain is pinned in `rust-toolchain.toml`. CI runs fmt --check, clippy -D warnings and tests, all with `--locked`, on Windows and Ubuntu.
 
 ## Workspace layout
@@ -53,6 +63,8 @@ The crates follow the dependency direction `core ← backends ← engine ← api
 - Planning (`transmute-core/src/plan/`) owns file safety: outputs never share a path, never replace a source, and only replace existing files under `overwrite`. The property test in `plan/tests.rs` guards this. Keep it passing, and commit `proptest-regressions/` files when it finds a case. When mutation-testing, `touch` restored files: cargo tracks mtimes, and a restored backup can leave a stale binary.
 - Metadata policy is carried out by `transmute-core::metadata` for the containers it can rewrite (JPEG, PNG, WebP, JPEG XL): encoders keep everything, then the engine sets the output's blocks from the original source. The planner records how in each job's `MetadataHandling`. The opt-in R5/R6 test (`TRANSMUTE_REAL_TOOLS=1 cargo test -p transmute-engine --test metadata`) must keep passing; a privacy failure there is a release blocker.
 - `transmute-api` is the only thing the desktop frontend talks to (documented in `docs/api.md`). It addresses files and jobs by id, never by frontend-supplied paths. Its types generate the TypeScript in `crates/transmute-api/bindings/`; after changing any type that crosses the boundary (API types, or core types deriving `ts_rs::TS` under the `typescript` feature), regenerate with `TRANSMUTE_UPDATE_BINDINGS=1 cargo test -p transmute-api --test bindings` and commit the result (a test fails otherwise). `tests/headless.rs` drives a whole session through the facade; keep it passing.
+- The desktop app is `src-tauri/` (crate `transmute-app`, binary `transmute`) plus `src/`. The shell holds no logic: one `async` `#[tauri::command]` per `Api` method in `src-tauri/src/commands.rs`, registered in `main.rs`, and every `ApiEvent` emitted on the `transmute` channel. Adding a command means touching both files and `src/api/tauriApi.ts`; a frontend test compares the lists. The webview gets no fs/shell plugins; the asset-protocol scope starts empty and the shell allows each file `preview()`/`sample()` returns.
+- The frontend talks to the backend only through the `TransmuteApi` interface (`src/api/client.ts`), with types imported from `@bindings` (the generated files). `src/api/mockApi.ts` implements it in memory for the browser and tests; extend it as the UI starts using more commands. Components read session state through `useSession` (a Zustand store in `src/state/`) and style with CSS modules over the tokens in `src/styles/tokens.css`.
 - The engine (`transmute-engine`) never lets a tool write a final path. It uses a `.transmute-part-*` temp file plus a no-clobber move, journals temp files for crash recovery, and kills whole process trees on cancel. Adapters in `transmute-backends/src/invoke.rs` only build command lines; keep process handling out of them.
 - Tests that need executables use the stub scripts in `transmute-backends/src/process.rs` (`test_support`), not the real tools.
 - Factory defaults in `codec.rs` are backed by the M9 benchmark data (`docs/internal/m9-defaults.md`). Change them only with new measurements from `cargo dev bench`.

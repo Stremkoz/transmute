@@ -38,13 +38,16 @@ use transmute_core::inspect::Content;
 use transmute_core::inventory::{Inventory, ScanOptions, ScanProgress, scan};
 use transmute_core::output::{CollisionPolicy, Destination, OutputTarget};
 use transmute_core::plan::{JobStatus, PlanContext, plan};
-use transmute_core::preset::{Preset, UserDefaults, resolve};
-use transmute_core::settings::AppSettings;
+use transmute_core::preset::resolve;
 use transmute_core::store::{Locations, Notice, Store};
 use transmute_engine::concurrency::resolve_worker_count;
 use transmute_engine::run::{Event, JobOutcome, RunControl, RunOptions, Work, run};
 
 pub use types::*;
+// The documents the frontend edits and sends back, so the shell needs no
+// dependency on core.
+pub use transmute_core::preset::{Preset, UserDefaults};
+pub use transmute_core::settings::AppSettings;
 
 /// Where events go: the shell forwards them to the webview.
 pub type EventSink = Arc<dyn Fn(ApiEvent) + Send + Sync>;
