@@ -4600,7 +4600,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-api"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "serde",
@@ -4617,7 +4617,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-app"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "tauri",
  "tauri-build",
@@ -4628,7 +4628,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-backends"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4639,7 +4639,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-cli"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "clap",
@@ -4658,7 +4658,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-core"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "brotli-decompressor 5.0.3",
  "chrono",
@@ -4675,7 +4675,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-engine"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "process-wrap",
