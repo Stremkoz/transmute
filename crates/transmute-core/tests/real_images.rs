@@ -6,6 +6,8 @@
 //! ```sh
 //! TRANSMUTE_REAL_TOOLS=1 cargo test -p transmute-core --test real_images
 //! ```
+// Tests run from a console, where a plain Command opens no window.
+#![allow(clippy::disallowed_methods)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

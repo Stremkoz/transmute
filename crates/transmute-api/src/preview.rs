@@ -13,10 +13,10 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::UNIX_EPOCH;
 
 use transmute_backends::invoke::{Invoker, StepRequest};
+use transmute_backends::process::tool_command;
 use transmute_core::capability::Toolbox;
 use transmute_core::codec::{CodecSettings, PngSettings};
 use transmute_core::format::Format;
@@ -128,7 +128,7 @@ pub fn preview(
                 auto_orient: false,
             })
             .map_err(|message| ApiError::new(ErrorCode::Internal, message))?;
-        let result = Command::new(&invocation.program)
+        let result = tool_command(&invocation.program)
             .args(&invocation.args)
             .output()
             .map_err(io_error)?;
@@ -232,7 +232,7 @@ pub fn thumbnail(
             size: THUMBNAIL_SIZE,
         })
         .map_err(|message| ApiError::new(ErrorCode::Unavailable, message))?;
-    let result = Command::new(&invocation.program)
+    let result = tool_command(&invocation.program)
         .args(&invocation.args)
         .output()
         .map_err(io_error)?;

@@ -1,2 +1,10 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+
+# Tools started with a plain Command open a console window from the GUI;
+# transmute_backends::process::tool_command hides it. Tests run in a console
+# and allow this per file.
+disallowed-methods = [
+  { path = "std::process::Command::new", reason = "use transmute_backends::process::tool_command, which opens no console window" },
+  { path = "tokio::process::Command::new", reason = "the engine's supervised runner sets the no-window flag; use it, or tool_command" },
+]

@@ -7,6 +7,8 @@
 //! ```sh
 //! TRANSMUTE_REAL_TOOLS=1 cargo test -p transmute-engine --test matrix -- --nocapture
 //! ```
+// Tests run from a console, where a plain Command opens no window.
+#![allow(clippy::disallowed_methods)]
 
 // Test-only file: helpers panic on setup failures, which is what a test wants.
 #![allow(clippy::unwrap_used)]

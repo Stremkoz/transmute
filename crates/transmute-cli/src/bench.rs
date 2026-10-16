@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Instant;
+use transmute_backends::process::tool_command;
 
 use image::Rgba32FImage;
 use rayon::prelude::*;
@@ -273,7 +273,7 @@ fn run_steps(
             metadata: MetadataPolicy::StripAll,
             auto_orient: false,
         })?;
-        let result = Command::new(&invocation.program)
+        let result = tool_command(&invocation.program)
             .args(&invocation.args)
             .output()
             .map_err(|err| format!("{} didn't start: {err}", step.tool.program_name()))?;

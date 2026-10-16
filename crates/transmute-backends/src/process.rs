@@ -3,6 +3,7 @@
 //!
 //! Long-running conversions use the engine's supervised runner instead (M5).
 
+use std::ffi::OsStr;
 use std::io::Read;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -43,13 +44,12 @@ pub fn run_captured(
     args: &[&str],
     timeout: Duration,
 ) -> Result<CapturedOutput, RunError> {
-    let mut command = Command::new(program);
+    let mut command = tool_command(program);
     command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    hide_console_window(&mut command);
 
     let mut child = command.spawn().map_err(RunError::Spawn)?;
     // Drain both pipes on their own threads: a tool that fills one pipe while
@@ -88,6 +88,18 @@ fn wait_with_timeout(child: &mut Child, timeout: Duration) -> Result<Option<i32>
         }
         thread::sleep(POLL_INTERVAL);
     }
+}
+
+/// A command for a console tool that opens no window. The app is a GUI
+/// program, so on Windows each tool it starts would otherwise get a terminal
+/// window of its own. Everything that starts a tool outside the engine
+/// (whose runner sets the same flag) must use this; clippy rejects
+/// `Command::new` anywhere else (`clippy.toml`).
+pub fn tool_command(program: impl AsRef<OsStr>) -> Command {
+    #[allow(clippy::disallowed_methods)] // the one place that may
+    let mut command = Command::new(program);
+    hide_console_window(&mut command);
+    command
 }
 
 /// Stops console tools from flashing a window when called from the GUI.
