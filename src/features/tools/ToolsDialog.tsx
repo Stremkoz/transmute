@@ -77,8 +77,11 @@ function ToolRow({ info, tools }: { info: ToolInfo; tools: ToolInfo[] }) {
               The only installed tool that writes <b>{only.map((f) => FORMAT_LABELS[f]).join(", ")}</b>.
             </p>
           )}
-          <p className={styles.path} title={info.status.path}>
-            {SOURCE_LABELS[info.status.source] ?? info.status.source}: {info.status.path}
+          <p className={styles.line}>
+            {SOURCE_LABELS[info.status.source] ?? info.status.source}:{" "}
+            <span className={styles.path} title={info.status.path}>
+              {info.status.path}
+            </span>
           </p>
           {info.status.outdated && (
             <p className={styles.line}>An older version than Transmute was tested with; results may differ.</p>
