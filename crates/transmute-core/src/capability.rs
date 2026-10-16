@@ -40,6 +40,11 @@ pub struct Capabilities {
     /// everything (no EXIF in TIFF output, say). Narrows `metadata`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata_drops: BTreeMap<Format, MetadataKinds>,
+    /// Metadata the tool doesn't read from a source format, so it can't
+    /// carry it into any output (ImageMagick skips JPEG XL's compressed
+    /// metadata boxes, say). Narrows `metadata` like `metadata_drops`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub metadata_unread: BTreeMap<Format, MetadataKinds>,
     /// How the tool handles metadata on the files it writes. `None` means the
     /// tool isn't characterised for this, e.g. a decoder whose output only
     /// feeds another step, with metadata handled from the original source.
@@ -54,20 +59,20 @@ impl Capabilities {
         self.reads.contains(&from) && self.writes.contains(&to)
     }
 
-    /// The metadata this tool carries into a file of `format`.
-    pub fn carries(&self, format: Format) -> MetadataKinds {
+    /// The metadata this tool carries from a `from` file into a `to` file.
+    pub fn carries(&self, from: Format, to: Format) -> MetadataKinds {
         let Some(support) = self.metadata else {
             return MetadataKinds::NONE;
         };
-        let dropped = self
-            .metadata_drops
-            .get(&format)
-            .copied()
-            .unwrap_or_default();
+        let lost = |map: &BTreeMap<Format, MetadataKinds>, format| {
+            map.get(&format).copied().unwrap_or_default()
+        };
+        let dropped = lost(&self.metadata_drops, to);
+        let unread = lost(&self.metadata_unread, from);
         MetadataKinds {
-            exif: support.preserves.exif && !dropped.exif,
-            xmp: support.preserves.xmp && !dropped.xmp,
-            icc: support.preserves.icc && !dropped.icc,
+            exif: support.preserves.exif && !dropped.exif && !unread.exif,
+            xmp: support.preserves.xmp && !dropped.xmp && !unread.xmp,
+            icc: support.preserves.icc && !dropped.icc && !unread.icc,
         }
     }
 

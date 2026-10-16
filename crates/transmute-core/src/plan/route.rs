@@ -421,7 +421,7 @@ fn metadata_gaps(
     let carried = if via_intermediate {
         MetadataKinds::NONE
     } else {
-        caps.carries(req.to)
+        caps.carries(req.from, req.to)
     };
     // Outputs we rewrite are encoded keeping everything; others are told
     // the policy, which they can only apply partially if not selective.
@@ -639,6 +639,28 @@ mod tests {
                 kinds: MetadataKinds::ICC_ONLY,
             }]
         );
+    }
+
+    #[test]
+    fn metadata_a_tool_cant_read_from_the_source_is_noted() {
+        // ImageMagick skips JPEG XL's compressed EXIF and XMP boxes.
+        let mut magick = caps(&[Format::Jxl, Format::Jpeg], &[Format::Avif]);
+        magick.metadata_unread = std::collections::BTreeMap::from([(
+            Format::Jxl,
+            MetadataKinds {
+                exif: true,
+                xmp: true,
+                icc: false,
+            },
+        )]);
+        let tools = Toolbox::new([(ToolId::Magick, magick)]);
+        let mut r = req(Format::Jxl, Format::Avif);
+        r.metadata = no_metadata();
+        r.metadata.exif = Presence::Present;
+        assert_eq!(metadata_notes(&find_route(&tools, &r).unwrap()), 1);
+        // From a JPEG, the same tool carries it.
+        r.from = Format::Jpeg;
+        assert_eq!(metadata_notes(&find_route(&tools, &r).unwrap()), 0);
     }
 
     #[test]

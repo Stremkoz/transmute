@@ -350,6 +350,16 @@ fn magick(listing: &str) -> Capabilities {
     // `file[0]` reads just the first frame of anything it reads animated.
     caps.first_frame_reads = caps.animated_reads.clone();
     caps.metadata_drops = no_exif_in_tiff();
+    // cjxl Brotli-compresses EXIF and XMP boxes by default, and ImageMagick's
+    // JPEG XL reader skips compressed boxes (checked with 7.1.1-46).
+    caps.metadata_unread = BTreeMap::from([(
+        Format::Jxl,
+        MetadataKinds {
+            exif: true,
+            xmp: true,
+            icc: false,
+        },
+    )]);
     caps.ignored_settings = ignoring(&[
         (Format::Jxl, &["reconstructJpeg"]),
         // Its HEIF coder has no lossless switch.
