@@ -34,7 +34,8 @@ describe("Compare viewer", () => {
     await user.click(await within(drawer).findByRole("button", { name: "Compare" }));
 
     const viewer = await screen.findByRole("dialog", { name: "photo-001.jpg", description: /file \d+ of \d+/ }, WAIT);
-    expect(within(viewer).getByRole("img", { name: "Output" })).toBeInTheDocument();
+    // The dialog opens before the converted file's preview has loaded.
+    expect(await within(viewer).findByRole("img", { name: "Output" }, WAIT)).toBeInTheDocument();
     expect(within(viewer).getByRole("button", { name: /^WebP · / })).toHaveAttribute("aria-pressed", "true");
     const table = within(viewer).getByRole("table");
     expect(within(table).getByRole("row", { name: /File size/ })).toHaveTextContent(/smaller/);
@@ -50,7 +51,7 @@ describe("Compare viewer", () => {
     expect(await screen.findByRole("dialog", { name: "photo-004.png", description: /file \d+ of/ }, WAIT)).toBeInTheDocument();
 
     await user.click(within(screen.getByRole("dialog", { name: "photo-004.png" })).getByRole("button", { name: "Side by side" }));
-    expect(screen.getAllByRole("img", { name: /Original|Output/ })).toHaveLength(2);
+    await vi.waitFor(() => expect(screen.getAllByRole("img", { name: /Original|Output/ })).toHaveLength(2), WAIT);
   });
 
   it("opens on double-click of a converted row", async () => {
