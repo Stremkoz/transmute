@@ -40,26 +40,6 @@
   color: var(--color-text-muted);
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.table th {
-  padding: var(--space-2);
-  border-bottom: 1px solid var(--color-border-strong);
-  color: var(--color-text-faint);
-  font-weight: 600;
-  text-align: left;
-}
-
-.table td {
-  padding: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  vertical-align: top;
-}
-
 .path {
   color: var(--color-text-muted);
   font-family: var(--font-mono);
@@ -80,6 +60,88 @@
   color: var(--color-error);
 }
 
-.close {
-  align-self: flex-end;
+.muted {
+  color: var(--color-text-muted);
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tool {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+}
+
+.toolHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.toolName {
+  font-weight: 600;
+}
+
+.line {
+  color: var(--color-text-muted);
+}
+
+.line b {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.problem {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  font-size: var(--text-xs);
+  user-select: text;
+}
+
+.command {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.command code,
+.url {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  user-select: text;
+}
+
+.notes {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }

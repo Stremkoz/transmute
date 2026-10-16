@@ -12,6 +12,8 @@ export interface Platform {
   pickDestination(): Promise<string | null>;
   /** Where to save the run report; null when cancelled. */
   pickReportPath(): Promise<string | null>;
+  /** A copy of a tool's program to use instead of the one found; null when cancelled. */
+  pickToolPath(tool: string): Promise<string | null>;
   /** A preset file to import; null when cancelled. */
   pickPresetFile(): Promise<string | null>;
   /** Where to export a preset (suggesting `name`); null when cancelled. */

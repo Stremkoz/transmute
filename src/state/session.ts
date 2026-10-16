@@ -134,6 +134,8 @@ export interface SessionState {
   exportPreset(id: string, path: string): Promise<void>;
   setDefaults(defaults: UserDefaults): Promise<void>;
   setSettings(settings: AppSettings): Promise<void>;
+  /** Looks for the tools again (after installing one, say). */
+  refreshTools(): Promise<void>;
 
   convert(): Promise<void>;
   pause(): Promise<void>;
@@ -478,6 +480,18 @@ export function createSessionStore(api: TransmuteApi) {
         } catch (error) {
           fail(error);
         }
+        // New tool paths can change what's possible.
+        await refresh();
+        schedulePlan();
+      },
+      async refreshTools() {
+        try {
+          set({ tools: await api.refreshTools() });
+        } catch (error) {
+          fail(error);
+        }
+        await refresh();
+        schedulePlan();
       },
 
       async convert() {

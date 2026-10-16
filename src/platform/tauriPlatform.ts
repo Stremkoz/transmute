@@ -29,6 +29,10 @@ export const tauriPlatform: Platform = {
       defaultPath: "transmute-report.txt",
       filters: [{ name: "Text", extensions: ["txt"] }],
     }),
+  pickToolPath: async (tool) => {
+    const picked = await open({ title: `Choose ${tool}`, filters: [{ name: "Programs", extensions: ["exe"] }] });
+    return typeof picked === "string" ? picked : null;
+  },
   pickPresetFile: async () => {
     const picked = await open({ title: "Import a preset", filters: PRESET_FILES });
     return typeof picked === "string" ? picked : null;

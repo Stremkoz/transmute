@@ -17,6 +17,24 @@ use transmute_api::{Api, ApiEvent};
 /// The one event channel the frontend listens on.
 const EVENT_CHANNEL: &str = "transmute";
 
+const SETTINGS_HINT: &str = r#"Transmute keeps its settings in %APPDATA%\Transmute, or in a "data" folder beside the program in portable mode. Check that it can be written to, then start Transmute again."#;
+
+/// Says why the session couldn't open, then quits once the user has read
+/// it. A release build has no console, so without this it would just vanish.
+fn startup_failed(app: &tauri::AppHandle, reason: &str) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    // The window would only show an app that can't do anything.
+    for window in app.webview_windows().values() {
+        let _ = window.hide();
+    }
+    let exit = app.clone();
+    app.dialog()
+        .message(format!("{reason}\n\n{SETTINGS_HINT}"))
+        .title("Transmute couldn't start")
+        .kind(MessageDialogKind::Error)
+        .show(move |_| exit.exit(1));
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -29,8 +47,12 @@ fn main() {
             });
             // Opening probes the installed tools, which needs a Tokio
             // runtime: use Tauri's, so the session's tasks share it.
-            let api = tauri::async_runtime::block_on(async { Api::open(sink) })?;
-            app.manage(api);
+            match tauri::async_runtime::block_on(async { Api::open(sink) }) {
+                Ok(api) => {
+                    app.manage(api);
+                }
+                Err(err) => startup_failed(app.handle(), &err.message),
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

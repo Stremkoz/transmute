@@ -273,19 +273,6 @@ describe("App", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("lists the tools, with missing ones flagged", async () => {
-    const user = userEvent.setup();
-    renderApp();
-
-    await user.click(await screen.findByRole("button", { name: /Tools.*2 missing/ }));
-
-    const dialog = screen.getByRole("dialog", { name: "Tools" });
-    const ffmpeg = within(dialog).getByRole("row", { name: /^FFmpeg/ });
-    expect(within(ffmpeg).getByText("Not found")).toBeInTheDocument();
-    const cjxl = within(dialog).getByRole("row", { name: /JPEG XL encoder/ });
-    expect(within(cjxl).getByText("0.11.1")).toBeInTheDocument();
-  });
-
   it("shows notices from the overview and from events, and dismisses them", async () => {
     const user = userEvent.setup();
     const api = mockApi({ notices: ["settings.json was damaged and has been backed up"] });

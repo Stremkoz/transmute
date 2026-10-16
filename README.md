@@ -2,12 +2,13 @@
 
 **A fast, approachable, Windows-first converter for image, video and audio files, including very large batches.**
 
-> **Status: pre-alpha.** This is a ground-up overhaul of Transmute 1.x (C#/.NET). The backend is in progress: a developer CLI can already plan and convert image batches. The desktop app is being scaffolded.
+> **Status: pre-alpha.** This is a ground-up overhaul of Transmute 1.x (C#/.NET). The desktop app converts images end to end: drop files, pick outputs and their settings, convert, and compare the results. Video and audio are on hold.
 
 ---
 
 ## Table of Contents
 
+- [Install](#install)
 - [Goals](#goals)
 - [Planned Features](#planned-features)
 - [Tech Stack](#tech-stack)
@@ -18,6 +19,15 @@
 - [License](#license)
 
 ---
+
+## Install
+
+Windows 10 or 11, 64-bit. Two downloads, from the releases page:
+
+- **`Transmute_<version>_x64-setup.exe`**: installs for your user account (no administrator rights), with a Start-menu entry and an uninstaller. Settings live in `%APPDATA%\Transmute`.
+- **`Transmute_<version>_x64-portable.zip`**: unzip anywhere and run `transmute.exe`. Settings stay in a `data` folder beside it, so it can live on a USB stick. Delete the `portable` file to use `%APPDATA%` instead.
+
+Both include the converters Transmute needs for JPEG, PNG, WebP, JPEG XL, AVIF, TIFF and GIF: libjxl (cjxl, djxl), libwebp (cwebp, dwebp, gif2webp) and libvips, each under its own licence (see `tools\licenses`). Two tools are optional and used when installed: **ImageMagick** (`winget install ImageMagick.ImageMagick`) adds BMP input and more fallbacks; **FFmpeg** (`winget install Gyan.FFmpeg`) adds another fallback for animation. Nothing bundled writes HEIF: that needs a libvips or ImageMagick build with an HEVC encoder, which most builds leave out. The Tools dialog shows what each tool adds, what's missing, and lets you use another copy of any of them.
 
 ## Goals
 
@@ -76,7 +86,7 @@ transmute/
 
 ## Development
 
-**Prerequisites:** [rustup](https://rustup.rs/) and [Node.js](https://nodejs.org/) (LTS). The pinned toolchain in `rust-toolchain.toml` installs automatically. On Linux, Tauri also needs the [WebKitGTK system libraries](https://v2.tauri.app/start/prerequisites/). To actually convert files you'll also need the external encoders on `PATH`: cjxl/djxl, cwebp/dwebp, libvips, ImageMagick, ffmpeg.
+**Prerequisites:** [rustup](https://rustup.rs/), [Node.js](https://nodejs.org/) (LTS) and Python 3. The pinned toolchain in `rust-toolchain.toml` installs automatically. On Linux, Tauri also needs the [WebKitGTK system libraries](https://v2.tauri.app/start/prerequisites/). To convert files during development, put the encoders on `PATH` (cjxl/djxl, cwebp/dwebp, libvips; optionally ImageMagick, ffmpeg), or fetch the bundled set with `python scripts/fetch_tools.py` and add `target/bundle-tools/tools` to `PATH`.
 
 ```sh
 cargo build --workspace        # build everything
@@ -94,7 +104,7 @@ npm install                    # once
 npm run tauri dev              # run the app with live reload
 npm run dev                    # the frontend alone in a browser, against a mock backend
 npm run lint                   # also: typecheck, test, build (what CI runs)
-npm run tauri build            # installer, in target/release/bundle/
+npm run package                # Windows installer + portable zip, with the bundled tools (scripts/package.py)
 ```
 
 | Crate | Purpose |
@@ -105,6 +115,8 @@ npm run tauri build            # installer, in target/release/bundle/
 | `transmute-api` | The facade the desktop app talks to: commands, events, generated TypeScript types ([docs/api.md](docs/api.md)) |
 | `transmute-cli` | `transmute-dev`, an internal CLI for driving the backend before the GUI exists |
 | `src-tauri` (`transmute-app`) | The desktop shell; no logic of its own |
+
+Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which builds both downloads on Windows and attaches them to a draft GitHub release.
 
 ## Contributing
 

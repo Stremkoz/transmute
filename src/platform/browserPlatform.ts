@@ -12,6 +12,7 @@ export function createBrowserPlatform(): Platform {
     pickFolders: async () => [`C:\\Users\\Demo\\Pictures\\Shoot ${++picks}`],
     pickDestination: async () => "D:\\Converted",
     pickReportPath: async () => "D:\\transmute-report.txt",
+    pickToolPath: async (tool) => `C:\\Tools\\Custom\\${tool}.exe`,
     pickPresetFile: async () => "C:\\Users\\Demo\\Downloads\\shared-preset.json",
     pickPresetExportPath: async (name) => `C:\\Users\\Demo\\Documents\\${name}.json`,
     onFileDrop: async (handlers) => {

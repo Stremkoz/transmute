@@ -12,6 +12,7 @@ export interface TestPlatform extends Platform {
   destination: string | null;
   reportPath: string | null;
   presetFile: string | null;
+  toolPath: string | null;
   presetExportPath: string | null;
   /** Simulates files dropped on the window. */
   drop(paths: string[]): void;
@@ -26,12 +27,14 @@ export function createTestPlatform(): TestPlatform {
     destination: "D:\\Converted",
     reportPath: "D:\\report.txt",
     presetFile: "D:\\shared.json",
+    toolPath: "D:\\Tools\\cwebp.exe",
     presetExportPath: "D:\\exported.json",
     pickFiles: async () => platform.files,
     pickFolders: async () => platform.folders,
     pickDestination: async () => platform.destination,
     pickReportPath: async () => platform.reportPath,
     pickPresetFile: async () => platform.presetFile,
+    pickToolPath: async () => platform.toolPath,
     pickPresetExportPath: async () => platform.presetExportPath,
     onFileDrop: async (next) => {
       handlers = next;

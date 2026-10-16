@@ -35,12 +35,27 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
-  }
+    ],
+    "publisher": "Stremkoz",
+    "shortDescription": "Convert images between formats, with each codec's real settings",
+    "copyright": "Copyright (c) 2026 Stremkoz",
+    "licenseFile": "../LICENSE",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  },
+  "version": "0.1.0"
 }
