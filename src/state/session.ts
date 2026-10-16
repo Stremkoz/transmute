@@ -14,7 +14,6 @@ import type {
   Progress,
   RunState,
   StoredPreset,
-  TargetTotals,
   ToolInfo,
   UserDefaults,
 } from "@bindings";
@@ -92,8 +91,6 @@ export interface SessionState {
   planning: boolean;
   planError: string | null;
   run: RunView | null;
-  /** Per output, once a run has finished. */
-  totals: TargetTotals[] | null;
   counts: FileCounts;
   /** Which files the list shows. */
   filter: FileFilter;
@@ -177,6 +174,7 @@ function emptyProgress(total: number): Progress {
     outputBytes: 0,
     elapsedMs: 0,
     remainingMs: null,
+    targets: [],
   };
 }
 
@@ -260,7 +258,7 @@ export function createSessionStore(api: TransmuteApi) {
       try {
         await command();
         // Any edit ends the review of a finished run, as in the backend.
-        set({ run: null, totals: null });
+        set({ run: null });
       } catch (error) {
         fail(error);
       }
@@ -322,8 +320,8 @@ export function createSessionStore(api: TransmuteApi) {
     const finishRun = async (progress: Progress) => {
       set({ run: { state: "finished", progress } });
       try {
-        const [overview, totals] = await Promise.all([api.overview(), api.runTotals()]);
-        set({ overview, counts: overview.counts, totals });
+        const overview = await api.overview();
+        set({ overview, counts: overview.counts });
       } catch (error) {
         fail(error);
       }
@@ -344,7 +342,6 @@ export function createSessionStore(api: TransmuteApi) {
       planning: false,
       planError: null,
       run: null,
-      totals: null,
       counts: NO_COUNTS,
       filter: "all",
       selected: null,
@@ -504,7 +501,7 @@ export function createSessionStore(api: TransmuteApi) {
           if (!summary || summary.ready === 0) return;
           // Shown before the call returns: a short run can finish (and send
           // runFinished) before startRun's reply arrives.
-          set({ run: { state: "running", progress: emptyProgress(summary.ready) }, totals: null, filter: "all" });
+          set({ run: { state: "running", progress: emptyProgress(summary.ready) }, filter: "all" });
           await api.startRun();
         } catch (error) {
           set({ run: null });

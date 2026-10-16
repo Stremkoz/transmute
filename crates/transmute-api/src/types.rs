@@ -251,7 +251,7 @@ pub struct EntryDetails {
 }
 
 /// What a run did for one output target, from the current plan's jobs.
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetTotals {
     pub target: u32,
@@ -414,6 +414,8 @@ pub struct Progress {
     pub elapsed_ms: u64,
     /// Estimated time left, once enough jobs have finished to tell.
     pub remaining_ms: Option<u64>,
+    /// Each output target's totals so far, from its jobs' states.
+    pub targets: Vec<TargetTotals>,
 }
 
 /// Pushed to the frontend as things happen.

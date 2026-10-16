@@ -54,8 +54,43 @@ function AddOutputMenu({ preset }: { preset: Preset }) {
   );
 }
 
+/**
+ * How far one output is in the current run, and once it's finished what it
+ * wrote. Counts every planned file of that output, so a second run of the
+ * files left over continues from the first.
+ */
+function CardProgress({ label, totals, finished }: { label: string; totals: TargetTotals; finished: boolean }) {
+  const done = totals.converted + totals.failed + totals.cancelled;
+  const total = done + totals.ready;
+  return (
+    <div className={styles.progress}>
+      <div className={styles.progressRow}>
+        <div
+          className={styles.track}
+          role="progressbar"
+          aria-label={`${label} progress`}
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={done}
+        >
+          <div className={styles.fill} style={{ width: `${total === 0 ? 100 : (done / total) * 100}%` }} />
+        </div>
+        <span className={styles.count}>
+          {formatCount(done)} of {formatCount(total)}
+        </span>
+      </div>
+      {finished ? (
+        <span className={styles.results}>{totalsLine(totals)}</span>
+      ) : (
+        totals.failed > 0 && <span className={styles.failed}>{formatCount(totals.failed)} failed</span>
+      )}
+    </div>
+  );
+}
+
 function OutputCards({ preset, locked }: { preset: Preset; locked: boolean }) {
   const codecs = useSession((state) => state.codecs);
+  const run = useSession((state) => state.run);
   const removeOutput = useSession((state) => state.removeOutput);
   const editOutput = useSession((state) => state.editOutput);
   if (preset.outputs.length === 0) {
@@ -68,6 +103,7 @@ function OutputCards({ preset, locked }: { preset: Preset; locked: boolean }) {
         const codec = defaultsFor(codecs, output.codec.format);
         const summary = codec ? settingsSummary(effective(codec.inherited, output.codec)) : "";
         const notes = overrideNotes(output);
+        const totals = run?.progress.targets.find((t) => t.target === index);
         return (
           <li key={`${output.codec.format}-${index}`} className={styles.card}>
             <button
@@ -99,6 +135,7 @@ function OutputCards({ preset, locked }: { preset: Preset; locked: boolean }) {
             >
               ×
             </button>
+            {totals && <CardProgress label={label} totals={totals} finished={run?.state === "finished"} />}
           </li>
         );
       })}
@@ -154,6 +191,7 @@ function WhereAndHow({ preset, locked }: { preset: Preset; locked: boolean }) {
   );
 }
 
+/** What a finished run wrote for one output. */
 function totalsLine(totals: TargetTotals): string {
   const parts = [`${formatCount(totals.converted)} written`];
   if (totals.converted > 0) parts.push(`${formatBytes(totals.inputBytes)} → ${formatBytes(totals.outputBytes)}`);
@@ -163,33 +201,20 @@ function totalsLine(totals: TargetTotals): string {
   return parts.join(" · ");
 }
 
-/** What the finished run did per output, and its report. */
-function LastRun() {
+/** The finished run's report, with every file's result. */
+function SaveReport() {
   const platform = usePlatform();
-  const totals = useSession((state) => state.totals);
+  const finished = useSession((state) => state.run?.state === "finished");
   const saveReport = useSession((state) => state.saveReport);
-  if (!totals) return null;
+  if (!finished) return null;
   const save = async () => {
     const path = await platform.pickReportPath();
     if (path) await saveReport(path);
   };
   return (
-    <section className={styles.lastRun} aria-labelledby="last-run-heading">
-      <h3 id="last-run-heading" className={styles.subheading}>
-        Last run
-      </h3>
-      <dl className={styles.totals}>
-        {totals.map((total) => (
-          <div key={total.target}>
-            <dt>{FORMAT_LABELS[total.format]}</dt>
-            <dd>{totalsLine(total)}</dd>
-          </div>
-        ))}
-      </dl>
-      <button type="button" className="link" style={{ alignSelf: "flex-start" }} onClick={() => void save()}>
-        Save report…
-      </button>
-    </section>
+    <button type="button" className="link" onClick={() => void save()}>
+      Save report…
+    </button>
   );
 }
 
@@ -208,8 +233,12 @@ export function OutputsPanel({ preset }: { preset: Preset }) {
         </p>
       )}
       <OutputCards preset={preset} locked={locked} />
-      {!locked && <AddOutputMenu preset={preset} />}
-      <LastRun />
+      {!locked && (
+        <div className={styles.belowCards}>
+          <AddOutputMenu preset={preset} />
+          <SaveReport />
+        </div>
+      )}
       <WhereAndHow preset={preset} locked={locked} />
     </section>
   );

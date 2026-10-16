@@ -158,8 +158,25 @@ describe("App", () => {
       WAIT,
     );
     expect(await screen.findByRole("button", { name: /^Done/ }, WAIT)).toBeInTheDocument();
-    const lastRun = await screen.findByRole("region", { name: "Last run" });
-    expect(within(lastRun).getByText(/written ·/)).toBeInTheDocument();
+    // The output's card keeps what it wrote.
+    const progress = screen.getByRole("progressbar", { name: "WebP progress" });
+    expect(progress).toHaveAttribute("aria-valuenow", progress.getAttribute("aria-valuemax"));
+    expect(screen.getByText(/^34 written · .+ → /)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save report…" })).toBeInTheDocument();
+  });
+
+  it("shows each output's progress on its card while converting", async () => {
+    renderApp(mockApi({ runStepMs: 60, failEvery: 0 }));
+    const user = await addFolderAndWebp();
+    expect(screen.queryByRole("progressbar", { name: "WebP progress" })).not.toBeInTheDocument();
+
+    await user.click(within(bar()).getByRole("button", { name: "Convert" }));
+    const progress = await screen.findByRole("progressbar", { name: "WebP progress" }, WAIT);
+    await vi.waitFor(() => expect(Number(progress.getAttribute("aria-valuenow"))).toBeGreaterThan(0), WAIT);
+    expect(Number(progress.getAttribute("aria-valuenow"))).toBeLessThan(34);
+    expect(screen.getByText(/^\d+ of 34$/)).toBeInTheDocument();
+    // The results line waits for the end.
+    expect(screen.queryByText(/written ·/)).not.toBeInTheDocument();
   });
 
   it("shows failures with their reasons and converts what's left", async () => {

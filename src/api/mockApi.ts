@@ -492,7 +492,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       ? { id: loaded.id, name: loaded.stored.name, edited: !sameValue(loaded.stored, preset) }
       : null,
     plan: plan ? copy(plan.summary) : null,
-    run: run ? { state: run.state, progress: copy(run.progress) } : null,
+    run: run ? { state: run.state, progress: progressNow(run.progress) } : null,
     counts: countsOf(),
     notices: [...notices],
   });
@@ -579,8 +579,37 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
     current.progress.running = 0;
     current.progress.remainingMs = null;
     if (updates.length > 0) emit({ type: "jobsChanged", jobs: copy(updates) });
-    emit({ type: "runFinished", progress: copy(current.progress) });
+    emit({ type: "runFinished", progress: progressNow(current.progress) });
   };
+
+  /** Each output's totals from its jobs' states, as the backend's `run_totals`. */
+  const targetTotals = (): TargetTotals[] =>
+    preset.outputs.map((output, target) => {
+      const totals: TargetTotals = {
+        target,
+        format: output.codec.format,
+        converted: 0,
+        skipped: 0,
+        blocked: 0,
+        failed: 0,
+        cancelled: 0,
+        ready: 0,
+        inputBytes: 0,
+        outputBytes: 0,
+      };
+      for (const { state } of (plan?.jobs ?? []).filter((j) => j.target === target)) {
+        if (state.state === "converted") {
+          totals.converted++;
+          totals.inputBytes += state.inputBytes;
+          totals.outputBytes += state.outputBytes;
+        } else if (state.state === "running") totals.ready++;
+        else totals[state.state]++;
+      }
+      return totals;
+    });
+
+  /** A run's progress with each output's totals, as the backend sends it. */
+  const progressNow = (progress: Progress): Progress => ({ ...copy(progress), targets: targetTotals() });
 
   const step = (current: MockRun) => {
     if (current.state === "paused" || !plan) return;
@@ -628,7 +657,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
     progress.remainingMs =
       finished >= 5 ? Math.round((progress.elapsedMs / finished) * (progress.total - finished)) : null;
     if (updates.length > 0) emit({ type: "jobsChanged", jobs: copy(updates) });
-    emit({ type: "progress", progress: copy(progress) });
+    emit({ type: "progress", progress: progressNow(progress) });
     if (next.length === 0) finishRun(current, []);
   };
 
@@ -885,6 +914,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
           outputBytes: 0,
           elapsedMs: 0,
           remainingMs: null,
+          targets: [],
         },
         timer: setInterval(() => step(current), runStepMs),
       };
@@ -911,29 +941,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
     },
     runTotals: async (): Promise<TargetTotals[]> => {
       if (!plan) throw failure("noPlan", "nothing has been planned yet");
-      return preset.outputs.map((output, target) => {
-        const totals: TargetTotals = {
-          target,
-          format: output.codec.format,
-          converted: 0,
-          skipped: 0,
-          blocked: 0,
-          failed: 0,
-          cancelled: 0,
-          ready: 0,
-          inputBytes: 0,
-          outputBytes: 0,
-        };
-        for (const { state } of (plan?.jobs ?? []).filter((j) => j.target === target)) {
-          if (state.state === "converted") {
-            totals.converted++;
-            totals.inputBytes += state.inputBytes;
-            totals.outputBytes += state.outputBytes;
-          } else if (state.state === "running") totals.ready++;
-          else totals[state.state]++;
-        }
-        return totals;
-      });
+      return targetTotals();
     },
     reveal: async () => {},
 

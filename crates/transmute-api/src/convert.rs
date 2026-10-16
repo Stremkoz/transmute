@@ -228,6 +228,8 @@ pub fn progress(batch: &BatchProgress) -> Progress {
         output_bytes: batch.output_bytes,
         elapsed_ms,
         remaining_ms,
+        // Filled in from the job states when sent.
+        targets: Vec::new(),
     }
 }
 

@@ -86,7 +86,7 @@ Delivered through the sink given to the `Api` at construction. The shell emits e
 |---|---|
 | `scanProgress { discovered, inspected }` | While adding inputs, at most every 100 ms. |
 | `jobsChanged { jobs: JobUpdate[] }` | Job state changes since the last batch, at most every 100 ms. A 10,000-file run doesn't flood the UI. |
-| `progress { progress }` | Run totals, at most every 100 ms: counts, original and output bytes of converted jobs, elapsed time, and `remainingMs` once enough jobs have finished to estimate it. |
+| `progress { progress }` | Run totals, at most every 100 ms: counts, original and output bytes of converted jobs, elapsed time, `remainingMs` once enough jobs have finished to estimate it, and `targets`: each output's totals so far (as `runTotals()`). `runFinished` and `overview().run` carry the same. |
 | `runFinished { progress }` | Once, at the end, after the last `jobsChanged`. |
 | `notice { text }` | Something to show once: a damaged settings file that was backed up, a run that couldn't start, … |
 

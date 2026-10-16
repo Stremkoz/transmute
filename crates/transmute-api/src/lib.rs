@@ -176,6 +176,13 @@ impl Session {
         self.current_plan().ok().map(PlanState::view)
     }
 
+    /// The run's totals, with each output target's from the job states.
+    fn run_progress(&self) -> Option<Progress> {
+        let mut progress = self.run.as_ref()?.progress.clone();
+        progress.targets = self.view().map(files::target_totals).unwrap_or_default();
+        Some(progress)
+    }
+
     fn loaded(&self) -> Option<LoadedPreset> {
         self.loaded.as_ref().map(|(id, stored)| LoadedPreset {
             id: id.clone(),
@@ -386,10 +393,14 @@ impl Api {
             preset: session.preset.clone(),
             loaded: session.loaded(),
             plan: session.current_plan().ok().map(|p| p.summary.clone()),
-            run: session.run.as_ref().map(|run| RunStatus {
-                state: run.state,
-                progress: run.progress.clone(),
-            }),
+            run: session
+                .run
+                .as_ref()
+                .zip(session.run_progress())
+                .map(|(run, progress)| RunStatus {
+                    state: run.state,
+                    progress,
+                }),
             notices: session.notices.clone(),
         }
     }
@@ -1172,10 +1183,10 @@ impl Api {
                     }
                 }
             }
-            let progress = session.run.as_mut().map(|run| {
+            if let Some(run) = session.run.as_mut() {
                 run.state = RunState::Finished;
-                run.progress.clone()
-            });
+            }
+            let progress = session.run_progress();
             drop(session);
             if !leftover.is_empty() {
                 self.emit(ApiEvent::JobsChanged { jobs: leftover });
@@ -1192,7 +1203,7 @@ impl Api {
             });
         }
         if std::mem::take(progress_changed) {
-            let progress = self.session().run.as_ref().map(|r| r.progress.clone());
+            let progress = self.session().run_progress();
             if let Some(progress) = progress {
                 self.emit(ApiEvent::Progress { progress });
             }

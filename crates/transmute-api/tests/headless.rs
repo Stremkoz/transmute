@@ -248,11 +248,30 @@ async fn a_whole_session_through_the_facade() {
         (progress.total, progress.converted, progress.failed),
         (2, 2, 0)
     );
+    // Each output's totals come with every progress event, for its card.
+    assert_eq!(progress.targets.len(), 1);
+    assert_eq!(
+        (progress.targets[0].converted, progress.targets[0].ready),
+        (2, 0)
+    );
+    let during: Vec<u32> = events
+        .iter()
+        .filter_map(|e| match e {
+            ApiEvent::Progress { progress } => progress.targets.first().map(|t| t.converted),
+            _ => None,
+        })
+        .collect();
+    assert!(!during.is_empty() && during.is_sorted(), "{during:?}");
     assert!(fx.photos.join("tiff").join("a.tiff").is_file());
 
     // Review: results stay browsable, outputs can be previewed.
     let overview = api.overview();
-    assert_eq!(overview.run.unwrap().state, RunState::Finished);
+    let run = overview.run.unwrap();
+    assert_eq!(run.state, RunState::Finished);
+    assert_eq!(
+        run.progress.targets, progress.targets,
+        "a reload sees the same"
+    );
     let converted = api.jobs(JobFilter::Converted, 0, 10).unwrap();
     assert_eq!(converted.total, 2);
     let source = api
