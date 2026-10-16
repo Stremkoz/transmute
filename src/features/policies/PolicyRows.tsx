@@ -2,6 +2,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { useState, type ReactNode } from "react";
 import type { CollisionPolicy, Destination, Format, MetadataPolicy, NamingRule } from "@bindings";
 import { InfoTip } from "../../components/InfoTip";
+import { ChevronDownIcon } from "../../components/icons";
 import popover from "../../components/Popover.module.css";
 import {
   COLLISION_OPTIONS,
@@ -49,6 +50,9 @@ export function PolicyRow({ label, info, value, tag, disabled, children }: RowPr
           <button type="button" className={styles.value} disabled={disabled} aria-label={`${label}: ${value}`}>
             <span className={styles.valueText}>{value}</span>
             {tag && <span className={styles.tag}>{tag}</span>}
+            <span className={styles.chevron}>
+              <ChevronDownIcon />
+            </span>
           </button>
         </Popover.Trigger>
         <Popover.Portal>
