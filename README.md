@@ -1,130 +1,154 @@
 # Transmute
 
-**A fast, approachable, Windows-first converter for image, video and audio files, including very large batches.**
+**A fast, approachable image converter for Windows, from a single photo to folders of tens of thousands.**
 
-> **Status: pre-alpha.** This is a ground-up overhaul of Transmute 1.x (C#/.NET). The desktop app converts images end to end: drop files, pick outputs and their settings, convert, and compare the results. Video and audio are on hold.
+Drop in files or folders, pick the formats you want, convert. Transmute keeps your file names, never overwrites anything without asking, and shows you what each conversion did before and after. When you want more control, every format has its real encoder settings, explained in plain English.
+
+![Transmute after converting a folder to JPEG XL and WebP](docs/screenshots/main.png)
+
+> **Version 0.1.** A ground-up rewrite of Transmute 1.x. It converts images; video and audio aren't supported.
 
 ---
 
-## Table of Contents
+## Contents
 
+- [Features](#features)
 - [Install](#install)
-- [Goals](#goals)
-- [Planned Features](#planned-features)
-- [Tech Stack](#tech-stack)
-- [Roadmap](#roadmap)
-- [Project Structure](#project-structure)
-- [Development](#development)
+- [Using Transmute](#using-transmute)
+- [Formats](#formats)
+- [Where things are kept](#where-things-are-kept)
+- [Building from source](#building-from-source)
 - [Contributing](#contributing)
 - [License](#license)
 
 ---
 
+## Features
+
+- **Several outputs at once.** Make JPEG XL, WebP and AVIF copies of the same files in one go, each with its own settings, folder and file names.
+- **Real settings, not one quality slider.** WebP quality and method, JPEG XL distance and effort, AVIF quality and effort, and so on. Defaults come from measuring size and visual quality on real photos and graphics.
+- **Lossless where it pays.** WebP's *Auto* mode tries lossless on graphics (PNG, GIF, BMP, TIFF) and keeps it when it's barely larger than lossy. Photos stay lossy.
+- **Safe with your files.** File names stay as they are unless you add a prefix or suffix. Name clashes are found before anything runs, and you choose what happens: skip, keep both, or replace. Originals are never replaced. Files are written to a temporary name and only moved into place when they're complete.
+- **Big folders.** Folders keep their structure in a tree you can expand, filter by format, and exclude files or subfolders from. Tens of thousands of files are scanned in moments.
+- **See the result.** Compare any converted file with its original, either with a divider or side by side, at 100% or 200%. *Try on one file* converts a single image so you can judge settings before running a whole batch.
+- **Metadata your way.** Keep everything, keep only the copyright, keep only the colour profile, or remove it all. Location data goes when you ask it to.
+- **Presets.** Save a whole setup (outputs, settings, folder, names, metadata) and load it again later, or share it as a file.
+- **Damaged files are flagged.** Truncated or corrupt images are flagged before conversion, with the reason.
+- **Light and dark.** Follows the Windows setting, or pick one in Settings.
+
+![The compare viewer, with the original on the left and JPEG XL on the right](docs/screenshots/compare.png)
+
 ## Install
 
-Windows 10 or 11, 64-bit. Two downloads, from the releases page:
+Windows 10 or 11, 64-bit. Download one of these from the [releases page](../../releases):
 
-- **`Transmute_<version>_x64-setup.exe`**: installs for your user account (no administrator rights), with a Start-menu entry and an uninstaller. Settings live in `%APPDATA%\Transmute`.
-- **`Transmute_<version>_x64-portable.zip`**: unzip anywhere and run `transmute.exe`. Settings stay in a `data` folder beside it, so it can live on a USB stick. Delete the `portable` file to use `%APPDATA%` instead.
+- **`Transmute_<version>_x64-setup.exe`** installs for your user account, with a Start-menu entry and an uninstaller. It needs no administrator rights.
+- **`Transmute_<version>_x64-portable.zip`**: unzip it anywhere and run `transmute.exe`. Settings stay in a `data` folder beside it, so it works from a USB stick.
 
-Both include the converters Transmute needs for JPEG, PNG, WebP, JPEG XL, AVIF, TIFF and GIF: libjxl (cjxl, djxl), libwebp (cwebp, dwebp, gif2webp) and libvips, each under its own licence (see `tools\licenses`). Two tools are optional and used when installed: **ImageMagick** (`winget install ImageMagick.ImageMagick`) adds BMP input and more fallbacks; **FFmpeg** (`winget install Gyan.FFmpeg`) adds another fallback for animation. Nothing bundled writes HEIF: that needs a libvips or ImageMagick build with an HEVC encoder, which most builds leave out. The Tools dialog shows what each tool adds, what's missing, and lets you use another copy of any of them.
+The downloads aren't code-signed yet, so Windows SmartScreen may warn about them. Choose **More info → Run anyway**.
 
-## Goals
+Both come with the converters for JPEG, PNG, WebP, JPEG XL, AVIF, TIFF and GIF: [libjxl](https://github.com/libjxl/libjxl), [libwebp](https://chromium.googlesource.com/webm/libwebp) and [libvips](https://www.libvips.org/). Two more tools are optional, and Transmute uses them when they're installed:
 
-Transmute should stay a quick, simple converter: add media, choose an output, convert. It should also scale to big folders, mixed input formats and several output formats at once.
+- **ImageMagick** adds HEIC/HEIF photos, BMP, and a fallback for other formats:
 
-The guiding rule is **progressive disclosure**. A basic conversion needs very few decisions. Power users can still tune each codec, control where output lands, and save setups they reuse.
+  ```
+  winget install ImageMagick.ImageMagick
+  ```
 
-## Planned Features
+- **FFmpeg** adds another route for animations:
 
-- **Drop and convert:** drag in files or folders and convert with sensible defaults. There is no wizard and no codec setup required.
-- **Multiple outputs per run:** produce JPEG XL, WebP and AVIF from the same sources in a single batch, each with its own settings.
-- **Codec-specific controls:** real encoder settings (WebP quality/method, JPEG XL distance/effort, and so on) with plain-English explanations, not one misleading universal quality slider.
-- **Safe file handling:** source filenames are kept by default, name clashes are checked before anything runs, nothing is overwritten silently, and files are written to a temporary location before being finalised.
-- **Hierarchical queue:** dropped folders keep their structure, can be collapsed and expanded, and let you exclude individual files or subfolders. The queue stays responsive at tens of thousands of files.
-- **Honest progress and review:** per-file and per-batch progress, readable failure messages, and a before/after image comparison viewer.
-- **Presets:** save a multi-output configuration, including filters, destination and naming, for reuse.
+  ```
+  winget install Gyan.FFmpeg
+  ```
 
-## Tech Stack
+**Tools** in the top bar shows what each tool adds and what's missing. You can also point Transmute at a different copy of any of them there.
 
-The proposed direction, which will be confirmed during Phase 1:
+## Using Transmute
 
-| Layer | Choice |
-|-------|--------|
-| Core | Rust (job planning, scheduling, codec/backend adapters, file policy) |
-| Desktop shell | Tauri 2 |
-| Frontend | React + TypeScript (Vite) |
-| Encoders | Existing specialised tools and libraries: libvips, cwebp, cjxl, FFmpeg, and others |
-| Persistence | SQLite, only where job recovery or history requires it |
+1. **Add images.** Drag files or folders onto the window, or use **Add files** / **Add folder**. Anything that isn't an image is listed and left alone.
+2. **Pick outputs.** Choose **Add output** for each format you want. The cog on an output opens its settings; each setting says what it does.
+3. **Choose where and how.** Under the outputs:
+   - *Save to*: beside the originals, a subfolder per format, or a folder of your choice.
+   - *File names*: unchanged, or with a prefix, a suffix, a date or a number.
+   - *If it exists*: skip it, keep both, or replace it.
+   - *Metadata*: keep all, copyright only, colour profile only, or remove all.
+4. **Convert.** Each output's card shows its progress; the bar at the bottom shows the whole run. Failures are listed with the reason, and **Convert N left** retries them.
+5. **Review.** Double-click a converted file to compare it with the original. **Save report…** writes a text report of every file.
 
-## Roadmap
+Save a setup you'll use again with **Preset → Save as a new preset** (Ctrl+Shift+S).
 
-| Phase | Focus |
-|-------|-------|
-| 0: Audit | Inventory the features, backends, routing and workflows of Transmute 1.x worth keeping |
-| 1: Design foundation | Job/output/preset schemas, destination and collision rules, codec capability metadata |
-| 2: Foundational UI | New shell, adaptive drop zone, format selection, destination selector |
-| 3: Queue and review | Virtualised hierarchical queue, progress, diagnostics, output comparison |
-| 4: Advanced workflow | Opt-in naming patterns, multi-output presets, richer codec panels, batch preview |
-| 5: Optional CLI | A small CLI on the same core, only if there is real demand |
+![An output's settings](docs/screenshots/settings.png)
 
-## Project Structure
+## Formats
 
-```
-transmute/
-├── .github/        # CI workflow, issue and PR templates
-├── assets/         # Icons and static assets
-├── config/         # Default/factory configuration
-├── docs/           # Project documentation
-├── examples/       # Example presets and sample workflows
-├── scripts/        # Build and utility scripts
-├── crates/         # Rust workspace crates (backend)
-├── src-tauri/      # Desktop shell (Tauri 2): forwards commands and events to transmute-api
-├── src/            # Frontend (React + TypeScript, Vite)
-└── tests/          # Shared test fixtures and corpora
-```
+| Format | Read | Write | Notes |
+|--------|:----:|:-----:|-------|
+| JPEG | ✓ | ✓ | Transparent areas become a colour you choose (white by default). |
+| PNG | ✓ | ✓ | |
+| WebP | ✓ | ✓ | Lossy, lossless or Auto; animated GIFs stay animated. |
+| JPEG XL | ✓ | ✓ | Lossless JPEG XL can repack a JPEG so the original can be restored exactly. |
+| AVIF | ✓ | ✓ | |
+| TIFF | ✓ | ✓ | |
+| GIF | ✓ | ✓ | |
+| HEIC / HEIF | ImageMagick | ImageMagick with an HEVC encoder | Phone photos. Most ImageMagick builds can read them; few can write them. |
+| BMP | ImageMagick | ImageMagick | |
 
-## Development
+Transmute recognises files by their content, not their extension, so a PNG named `.jpg` is still converted correctly, and it says so.
 
-**Prerequisites:** [rustup](https://rustup.rs/), [Node.js](https://nodejs.org/) (LTS) and Python 3. The pinned toolchain in `rust-toolchain.toml` installs automatically. On Linux, Tauri also needs the [WebKitGTK system libraries](https://v2.tauri.app/start/prerequisites/). To convert files during development, put the encoders on `PATH` (cjxl/djxl, cwebp/dwebp, libvips; optionally ImageMagick, ffmpeg), or fetch the bundled set with `python scripts/fetch_tools.py` and add `target/bundle-tools/tools` to `PATH`.
+## Where things are kept
 
-```sh
-cargo build --workspace        # build everything
-cargo test --workspace         # run all tests
-cargo test -p transmute-core   # test one crate
-cargo lint                     # clippy, exactly as CI runs it
-cargo fmt --all                # format
-cargo dev --help               # run the developer CLI (transmute-dev)
-```
+| | Installed | Portable |
+|---|---|---|
+| Settings, defaults and presets | `%APPDATA%\Transmute` | `data\` beside `transmute.exe` |
+| Previews, thumbnails, run journals | `%LOCALAPPDATA%\Transmute\state` | `data\state` |
 
-The desktop app:
+The settings and preset files are plain JSON, documented in [docs/preset-format.md](docs/preset-format.md). When you uninstall, ticking **Delete the application data** removes Transmute's own files and leaves anything else in those folders, such as Transmute 1.x's settings, alone.
+
+## Building from source
+
+**Prerequisites:**
+- [rustup](https://rustup.rs/). The pinned toolchain in `rust-toolchain.toml` installs itself.
+- [Node.js](https://nodejs.org/) LTS.
+- Python 3.
+- On Linux, Tauri's [WebKitGTK libraries](https://v2.tauri.app/start/prerequisites/).
+
+To convert files during development, the converters must be on `PATH`. Either install them, or run `python scripts/fetch_tools.py` to fetch the bundled set and add `target/bundle-tools/tools` to `PATH`.
 
 ```sh
 npm install                    # once
-npm run tauri dev              # run the app with live reload
+npm run tauri dev              # the app, with live reload
 npm run dev                    # the frontend alone in a browser, against a mock backend
-npm run lint                   # also: typecheck, test, build (what CI runs)
-npm run package                # Windows installer + portable zip, with the bundled tools (scripts/package.py)
+npm run package                # Windows installer and portable zip, with the bundled tools
+
+cargo test --workspace         # all Rust tests
+cargo lint                     # clippy, as CI runs it
+npm run lint && npm run typecheck && npm test && npm run build   # the frontend checks CI runs
+TRANSMUTE_REAL_TOOLS=1 cargo test --workspace                    # also test against the installed converters
 ```
 
-| Crate | Purpose |
-|-------|---------|
-| `transmute-core` | Domain types, settings/preset schemas, inventory, planner, path and collision policy. Spawns no processes. |
-| `transmute-backends` | External tool discovery, capability probing, per-tool adapters, metadata I/O |
-| `transmute-engine` | Scheduling, process supervision, safe file finalisation, progress events |
-| `transmute-api` | The facade the desktop app talks to: commands, events, generated TypeScript types ([docs/api.md](docs/api.md)) |
-| `transmute-cli` | `transmute-dev`, an internal CLI for driving the backend before the GUI exists |
-| `src-tauri` (`transmute-app`) | The desktop shell; no logic of its own |
+The backend is a Rust workspace; the desktop app is a [Tauri 2](https://v2.tauri.app/) shell with a React and TypeScript frontend.
+
+| Part | What it does |
+|------|--------------|
+| `crates/transmute-core` | File detection, settings and preset formats, the job planner, and naming and collision rules. It starts no processes. |
+| `crates/transmute-backends` | Finding the converters, probing what each can do, and building their command lines. |
+| `crates/transmute-engine` | Running conversions in parallel, cancelling them cleanly, and moving finished files into place safely. |
+| `crates/transmute-api` | The interface the app talks to: commands, events and generated TypeScript types ([docs/api.md](docs/api.md)). |
+| `crates/transmute-cli` | `transmute-dev`, a developer CLI for driving the backend (`cargo dev --help`). |
+| `src-tauri/` | The desktop shell. It passes commands through and holds no logic. |
+| `src/` | The frontend. |
 
 Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which builds both downloads on Windows and attaches them to a draft GitHub release.
 
 ## Contributing
 
-1. Open an issue describing the bug or proposal.
+1. Open an issue describing the bug or the idea.
 2. Create a branch from `main`, e.g. `feat/output-targets` or `fix/collision-check`.
 3. Use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages.
-4. Open a pull request using the PR template.
+4. Open a pull request using the template, with the checks above passing.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Transmute is MIT licensed; see [LICENSE](LICENSE). The bundled converters keep their own licences, included with every download in `tools\licenses`:
+- libjxl and libwebp: BSD.
+- libvips: LGPL 2.1 or later.
