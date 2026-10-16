@@ -59,6 +59,11 @@
   --radius-lg: 10px;
 
   --shadow-overlay: 0 12px 40px rgb(0 0 0 / 0.5);
+
+  /* Layers: the files list's sticky header sits at 1. */
+  --z-overlay: 20;
+  --z-dialog: 21;
+  --z-menu: 30;
   --duration-fast: 120ms;
 }
 

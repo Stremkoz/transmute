@@ -45,6 +45,7 @@ fn export_all(dir: &Path) {
     Preset::export_all(&cfg).unwrap();
     UserDefaults::export_all(&cfg).unwrap();
     AppSettings::export_all(&cfg).unwrap();
+    CodecDefaults::export_all(&cfg).unwrap();
 
     // One import point for the frontend.
     let mut names: Vec<String> = fs::read_dir(dir)

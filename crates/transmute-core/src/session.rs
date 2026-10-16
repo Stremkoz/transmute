@@ -13,6 +13,9 @@ use crate::validation::ValidationError;
 pub struct LastSession {
     /// May have no outputs yet: it's a draft, not a preset to run.
     pub preset: Preset,
+    /// The stored preset it was loaded from or last saved as, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset_id: Option<String>,
 }
 
 impl LastSession {

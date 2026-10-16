@@ -108,3 +108,12 @@ button {
   cursor: default;
   text-decoration: none;
 }
+
+.button-danger {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--color-error-bg);
+}

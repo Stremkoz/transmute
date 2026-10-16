@@ -12,6 +12,10 @@ export interface Platform {
   pickDestination(): Promise<string | null>;
   /** Where to save the run report; null when cancelled. */
   pickReportPath(): Promise<string | null>;
+  /** A preset file to import; null when cancelled. */
+  pickPresetFile(): Promise<string | null>;
+  /** Where to export a preset (suggesting `name`); null when cancelled. */
+  pickPresetExportPath(name: string): Promise<string | null>;
   /** Follows files dragged over and dropped on the window. */
   onFileDrop(handlers: FileDropHandlers): Promise<() => void>;
 }

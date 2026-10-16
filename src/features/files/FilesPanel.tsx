@@ -1,9 +1,11 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ChevronDownIcon } from "../../components/icons";
 import type { FileCounts, FileFilter, InputsSummary } from "@bindings";
 import { formatCount, plural } from "../../lib/units";
 import { isRunActive } from "../../state/session";
 import { usePlatform, useSession } from "../../state/sessionContext";
 import { FlatList } from "./FlatList";
+import { FormatFilter } from "./FormatFilter";
 import styles from "./FilesPanel.module.css";
 import { TreeList } from "./TreeList";
 
@@ -45,9 +47,7 @@ function ClearMenu({ disabled }: { disabled: boolean }) {
       <DropdownMenu.Trigger asChild>
         <button type="button" className="button" disabled={disabled}>
           Clear
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+          <ChevronDownIcon />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
@@ -171,6 +171,7 @@ export function FilesPanel({ inputs }: { inputs: InputsSummary }) {
         </div>
         <div className={styles.actions}>
           <AddButtons disabled={locked} />
+          <FormatFilter inputs={inputs} disabled={locked} />
           <ClearMenu disabled={locked} />
         </div>
       </div>

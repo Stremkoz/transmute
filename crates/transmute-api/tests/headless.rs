@@ -211,6 +211,14 @@ async fn a_whole_session_through_the_facade() {
     let plan = api.plan().await.unwrap();
     assert_eq!((plan.jobs, plan.ready), (2, 2), "b.png is excluded");
     assert_eq!(api.overview().plan.unwrap().ready, 2);
+    // One example per output, from its first file.
+    assert_eq!(plan.examples.len(), 1);
+    assert_eq!(plan.examples[0].source, "a.png");
+    assert!(
+        plan.examples[0].output.ends_with("a.tiff"),
+        "{:?}",
+        plan.examples
+    );
     let page = api.jobs(JobFilter::Ready, 0, 1).unwrap();
     assert_eq!((page.total, page.jobs.len()), (2, 1), "paged");
     assert_eq!(page.jobs[0].format, Format::Tiff);
@@ -423,6 +431,107 @@ async fn first_launch_has_no_outputs_and_the_working_preset_is_remembered() {
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].codec.format(), Format::Webp);
     assert!(api.overview().notices.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_loaded_preset_and_its_edits_are_tracked() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+    let api = bare_session(&data);
+    assert_eq!(api.overview().loaded, None);
+
+    // Save as: the working configuration becomes the loaded preset.
+    api.set_preset(tiff_preset()).unwrap();
+    let id = api
+        .save_working(None, "Archive".into(), Some("Lossless copies".into()))
+        .unwrap();
+    let loaded = api.overview().loaded.unwrap();
+    assert_eq!((loaded.id.as_str(), loaded.edited), (id.as_str(), false));
+    assert_eq!(api.preset().description.as_deref(), Some("Lossless copies"));
+
+    // An edit shows; loading it again undoes it.
+    let mut edited = api.preset();
+    edited.outputs.push(OutputTarget::new(Format::Webp));
+    api.set_preset(edited.clone()).unwrap();
+    assert!(api.overview().loaded.unwrap().edited);
+    api.load_preset(&id).unwrap();
+    assert!(!api.overview().loaded.unwrap().edited);
+    assert_eq!(api.preset().outputs.len(), 1);
+
+    // Save changes stores over the same id.
+    api.set_preset(edited).unwrap();
+    assert_eq!(
+        api.save_working(Some(id.clone()), "Archive".into(), None)
+            .unwrap(),
+        id
+    );
+    assert!(!api.overview().loaded.unwrap().edited);
+    assert_eq!(api.stored_presets().unwrap()[0].preset.outputs.len(), 2);
+
+    // Renaming the stored preset is measured against from then on.
+    let mut renamed = api.stored_presets().unwrap()[0].preset.clone();
+    renamed.name = "Keepers".into();
+    api.save_preset(Some(id.clone()), renamed.clone()).unwrap();
+    let loaded = api.overview().loaded.unwrap();
+    assert_eq!((loaded.name.as_str(), loaded.edited), ("Keepers", true));
+    api.set_preset(renamed).unwrap();
+    assert!(!api.overview().loaded.unwrap().edited);
+
+    // Export and import round-trip through a file.
+    let file = dir.path().join("shared.json");
+    api.export_preset(&id, &file.display().to_string()).unwrap();
+    let imported = api.import_preset(&file.display().to_string()).unwrap();
+    assert_ne!(imported.id, id);
+    assert_eq!(imported.preset.name, "Keepers");
+    assert_eq!(api.stored_presets().unwrap().len(), 2);
+    let err = api
+        .import_preset(&dir.path().join("missing.json").display().to_string())
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Store);
+
+    // The next launch remembers which preset was loaded.
+    drop(api);
+    let api = bare_session(&data);
+    let loaded = api.overview().loaded.unwrap();
+    assert_eq!((loaded.id.as_str(), loaded.edited), (id.as_str(), false));
+
+    // Deleting it leaves the working configuration, now unsaved.
+    api.delete_preset(&id).unwrap();
+    assert_eq!(api.overview().loaded, None);
+    assert_eq!(api.preset().name, "Keepers");
+
+    // Starting over: nothing stored, nothing picked.
+    api.load_preset(&imported.id).unwrap();
+    api.new_preset().unwrap();
+    assert_eq!(api.overview().loaded, None);
+    assert!(api.preset().outputs.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codec_defaults_layer_the_users_over_the_factorys() {
+    use transmute_core::codec::{CodecPatch, CodecSettings, WebpPatch};
+    use transmute_core::preset::UserDefaults;
+
+    let dir = tempfile::tempdir().unwrap();
+    let api = bare_session(&dir.path().join("data"));
+    api.set_defaults(UserDefaults {
+        codecs: vec![CodecPatch::Webp(WebpPatch {
+            quality: Some(70),
+            ..WebpPatch::default()
+        })],
+        ..UserDefaults::default()
+    })
+    .unwrap();
+    let codecs = api.codecs();
+    assert_eq!(codecs.len(), Format::ALL.len());
+    let webp = codecs.iter().find(|c| c.format == Format::Webp).unwrap();
+    let (CodecSettings::Webp(factory), CodecSettings::Webp(inherited)) =
+        (&webp.factory, &webp.inherited)
+    else {
+        panic!("not WebP settings");
+    };
+    assert_eq!((factory.quality, inherited.quality), (85, 70));
+    assert_eq!(factory.method, inherited.method);
 }
 
 #[tokio::test(flavor = "multi_thread")]

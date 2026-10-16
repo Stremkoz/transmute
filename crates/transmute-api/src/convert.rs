@@ -13,8 +13,8 @@ use transmute_engine::run::{BatchProgress, JobOutcome, JobResult};
 
 use crate::files::{self, PlanView};
 use crate::types::{
-    FormatCount, InputsSummary, Job, JobState, Message, PlanSummary, Progress, RootInfo, Tally,
-    ToolInfo, ToolStatus,
+    ExampleOutput, FormatCount, InputsSummary, Job, JobState, Message, PlanSummary, Progress,
+    RootInfo, Tally, ToolInfo, ToolStatus,
 };
 
 /// `a/b/c` with forward slashes, whatever the platform.
@@ -107,7 +107,7 @@ pub fn finished_state(result: &JobResult) -> JobState {
     }
 }
 
-pub fn plan_summary(plan: &Plan, outputs_per_source: usize) -> PlanSummary {
+pub fn plan_summary(plan: &Plan, inventory: &Inventory, outputs_per_source: usize) -> PlanSummary {
     let counts = plan.counts();
     let mut problems: BTreeMap<(String, String), u32> = BTreeMap::new();
     let mut notes: BTreeMap<(String, String), u32> = BTreeMap::new();
@@ -145,6 +145,21 @@ pub fn plan_summary(plan: &Plan, outputs_per_source: usize) -> PlanSummary {
         .map(|j| j.source)
         .collect::<std::collections::BTreeSet<_>>()
         .len();
+    let mut firsts: BTreeMap<usize, &PlannedJob> = BTreeMap::new();
+    for job in &plan.jobs {
+        let first = firsts.entry(job.target).or_insert(job);
+        if !matches!(first.status, JobStatus::Ready) && matches!(job.status, JobStatus::Ready) {
+            *first = job;
+        }
+    }
+    let examples = firsts
+        .into_iter()
+        .map(|(target, job)| ExampleOutput {
+            target: target as u32,
+            source: slash_path(&inventory.entries[job.source].relative_path),
+            output: job.output.display().to_string(),
+        })
+        .collect();
     PlanSummary {
         jobs: plan.jobs.len() as u32,
         ready: counts.ready as u32,
@@ -157,6 +172,7 @@ pub fn plan_summary(plan: &Plan, outputs_per_source: usize) -> PlanSummary {
         unsupported: plan.unsupported.len() as u32,
         problems: tallies(problems),
         notes: tallies(notes),
+        examples,
     }
 }
 

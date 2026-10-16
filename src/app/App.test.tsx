@@ -19,7 +19,7 @@ async function addFolderAndWebp() {
   await user.click(await screen.findByRole("button", { name: "Add folder" }));
   await screen.findByRole("row", { name: "Holiday" });
   await user.click(screen.getByRole("button", { name: "Add output" }));
-  await user.click(await screen.findByRole("menuitem", { name: "WebP" }));
+  await user.click(await screen.findByRole("menuitem", { name: /^WebP/ }));
   await within(bar()).findByText(/× 1 output →/, undefined, WAIT);
   return user;
 }
@@ -36,7 +36,7 @@ describe("App", () => {
     expect(await screen.findByText("Drop images or folders here")).toBeInTheDocument();
     const outputs = screen.getByRole("region", { name: "Outputs" });
     expect(within(outputs).getByText("Pick at least one format to convert to.")).toBeInTheDocument();
-    expect(within(outputs).getByRole("radio", { name: "Beside each source" })).toBeChecked();
+    expect(within(outputs).getByRole("button", { name: "Save to: Beside the originals" })).toBeInTheDocument();
     expect(within(bar()).getByRole("button", { name: "Convert" })).toBeDisabled();
     expect(within(bar()).getByText("Add images, then pick at least one output.")).toBeInTheDocument();
   });
@@ -58,7 +58,7 @@ describe("App", () => {
     expect(within(bar()).getByText("Pick an output format.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Add output" }));
-    await user.click(await screen.findByRole("menuitem", { name: "WebP" }));
+    await user.click(await screen.findByRole("menuitem", { name: /^WebP/ }));
 
     expect(await within(bar()).findByText(/images? × 1 output →/, undefined, WAIT)).toBeInTheDocument();
     expect(within(bar()).getByRole("button", { name: "Convert" })).toBeEnabled();
@@ -106,13 +106,13 @@ describe("App", () => {
     expect(await screen.findByText("Drop images or folders here")).toBeInTheDocument();
   });
 
-  it("offers each format once and greys out formats no tool writes", async () => {
+  it("describes each format, marks added ones and greys out formats no tool writes", async () => {
     renderApp();
     const user = await addFolderAndWebp();
 
     await user.click(screen.getByRole("button", { name: "Add output" }));
     const menu = await screen.findByRole("menu");
-    expect(within(menu).queryByRole("menuitem", { name: "WebP" })).not.toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /^WebPadded/ })).toHaveTextContent("opens in every browser");
     expect(within(menu).getByRole("menuitem", { name: /HEIF/ })).toHaveAttribute("aria-disabled", "true");
   });
 
@@ -121,12 +121,14 @@ describe("App", () => {
     const user = userEvent.setup();
     const outputs = await screen.findByRole("region", { name: "Outputs" });
 
-    await user.click(within(outputs).getByRole("radio", { name: "A folder of my choice" }));
-    expect(await within(outputs).findByText("D:\\Converted")).toBeInTheDocument();
-    await user.click(within(outputs).getByRole("checkbox", { name: "Separate folder per format" }));
+    await user.click(within(outputs).getByRole("button", { name: /^Save to:/ }));
+    await user.click(await screen.findByRole("radio", { name: "A folder of my choice" }));
+    expect(await within(outputs).findByRole("button", { name: "Save to: D:\\Converted" })).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: "A folder per format inside it" }));
 
-    await screen.findByRole("checkbox", { name: "Separate folder per format", checked: true });
+    await screen.findByRole("checkbox", { name: "A folder per format inside it", checked: true });
     expect((await api.preset()).destination).toEqual({ mode: "custom", root: "D:\\Converted", perFormatSubfolders: true });
+    expect(within(outputs).getByRole("button", { name: "Save to: D:\\Converted, a folder per format" })).toBeInTheDocument();
   });
 
   it("keeps the destination when the folder picker is cancelled", async () => {
@@ -134,9 +136,10 @@ describe("App", () => {
     platform.destination = null;
     const user = userEvent.setup();
 
+    await user.click(await screen.findByRole("button", { name: /^Save to:/ }));
     await user.click(await screen.findByRole("radio", { name: "A folder of my choice" }));
 
-    expect(screen.getByRole("radio", { name: "Beside each source" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /^Beside the originals/ })).toBeChecked();
     expect((await api.preset()).destination).toBeUndefined();
   });
 

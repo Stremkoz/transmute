@@ -1,15 +1,19 @@
 import { createStore } from "zustand/vanilla";
 import type {
   ApiEvent,
-  Destination,
+  AppSettings,
+  CodecDefaults,
+  CodecPatch,
   FileCounts,
   FileFilter,
   Format,
+  OutputTarget,
   Overview,
   Preset,
   PreviewTarget,
   Progress,
   RunState,
+  StoredPreset,
   TargetTotals,
   ToolInfo,
   UserDefaults,
@@ -20,6 +24,9 @@ import { errorMessage, isApiError, type TransmuteApi } from "../api/client";
 export const PLAN_DELAY_MS = 250;
 /** How often the files list catches up with a running conversion. */
 export const LIST_REFRESH_MS = 750;
+
+/** The preset-wide settings the "Where and how" rows edit. */
+export type PresetPolicies = Partial<Pick<Preset, "destination" | "naming" | "metadata" | "collision" | "inputFilter">>;
 
 /** A run as the workspace shows it, kept after it finishes until an edit. */
 export interface RunView {
@@ -50,6 +57,12 @@ export interface SessionState {
   overview: Overview | null;
   tools: ToolInfo[];
   defaults: UserDefaults;
+  settings: AppSettings;
+  /** Every format's factory and inherited settings. */
+  codecs: CodecDefaults[];
+  presets: StoredPreset[];
+  /** The output whose codec drawer is open. */
+  editing: number | null;
   /** Why loading failed, when it did. */
   error: string | null;
   /** Counts while inputs are being scanned. */
@@ -77,7 +90,24 @@ export interface SessionState {
   setExcluded(root: number, relativePath: string, excluded: boolean): Promise<void>;
   addOutput(format: Format): Promise<void>;
   removeOutput(index: number): Promise<void>;
-  setDestination(destination: Destination): Promise<void>;
+  updateOutput(index: number, target: OutputTarget): Promise<void>;
+  /** Makes an output's codec settings the user's defaults for its format. */
+  makeDefaults(index: number): Promise<void>;
+  /** Sets preset-wide policies; `undefined` values go back to the defaults. */
+  setPolicies(policies: PresetPolicies): Promise<void>;
+  editOutput(index: number | null): void;
+
+  loadPreset(id: string): Promise<void>;
+  newPreset(): Promise<void>;
+  /** Saves the working setup over `id`, or as a new preset; true if it worked. */
+  saveWorking(id: string | null, name: string, description: string | null): Promise<boolean>;
+  renamePreset(id: string, name: string): Promise<void>;
+  deletePreset(id: string): Promise<void>;
+  importPreset(path: string): Promise<void>;
+  exportPreset(id: string, path: string): Promise<void>;
+  setDefaults(defaults: UserDefaults): Promise<void>;
+  setSettings(settings: AppSettings): Promise<void>;
+
   convert(): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
@@ -209,6 +239,37 @@ export function createSessionStore(api: TransmuteApi) {
         if (overview) await api.setPreset(change(overview.preset));
       });
 
+    /** Re-reads what presets and defaults depend on. */
+    const refreshConfig = async () => {
+      try {
+        const [defaults, codecs, presets] = await Promise.all([api.defaults(), api.codecs(), api.storedPresets()]);
+        set({ defaults, codecs, presets });
+      } catch (error) {
+        fail(error);
+      }
+    };
+
+    const refreshPresets = async () => {
+      try {
+        set({ presets: await api.storedPresets() });
+      } catch (error) {
+        fail(error);
+      }
+    };
+
+    /** A command that changes stored files only: no re-plan. */
+    const store = async (command: () => Promise<unknown>): Promise<boolean> => {
+      try {
+        await command();
+        return true;
+      } catch (error) {
+        fail(error);
+        return false;
+      } finally {
+        await Promise.all([refreshPresets(), refresh()]);
+      }
+    };
+
     const setRunState = (state: RunState) => {
       const { run } = get();
       if (run) set({ run: { ...run, state } });
@@ -239,6 +300,10 @@ export function createSessionStore(api: TransmuteApi) {
       overview: null,
       tools: [],
       defaults: { codecs: [] },
+      settings: { toolPaths: {} },
+      codecs: [],
+      presets: [],
+      editing: null,
       error: null,
       scan: null,
       planning: false,
@@ -253,9 +318,27 @@ export function createSessionStore(api: TransmuteApi) {
 
       async load() {
         try {
-          const [overview, tools, defaults] = await Promise.all([api.overview(), api.tools(), api.defaults()]);
+          const [overview, tools, defaults, settings, codecs, presets] = await Promise.all([
+            api.overview(),
+            api.tools(),
+            api.defaults(),
+            api.settings(),
+            api.codecs(),
+            api.storedPresets(),
+          ]);
           const run = overview.run && overview.run.state !== "finished" ? overview.run : null;
-          set({ status: "ready", overview, counts: overview.counts, tools, defaults, run, error: null });
+          set({
+            status: "ready",
+            overview,
+            counts: overview.counts,
+            tools,
+            defaults,
+            settings,
+            codecs,
+            presets,
+            run,
+            error: null,
+          });
           if (!run) schedulePlan();
         } catch (error) {
           set({ status: "failed", error: errorMessage(error) });
@@ -280,9 +363,80 @@ export function createSessionStore(api: TransmuteApi) {
 
       addOutput: (format) =>
         editPreset((preset) => ({ ...preset, outputs: [...preset.outputs, { codec: { format } }] })),
-      removeOutput: (index) =>
-        editPreset((preset) => ({ ...preset, outputs: preset.outputs.filter((_, i) => i !== index) })),
-      setDestination: (destination) => editPreset((preset) => ({ ...preset, destination })),
+      async removeOutput(index) {
+        const { editing } = get();
+        if (editing !== null) set({ editing: editing === index ? null : editing > index ? editing - 1 : editing });
+        await editPreset((preset) => ({ ...preset, outputs: preset.outputs.filter((_, i) => i !== index) }));
+      },
+      updateOutput: (index, target) =>
+        editPreset((preset) => ({ ...preset, outputs: preset.outputs.map((output, i) => (i === index ? target : output)) })),
+      async makeDefaults(index) {
+        const { overview, defaults } = get();
+        const output = overview?.preset.outputs[index];
+        if (!output) return;
+        const { format } = output.codec;
+        const current = defaults.codecs.find((codec) => codec.format === format);
+        const merged = { ...current, ...output.codec } as CodecPatch;
+        try {
+          await api.setDefaults({
+            ...defaults,
+            codecs: [...defaults.codecs.filter((codec) => codec.format !== format), merged],
+          });
+        } catch (error) {
+          fail(error);
+          return;
+        }
+        await refreshConfig();
+        // The output now inherits exactly what it had set.
+        await get().updateOutput(index, { ...output, codec: { format } as CodecPatch });
+      },
+      setPolicies: (policies) => editPreset((preset) => ({ ...preset, ...policies })),
+      editOutput: (editing) => set({ editing, selected: null }),
+
+      async loadPreset(id) {
+        set({ editing: null });
+        await edit(() => api.loadPreset(id));
+      },
+      async newPreset() {
+        set({ editing: null });
+        await edit(() => api.newPreset());
+      },
+      saveWorking: (id, name, description) => store(() => api.saveWorking(id, name, description)),
+      async renamePreset(id, name) {
+        const stored = get().presets.find((p) => p.id === id);
+        if (!stored) return;
+        const renamed = await store(() => api.savePreset(id, { ...stored.preset, name }));
+        // The working copy of a renamed loaded preset follows its name.
+        const { overview } = get();
+        if (renamed && overview?.loaded?.id === id && overview.preset.name === stored.preset.name) {
+          await editPreset((preset) => ({ ...preset, name }));
+        }
+      },
+      async deletePreset(id) {
+        await store(() => api.deletePreset(id));
+      },
+      async importPreset(path) {
+        await store(() => api.importPreset(path));
+      },
+      async exportPreset(id, path) {
+        try {
+          await api.exportPreset(id, path);
+        } catch (error) {
+          fail(error);
+        }
+      },
+      async setDefaults(defaults) {
+        await edit(() => api.setDefaults(defaults));
+        await refreshConfig();
+      },
+      async setSettings(settings) {
+        try {
+          await api.setSettings(settings);
+          set({ settings: await api.settings(), tools: await api.tools() });
+        } catch (error) {
+          fail(error);
+        }
+      },
 
       async convert() {
         const { run, planning } = get();
@@ -322,7 +476,7 @@ export function createSessionStore(api: TransmuteApi) {
       },
 
       setFilter: (filter) => set({ filter }),
-      select: (selected) => set({ selected }),
+      select: (selected) => set({ selected, editing: selected === null ? get().editing : null }),
 
       async dismissNotices() {
         await api.dismissNotices();

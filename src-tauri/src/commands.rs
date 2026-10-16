@@ -8,9 +8,9 @@
 
 use tauri::{AppHandle, State};
 use transmute_api::{
-    Api, ApiError, ApiResult, AppSettings, EntryDetails, EntryId, ErrorCode, FileCounts,
-    FileFilter, FilePage, InputsSummary, JobFilter, JobPage, Overview, PlanSummary, Preset,
-    Preview, PreviewTarget, RootId, Sample, StoredPreset, TargetTotals, ToolInfo, TreeNode,
+    Api, ApiError, ApiResult, AppSettings, CodecDefaults, EntryDetails, EntryId, ErrorCode,
+    FileCounts, FileFilter, FilePage, InputsSummary, JobFilter, JobPage, Overview, PlanSummary,
+    Preset, Preview, PreviewTarget, RootId, Sample, StoredPreset, TargetTotals, ToolInfo, TreeNode,
     UserDefaults,
 };
 
@@ -125,6 +125,36 @@ pub async fn save_preset(
 #[tauri::command]
 pub async fn delete_preset(api: State<'_, Api>, id: String) -> ApiResult<()> {
     api.delete_preset(&id)
+}
+
+#[tauri::command]
+pub async fn new_preset(api: State<'_, Api>) -> ApiResult<Preset> {
+    api.new_preset()
+}
+
+#[tauri::command]
+pub async fn save_working(
+    api: State<'_, Api>,
+    id: Option<String>,
+    name: String,
+    description: Option<String>,
+) -> ApiResult<String> {
+    api.save_working(id, name, description)
+}
+
+#[tauri::command]
+pub async fn import_preset(api: State<'_, Api>, path: String) -> ApiResult<StoredPreset> {
+    api.import_preset(&path)
+}
+
+#[tauri::command]
+pub async fn export_preset(api: State<'_, Api>, id: String, path: String) -> ApiResult<()> {
+    api.export_preset(&id, &path)
+}
+
+#[tauri::command]
+pub async fn codecs(api: State<'_, Api>) -> ApiResult<Vec<CodecDefaults>> {
+    Ok(api.codecs())
 }
 
 #[tauri::command]

@@ -604,7 +604,10 @@ mod tests {
         // The working preset may have no outputs yet.
         let mut draft = preset("Untitled");
         draft.outputs.clear();
-        let session = LastSession { preset: draft };
+        let session = LastSession {
+            preset: draft,
+            preset_id: Some("untitled".into()),
+        };
         store.save_last_session(&session).unwrap();
         assert_eq!(store.last_session().value, Some(session));
 

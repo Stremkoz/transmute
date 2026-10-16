@@ -7,7 +7,14 @@ function asList(picked: string | string[] | null): string[] {
   return Array.isArray(picked) ? picked : [picked];
 }
 
-// No file-type filter on the pickers: formats are detected from content,
+const PRESET_FILES = [{ name: "Transmute preset", extensions: ["json"] }];
+
+/** A preset name as a file name: characters Windows forbids are dropped. */
+function fileStem(name: string): string {
+  return name.replace(/[<>:"/\\|?*]/g, "").trim() || "preset";
+}
+
+// No file-type filter on the image pickers: formats are detected from content,
 // so a misnamed image is still found, and anything else is reported.
 export const tauriPlatform: Platform = {
   pickFiles: async () => asList(await open({ multiple: true, title: "Add images" })),
@@ -22,6 +29,12 @@ export const tauriPlatform: Platform = {
       defaultPath: "transmute-report.txt",
       filters: [{ name: "Text", extensions: ["txt"] }],
     }),
+  pickPresetFile: async () => {
+    const picked = await open({ title: "Import a preset", filters: PRESET_FILES });
+    return typeof picked === "string" ? picked : null;
+  },
+  pickPresetExportPath: (name) =>
+    save({ title: "Export the preset", defaultPath: `${fileStem(name)}.json`, filters: PRESET_FILES }),
   onFileDrop: (handlers) =>
     getCurrentWebview().onDragDropEvent(({ payload }) => {
       switch (payload.type) {

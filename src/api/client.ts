@@ -2,6 +2,7 @@ import type {
   ApiError,
   ApiEvent,
   AppSettings,
+  CodecDefaults,
   EntryDetails,
   FileCounts,
   FileFilter,
@@ -48,7 +49,16 @@ export interface TransmuteApi {
   storedPresets(): Promise<StoredPreset[]>;
   loadPreset(id: string): Promise<Preset>;
   savePreset(id: string | null, preset: Preset): Promise<string>;
+  /** Deletes a stored preset; if it was loaded, the working copy is now unsaved. */
   deletePreset(id: string): Promise<void>;
+  /** Starts over with nothing stored: no outputs, the user's defaults. */
+  newPreset(): Promise<Preset>;
+  /** Stores the working configuration (over `id`, or as a new preset) and loads it. */
+  saveWorking(id: string | null, name: string, description: string | null): Promise<string>;
+  importPreset(path: string): Promise<StoredPreset>;
+  exportPreset(id: string, path: string): Promise<void>;
+  /** Factory and inherited settings for every format. */
+  codecs(): Promise<CodecDefaults[]>;
 
   defaults(): Promise<UserDefaults>;
   setDefaults(defaults: UserDefaults): Promise<void>;

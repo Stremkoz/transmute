@@ -27,7 +27,7 @@ Rules the API keeps:
 
 | Command | Returns | Notes |
 |---|---|---|
-| `overview()` | `Overview` | Inputs summary (with each input's file counts), working preset, current plan summary, run status, file counts, notices. Use it to (re)draw the workspace. |
+| `overview()` | `Overview` | Inputs summary (with each input's file counts), working preset, the stored preset it was loaded from (`loaded`: id, stored name, `edited`), current plan summary, run status, file counts, notices. Use it to (re)draw the workspace. |
 | `dismissNotices()` | — | Clears `Overview.notices`. |
 | `addInputs(paths, recursive)` | `InputsSummary` | Async. Rescans every input; `scanProgress` events while it works. |
 | `removeRoot(root)` / `clearInputs()` | `InputsSummary` | |
@@ -39,13 +39,17 @@ Rules the API keeps:
 | `clearFinished()` | `InputsSummary` | Takes the [done](#file-states) files off the list, keeping anything failed, cancelled, waiting or excluded. An input left with no images goes too. Nothing on disk changes; the files stay off through rescans until their input is added again. |
 | `preset()` / `setPreset(preset)` | `Preset` / — | The working configuration. Validated, except that it may have no outputs yet. Remembered for the next launch. |
 | `storedPresets()` | `StoredPreset[]` | |
-| `loadPreset(id)` | `Preset` | Makes a stored preset the working one. |
-| `savePreset(id?, preset)` | id | No id: a new one is made from the name. |
-| `deletePreset(id)` | — | |
+| `loadPreset(id)` | `Preset` | Makes a stored preset the working one, and the loaded one. Loading the loaded preset again undoes its edits. |
+| `savePreset(id?, preset)` | id | No id: a new one is made from the name. Storing over the loaded preset (a rename) updates what edits are measured against. |
+| `saveWorking(id?, name, description?)` | id | Stores the working configuration under that name, over `id` ("save changes") or as a new preset ("save as"), and makes it the loaded one. |
+| `newPreset()` | `Preset` | Starts over: no outputs, nothing loaded. |
+| `deletePreset(id)` | — | If it was loaded, the working configuration stays, unsaved. |
+| `importPreset(path)` / `exportPreset(id, path)` | `StoredPreset` / — | A preset file the user picked: imported as a new preset (older schema versions migrated), or written out to share. |
+| `codecs()` | `CodecDefaults[]` | Every format's factory settings and its inherited ones (factory + user defaults), so the UI can show which settings an output changes without repeating the numbers. |
 | `defaults()` / `setDefaults(d)` | `UserDefaults` / — | Layered under every preset. |
 | `settings()` / `setSettings(s)` | `AppSettings` / — | Tool paths take effect at once. |
 | `tools()` / `refreshTools()` | `ToolInfo[]` | What's installed, versions, formats, caveats. |
-| `plan()` | `PlanSummary` | Async. Counts, plus problems and notes grouped with counts. `invalid` while the working preset has no outputs. About 2.5 s for 50,000 files × 2 outputs on a fast desktop. |
+| `plan()` | `PlanSummary` | Async. Counts, plus problems and notes grouped with counts, and one example output path per output (`examples`). `invalid` while the working preset has no outputs. About 2.5 s for 50,000 files × 2 outputs on a fast desktop. |
 | `jobs(filter, offset, limit)` | `JobPage` | Pages of at most 1000. Filters: `all`, `problems`, `ready`, `running`, `converted`, `failed`, `cancelled`, `finished`. |
 | `startRun()` | — | Async; returns once started. Progress arrives as events. |
 | `pause()` / `resume()` / `cancel()` | — | Pause holds back new jobs; cancel kills running conversions (whole process trees), leaves nothing partial and marks unstarted jobs cancelled. |

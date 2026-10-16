@@ -1,7 +1,7 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import type { EntryDetails, Job } from "@bindings";
 import { errorMessage } from "../../api/client";
+import { Drawer, DrawerSection } from "../../components/Drawer";
 import { FORMAT_LABELS, TOOL_LABELS } from "../../lib/formats";
 import { formatBytes } from "../../lib/units";
 import { isRunActive } from "../../state/session";
@@ -81,8 +81,7 @@ function Details({ details }: { details: EntryDetails }) {
 
   return (
     <>
-      <section className={styles.section}>
-        <h3 className={styles.label}>Original</h3>
+      <DrawerSection label="Original">
         <dl className={styles.facts}>
           <dt>Format</dt>
           <dd>
@@ -127,11 +126,10 @@ function Details({ details }: { details: EntryDetails }) {
             Show original in folder
           </button>
         </div>
-      </section>
+      </DrawerSection>
 
       {image && (
-        <section className={styles.section}>
-          <h3 className={styles.label}>Outputs</h3>
+        <DrawerSection label="Outputs">
           {details.jobs.length > 0 ? (
             <ul className={styles.outputs}>
               {details.jobs.map((job) => (
@@ -143,11 +141,11 @@ function Details({ details }: { details: EntryDetails }) {
               {file.excluded ? "Excluded, so nothing will be made from it." : "Pick an output to see what this file becomes."}
             </p>
           )}
-        </section>
+        </DrawerSection>
       )}
 
       {image && (
-        <section className={styles.section}>
+        <DrawerSection>
           <label className={styles.include}>
             <input
               type="checkbox"
@@ -157,7 +155,7 @@ function Details({ details }: { details: EntryDetails }) {
             />
             Include this file in the next conversion
           </label>
-        </section>
+        </DrawerSection>
       )}
     </>
   );
@@ -192,27 +190,9 @@ export function FileDrawer() {
 
   const shown = details?.file.entry === selected ? details : null;
   return (
-    <Dialog.Root open={selected !== null} onOpenChange={(open) => !open && select(null)}>
-      <Dialog.Portal>
-        <Dialog.Overlay className={styles.overlay} />
-        <Dialog.Content className={styles.drawer} aria-describedby={undefined}>
-          <header className={styles.header}>
-            <div className={styles.headerText}>
-              <Dialog.Title className={styles.title}>{shown?.name ?? "File"}</Dialog.Title>
-              {shown && <p className={styles.fullPath}>{shown.path}</p>}
-            </div>
-            <Dialog.Close asChild>
-              <button type="button" className={`button ${styles.close}`} aria-label="Close">
-                ×
-              </button>
-            </Dialog.Close>
-          </header>
-          <div className={styles.body}>
-            {error && <p className={styles.reason}>{error}</p>}
-            {shown ? <Details details={shown} /> : !error && <p className={styles.muted}>Loading…</p>}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Drawer open={selected !== null} onClose={() => select(null)} title={shown?.name ?? "File"} subtitle={shown?.path}>
+      {error && <p className={styles.reason}>{error}</p>}
+      {shown ? <Details details={shown} /> : !error && <p className={styles.muted}>Loading…</p>}
+    </Drawer>
   );
 }

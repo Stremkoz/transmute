@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { FileDrawer } from "../features/files/FileDrawer";
 import { FilesPanel } from "../features/files/FilesPanel";
+import { CodecDrawer } from "../features/outputs/CodecDrawer";
+import { PresetMenu } from "../features/presets/PresetMenu";
+import { SettingsDialog } from "../features/settings/SettingsDialog";
 import { ToolsDialog } from "../features/tools/ToolsDialog";
 import { BottomBar } from "../features/workspace/BottomBar";
 import { OutputsPanel } from "../features/workspace/OutputsPanel";
@@ -78,7 +81,11 @@ export function App() {
     <div className={styles.app}>
       <header className={styles.header}>
         <h1 className={styles.title}>Transmute</h1>
-        <ToolsDialog tools={tools} />
+        {status === "ready" && <PresetMenu />}
+        <div className={styles.headerEnd}>
+          <ToolsDialog tools={tools} />
+          {status === "ready" && <SettingsDialog />}
+        </div>
       </header>
       <Notices />
       <CommandError />
@@ -96,6 +103,7 @@ export function App() {
           </main>
           <BottomBar overview={overview} />
           <FileDrawer />
+          <CodecDrawer />
         </>
       )}
       {hovering && (

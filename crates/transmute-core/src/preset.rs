@@ -180,7 +180,7 @@ impl UserDefaults {
         v.finish()
     }
 
-    fn codec_patch(&self, format: Format) -> Option<&CodecPatch> {
+    pub fn codec_patch(&self, format: Format) -> Option<&CodecPatch> {
         self.codecs.iter().find(|patch| patch.format() == format)
     }
 }

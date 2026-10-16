@@ -2,6 +2,9 @@ import type {
   ApiError,
   ApiEvent,
   AppSettings,
+  CodecDefaults,
+  CodecPatch,
+  CodecSettings,
   EntryDetails,
   ErrorCode,
   FileCounts,
@@ -45,6 +48,9 @@ export interface MockApi extends TransmuteApi {
 
 export interface MockSeed {
   preset?: Preset;
+  /** Stored presets, by id. */
+  presets?: Record<string, Preset>;
+  defaults?: UserDefaults;
   tools?: ToolInfo[];
   notices?: string[];
   /** Milliseconds between simulated run steps. */
@@ -100,6 +106,35 @@ function available(
     writes,
     notes: [],
   };
+}
+
+/**
+ * The backend's factory defaults (transmute-core/src/codec.rs), so the mock
+ * can answer `codecs()`. Only the mock repeats them; the UI always asks.
+ */
+export const MOCK_FACTORY: CodecSettings[] = [
+  { format: "jpeg", quality: 85, progressive: true, background: "#ffffff" },
+  { format: "png", compression: 9 },
+  { format: "webp", lossless: false, quality: 85, method: 4 },
+  { format: "jxl", lossless: false, distance: 1.5, reconstructJpeg: true },
+  { format: "avif", lossless: false, quality: 70, effort: 4 },
+  { format: "heif", lossless: false, quality: 50 },
+  { format: "tiff", compression: "lzw" },
+  { format: "gif" },
+  { format: "bmp" },
+];
+
+/** Deep equality of JSON-like values, ignoring absent and undefined fields. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const record = (value: object) =>
+    Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Record<string, unknown>;
+  const left = record(a);
+  const right = record(b);
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  return [...keys].every((key) => sameValue(left[key], right[key]));
 }
 
 const EXTENSIONS: Record<string, Format> = {
@@ -239,13 +274,15 @@ function jobFlags(states: JobState[]) {
 
 export function createMockApi(seed: MockSeed = {}): MockApi {
   const listeners = new Set<(event: ApiEvent) => void>();
-  const presets = new Map<string, Preset>();
+  const presets = new Map<string, Preset>(Object.entries(copy(seed.presets ?? {})));
+  // The stored preset the working one came from, as stored.
+  let loaded: { id: string; stored: Preset } | null = null;
   const runStepMs = seed.runStepMs ?? 100;
   const failEvery = seed.failEvery ?? 50;
   let preset = copy(seed.preset ?? MOCK_PRESET);
   let tools = copy(seed.tools ?? MOCK_TOOLS);
   let notices = [...(seed.notices ?? [])];
-  let defaults: UserDefaults = { codecs: [] };
+  let defaults: UserDefaults = copy(seed.defaults ?? { codecs: [] });
   let settings: AppSettings = { toolPaths: {} };
   let roots: MockRoot[] = [];
   let entries: MockEntry[] = [];
@@ -390,6 +427,9 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
   const overview = (): Overview => ({
     inputs: summarize(),
     preset: copy(preset),
+    loaded: loaded
+      ? { id: loaded.id, name: loaded.stored.name, edited: !sameValue(loaded.stored, preset) }
+      : null,
     plan: plan ? copy(plan.summary) : null,
     run: run ? { state: run.state, progress: copy(run.progress) } : null,
     counts: countsOf(),
@@ -456,6 +496,11 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
         unsupported: entries.length - entries.filter(isImage).length,
         problems: [...problems.values()].sort((a, b) => b.count - a.count),
         notes: [],
+        examples: preset.outputs.flatMap((_, target) => {
+          const first = jobs.find((j) => j.target === target && j.state.state === "ready") ?? jobs.find((j) => j.target === target);
+          const entry = first && entries.find((e) => e.id === first.entry);
+          return first && entry ? [{ target, source: entry.relativePath, output: first.output }] : [];
+        }),
       },
     };
   };
@@ -669,6 +714,7 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       if (!stored) throw failure("notFound", `no preset "${id}"`);
       ensureIdle();
       preset = copy(stored);
+      loaded = { id, stored: copy(stored) };
       changed();
       return copy(preset);
     },
@@ -678,11 +724,51 @@ export function createMockApi(seed: MockSeed = {}): MockApi {
       }
       const key = id ?? presetId(next.name);
       presets.set(key, copy(next));
+      if (loaded?.id === key) loaded = { id: key, stored: copy(next) };
       return key;
     },
     deletePreset: async (id) => {
       if (!presets.delete(id)) throw failure("notFound", `no preset ${id}`);
+      if (loaded?.id === id) loaded = null;
     },
+    newPreset: async () => {
+      ensureIdle();
+      preset = copy(MOCK_PRESET);
+      loaded = null;
+      changed();
+      return copy(preset);
+    },
+    saveWorking: async (id, name, description) => {
+      if (!name.trim()) throw failure("invalid", "invalid preset: name: must not be empty");
+      if (preset.outputs.length === 0) {
+        throw failure("invalid", "invalid preset: outputs: must contain at least one output");
+      }
+      const next: Preset = { ...copy(preset), name, description: description?.trim() ? description : undefined };
+      const key = id ?? presetId(name);
+      presets.set(key, copy(next));
+      preset = next;
+      loaded = { id: key, stored: copy(next) };
+      return key;
+    },
+    importPreset: async (path) => {
+      const name = baseName(path).replace(/\.json$/i, "").replace(/[-_]+/g, " ");
+      const imported: Preset = {
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        inputFilter: { mode: "all" },
+        outputs: [{ codec: { format: "webp", quality: 80 } }],
+      };
+      const id = presetId(imported.name);
+      presets.set(id, copy(imported));
+      return { id, preset: imported };
+    },
+    exportPreset: async (id) => {
+      if (!presets.has(id)) throw failure("notFound", `no preset "${id}"`);
+    },
+    codecs: async (): Promise<CodecDefaults[]> =>
+      MOCK_FACTORY.map((factory) => {
+        const patch: CodecPatch | undefined = defaults.codecs.find((c) => c.format === factory.format);
+        return { format: factory.format, factory: copy(factory), inherited: { ...copy(factory), ...copy(patch) } as CodecSettings };
+      }),
 
     defaults: async () => copy(defaults),
     setDefaults: async (next) => {

@@ -34,14 +34,16 @@ use transmute_backends::discovery::ToolConfig;
 use transmute_backends::invoke::{Invoker, ToolInvoker};
 use transmute_backends::probe::{ToolReport, discover_tools, toolbox};
 use transmute_core::capability::Toolbox;
+use transmute_core::codec::CodecSettings;
 use transmute_core::format::Format;
 use transmute_core::inspect::{Animation, Content};
 use transmute_core::inventory::{Inventory, ScanOptions, ScanProgress, scan};
 use transmute_core::output::{CollisionPolicy, Destination};
 use transmute_core::plan::{JobStatus, PlanContext, plan};
 use transmute_core::preset::resolve;
+use transmute_core::schema::{load, save};
 use transmute_core::session::LastSession;
-use transmute_core::store::{Locations, Notice, Store};
+use transmute_core::store::{Locations, Notice, Store, write_atomically};
 use transmute_engine::concurrency::resolve_worker_count;
 use transmute_engine::run::{Event, JobOutcome, RunControl, RunOptions, Work, run};
 
@@ -133,6 +135,9 @@ struct Session {
     exclusions: Vec<Exclusion>,
     removed: Vec<Removal>,
     preset: Preset,
+    /// The stored preset `preset` was loaded from or last saved as, with
+    /// its stored contents, to tell whether it has been edited since.
+    loaded: Option<(String, Preset)>,
     /// Bumped by every change that affects planning.
     revision: u64,
     plan: Option<PlanState>,
@@ -171,6 +176,22 @@ impl Session {
         self.current_plan().ok().map(PlanState::view)
     }
 
+    fn loaded(&self) -> Option<LoadedPreset> {
+        self.loaded.as_ref().map(|(id, stored)| LoadedPreset {
+            id: id.clone(),
+            name: stored.name.clone(),
+            edited: *stored != self.preset,
+        })
+    }
+
+    /// What's kept for the next launch.
+    fn remembered(&self) -> LastSession {
+        LastSession {
+            preset: self.preset.clone(),
+            preset_id: self.loaded.as_ref().map(|(id, _)| id.clone()),
+        }
+    }
+
     fn current_plan(&self) -> ApiResult<&PlanState> {
         self.plan
             .as_ref()
@@ -207,6 +228,20 @@ fn store_error(err: impl std::fmt::Display) -> ApiError {
 
 fn internal(err: impl std::fmt::Display) -> ApiError {
     ApiError::new(ErrorCode::Internal, err.to_string())
+}
+
+fn invalid(err: impl std::fmt::Display) -> ApiError {
+    ApiError::new(ErrorCode::Invalid, err.to_string())
+}
+
+/// Where a new working configuration came from.
+enum Origin {
+    /// An edit: it still comes from whatever it came from.
+    Unchanged,
+    /// A stored preset, by id, as stored.
+    Stored(String, Box<Preset>),
+    /// Nothing stored.
+    Detached,
 }
 
 /// A first launch's configuration: nothing picked yet (gui-plan: no output
@@ -251,10 +286,17 @@ impl Api {
     ) -> Self {
         let store = Store::new(&locations);
         // Pick up where the last launch left off.
-        let last = store.last_session();
-        let preset = last
-            .value
-            .map_or_else(default_preset, |session| session.preset);
+        let mut last = store.last_session();
+        let (preset, preset_id) = last.value.map_or_else(
+            || (default_preset(), None),
+            |session| (session.preset, session.preset_id),
+        );
+        // The preset it came from, if that's still stored.
+        let loaded = preset_id.and_then(|id| {
+            let stored = store.preset(&id).ok()?;
+            last.notices.extend(stored.notices);
+            Some((id, stored.value?))
+        });
         let api = Self {
             inner: Arc::new(Inner {
                 locations,
@@ -268,6 +310,7 @@ impl Api {
                     exclusions: Vec::new(),
                     removed: Vec::new(),
                     preset,
+                    loaded,
                     revision: 0,
                     plan: None,
                     run: None,
@@ -330,6 +373,7 @@ impl Api {
             inputs: convert::inputs_summary(&session.inventory, session.view()),
             counts: files::counts(&session.inventory, session.view(), None),
             preset: session.preset.clone(),
+            loaded: session.loaded(),
             plan: session.current_plan().ok().map(|p| p.summary.clone()),
             run: session.run.as_ref().map(|run| RunStatus {
                 state: run.state,
@@ -636,24 +680,44 @@ impl Api {
     /// Replaces the configuration being edited. It may have no outputs
     /// yet; planning says so. It's remembered for the next launch.
     pub fn set_preset(&self, preset: Preset) -> ApiResult<()> {
-        preset
-            .validate_draft()
-            .map_err(|err| ApiError::new(ErrorCode::Invalid, err.to_string()))?;
-        {
+        self.replace_preset(preset, Origin::Unchanged)
+    }
+
+    /// Starts over from nothing stored: no outputs, and the user's
+    /// defaults for everything else.
+    pub fn new_preset(&self) -> ApiResult<Preset> {
+        let preset = default_preset();
+        self.replace_preset(preset.clone(), Origin::Detached)?;
+        Ok(preset)
+    }
+
+    fn replace_preset(&self, preset: Preset, origin: Origin) -> ApiResult<()> {
+        preset.validate_draft().map_err(invalid)?;
+        let remembered = {
             let mut session = self.session();
             session.ensure_idle()?;
-            session.preset = preset.clone();
+            session.preset = preset;
+            match origin {
+                Origin::Unchanged => {}
+                Origin::Stored(id, stored) => session.loaded = Some((id, *stored)),
+                Origin::Detached => session.loaded = None,
+            }
             session.changed();
-        }
-        // Losing the remembered configuration isn't worth failing the
-        // change for: the user is told, and the session goes on.
-        match self.inner.store.save_last_session(&LastSession { preset }) {
+            session.remembered()
+        };
+        self.remember(&remembered);
+        Ok(())
+    }
+
+    /// Saves what the next launch starts from. Losing it isn't worth
+    /// failing a change for: the user is told, and the session goes on.
+    fn remember(&self, remembered: &LastSession) {
+        match self.inner.store.save_last_session(remembered) {
             Ok(notices) => self.add_notices(&notices),
             Err(err) => self.add_notice(format!(
                 "Couldn't remember the current outputs for next time: {err}"
             )),
         }
-        Ok(())
     }
 
     pub fn stored_presets(&self) -> ApiResult<Vec<StoredPreset>> {
@@ -669,33 +733,128 @@ impl Api {
             .collect())
     }
 
-    /// Makes a stored preset the configuration being edited.
+    /// Makes a stored preset the configuration being edited. Loading the
+    /// one already loaded undoes the changes made to it.
     pub fn load_preset(&self, id: &str) -> ApiResult<Preset> {
-        let loaded = self.inner.store.preset(id).map_err(store_error)?;
-        self.add_notices(&loaded.notices);
-        let preset = loaded
-            .value
-            .ok_or_else(|| ApiError::new(ErrorCode::NotFound, format!("no preset \"{id}\"")))?;
-        self.set_preset(preset.clone())?;
+        let preset = self.stored_preset(id)?;
+        self.replace_preset(
+            preset.clone(),
+            Origin::Stored(id.to_owned(), Box::new(preset.clone())),
+        )?;
         Ok(preset)
     }
 
-    /// Stores a preset, under `id` or a new id made from its name.
+    fn stored_preset(&self, id: &str) -> ApiResult<Preset> {
+        let loaded = self.inner.store.preset(id).map_err(store_error)?;
+        self.add_notices(&loaded.notices);
+        loaded
+            .value
+            .ok_or_else(|| ApiError::new(ErrorCode::NotFound, format!("no preset \"{id}\"")))
+    }
+
+    /// Stores a preset, under `id` or a new id made from its name. Storing
+    /// over the loaded preset (a rename, say) updates what edits are
+    /// measured against.
     pub fn save_preset(&self, id: Option<String>, preset: Preset) -> ApiResult<String> {
-        preset
-            .validate()
-            .map_err(|err| ApiError::new(ErrorCode::Invalid, err.to_string()))?;
+        preset.validate().map_err(invalid)?;
         let (id, notices) = self
             .inner
             .store
             .save_preset(id.as_deref(), &preset)
             .map_err(store_error)?;
         self.add_notices(&notices);
+        let mut session = self.session();
+        if let Some((loaded, stored)) = &mut session.loaded
+            && *loaded == id
+        {
+            *stored = preset;
+        }
         Ok(id)
     }
 
+    /// Stores the working configuration, named `name`: over `id` (save
+    /// changes) or as a new preset (save as). It becomes the loaded preset.
+    pub fn save_working(
+        &self,
+        id: Option<String>,
+        name: String,
+        description: Option<String>,
+    ) -> ApiResult<String> {
+        let mut preset = self.preset();
+        preset.name = name;
+        preset.description = description.filter(|d| !d.trim().is_empty());
+        let id = self.save_preset(id, preset.clone())?;
+        let remembered = {
+            let mut session = self.session();
+            // Stored as it was asked for, even if an edit landed meanwhile.
+            if session.preset.outputs == preset.outputs {
+                session.preset.name = preset.name.clone();
+                session.preset.description = preset.description.clone();
+            }
+            session.loaded = Some((id.clone(), preset));
+            session.remembered()
+        };
+        self.remember(&remembered);
+        Ok(id)
+    }
+
+    /// Deletes a stored preset. The working configuration stays; if it was
+    /// loaded from this preset, it's now unsaved.
     pub fn delete_preset(&self, id: &str) -> ApiResult<()> {
-        self.inner.store.delete_preset(id).map_err(store_error)
+        self.inner.store.delete_preset(id).map_err(store_error)?;
+        let remembered = {
+            let mut session = self.session();
+            if session
+                .loaded
+                .as_ref()
+                .is_none_or(|(loaded, _)| loaded != id)
+            {
+                return Ok(());
+            }
+            session.loaded = None;
+            session.remembered()
+        };
+        self.remember(&remembered);
+        Ok(())
+    }
+
+    /// Stores a preset file the user picked, as a new preset (older schema
+    /// versions are migrated). Returns its id.
+    pub fn import_preset(&self, path: &str) -> ApiResult<StoredPreset> {
+        let json = std::fs::read_to_string(path).map_err(|err| {
+            ApiError::new(ErrorCode::Store, format!("couldn't read {path}: {err}"))
+        })?;
+        let preset: Preset = load(&json).map_err(|err| invalid(format!("{path}: {err}")))?;
+        let id = self.save_preset(None, preset.clone())?;
+        Ok(StoredPreset { id, preset })
+    }
+
+    /// Writes a stored preset to a file the user picked, to share it.
+    pub fn export_preset(&self, id: &str, path: &str) -> ApiResult<()> {
+        let preset = self.stored_preset(id)?;
+        write_atomically(Path::new(path), &save(&preset))
+            .map_err(|err| ApiError::new(ErrorCode::Store, format!("couldn't write {path}: {err}")))
+    }
+
+    /// Every format's factory and inherited settings, for showing which
+    /// settings an output changes.
+    pub fn codecs(&self) -> Vec<CodecDefaults> {
+        let defaults = self.defaults();
+        Format::ALL
+            .into_iter()
+            .map(|format| {
+                let factory = CodecSettings::factory(format);
+                let mut inherited = factory.clone();
+                if let Some(patch) = defaults.codec_patch(format) {
+                    inherited.apply(patch);
+                }
+                CodecDefaults {
+                    format,
+                    factory,
+                    inherited,
+                }
+            })
+            .collect()
     }
 
     pub fn defaults(&self) -> UserDefaults {
@@ -805,7 +964,7 @@ impl Api {
                     output_exists: &exists,
                 },
             );
-            let summary = convert::plan_summary(&plan, config.targets.len());
+            let summary = convert::plan_summary(&plan, &inventory, config.targets.len());
             let index = JobIndex::new(&plan, inventory.entries.len());
             let formats: Vec<Format> = config.targets.iter().map(|t| t.settings.format()).collect();
             let states = plan

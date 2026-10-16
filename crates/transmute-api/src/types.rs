@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use transmute_core::codec::CodecSettings;
 use transmute_core::format::Format;
 use transmute_core::preset::Preset;
 use transmute_core::tool::ToolId;
@@ -26,6 +27,8 @@ pub struct Overview {
     pub inputs: InputsSummary,
     /// The configuration being edited: an unsaved preset.
     pub preset: Preset,
+    /// The stored preset it was loaded from or last saved as, if any.
+    pub loaded: Option<LoadedPreset>,
     /// The current plan, if it's still valid for the inputs and preset.
     pub plan: Option<PlanSummary>,
     pub run: Option<RunStatus>,
@@ -33,6 +36,40 @@ pub struct Overview {
     pub counts: FileCounts,
     /// Things the user should be told about stored files, tools and so on.
     pub notices: Vec<String>,
+}
+
+/// The stored preset the working configuration came from.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadedPreset {
+    pub id: String,
+    /// Its stored name (the working copy may have been renamed).
+    pub name: String,
+    /// The working configuration differs from what's stored.
+    pub edited: bool,
+}
+
+/// One format's settings before any output changes them.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CodecDefaults {
+    pub format: Format,
+    /// Transmute's own defaults.
+    pub factory: CodecSettings,
+    /// The factory defaults with the user's defaults applied: what an
+    /// output gets for every setting it leaves unset.
+    pub inherited: CodecSettings,
+}
+
+/// Where one output's first file goes, to show what the settings produce.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExampleOutput {
+    /// Index of the output target in the preset.
+    pub target: u32,
+    /// The source, relative to its root.
+    pub source: String,
+    pub output: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, TS)]
@@ -265,6 +302,9 @@ pub struct PlanSummary {
     pub problems: Vec<Tally>,
     /// Compromises and warnings, grouped.
     pub notes: Vec<Tally>,
+    /// One per output target that has jobs, from its first file (a ready
+    /// one if there is one).
+    pub examples: Vec<ExampleOutput>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
