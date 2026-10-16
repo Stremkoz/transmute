@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
 use crate::preset::{Preset, UserDefaults};
+use crate::session::LastSession;
 use crate::settings::AppSettings;
 use crate::validation::ValidationError;
 
@@ -50,6 +51,15 @@ impl Document for UserDefaults {
 
     fn validate(&self) -> Result<(), ValidationError> {
         UserDefaults::validate(self)
+    }
+}
+
+impl Document for LastSession {
+    const KIND: &'static str = "session";
+    const VERSION: u32 = 1;
+
+    fn validate(&self) -> Result<(), ValidationError> {
+        LastSession::validate(self)
     }
 }
 

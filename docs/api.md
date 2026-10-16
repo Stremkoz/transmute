@@ -13,7 +13,7 @@ TRANSMUTE_UPDATE_BINDINGS=1 cargo test -p transmute-api --test bindings
 One `Api` value is one **session**:
 
 - **Inputs**: the files and folders the user dropped, scanned into a snapshot (not watched). Files are addressed by `EntryId`, dropped items by `RootId`. Exclusions survive a rescan.
-- **Working preset**: the output configuration being edited. It's an unsaved [preset](preset-format.md); saving it is a separate command.
+- **Working preset**: the output configuration being edited. It's an unsaved [preset](preset-format.md); saving it is a separate command. It may have no outputs (a first launch starts with none), and it's remembered between launches in `session.json`.
 - **Plan**: what would happen to every (file, output) pair, made by `plan`. It's valid for one state of the inputs, preset, user defaults and tools. **Any change invalidates it**, and running needs a current one. Jobs are addressed by `JobId`.
 - **Run**: converting a plan's ready jobs. While it runs, the inputs and configuration can't change (`busy`). Once it has run, a plan needs re-planning before it can run again, because its outputs now exist.
 
@@ -33,7 +33,7 @@ Rules the API keeps:
 | `removeRoot(root)` / `clearInputs()` | `InputsSummary` | |
 | `tree(root, dir)` | `TreeNode[]` | The children of one folder (`dir` relative to the root, `/`-separated, `""` for the top). Folders come first, with file counts. Load on demand; never mount thousands of rows. |
 | `setExcluded(root, relativePath, excluded)` | `InputsSummary` | A file, or a folder and everything below it. |
-| `preset()` / `setPreset(preset)` | `Preset` / — | The working configuration. Validated. |
+| `preset()` / `setPreset(preset)` | `Preset` / — | The working configuration. Validated, except that it may have no outputs yet. Remembered for the next launch. |
 | `storedPresets()` | `StoredPreset[]` | |
 | `loadPreset(id)` | `Preset` | Makes a stored preset the working one. |
 | `savePreset(id?, preset)` | id | No id: a new one is made from the name. |
@@ -41,7 +41,7 @@ Rules the API keeps:
 | `defaults()` / `setDefaults(d)` | `UserDefaults` / — | Layered under every preset. |
 | `settings()` / `setSettings(s)` | `AppSettings` / — | Tool paths take effect at once. |
 | `tools()` / `refreshTools()` | `ToolInfo[]` | What's installed, versions, formats, caveats. |
-| `plan()` | `PlanSummary` | Async. Counts, plus problems and notes grouped with counts. |
+| `plan()` | `PlanSummary` | Async. Counts, plus problems and notes grouped with counts. `invalid` while the working preset has no outputs. About 2.5 s for 50,000 files × 2 outputs on a fast desktop. |
 | `jobs(filter, offset, limit)` | `JobPage` | Pages of at most 1000. Filters: `all`, `problems`, `ready`, `running`, `converted`, `failed`, `cancelled`, `finished`. |
 | `startRun()` | — | Async; returns once started. Progress arrives as events. |
 | `pause()` / `resume()` / `cancel()` | — | Pause holds back new jobs; cancel kills running conversions (whole process trees), leaves nothing partial and marks unstarted jobs cancelled. |

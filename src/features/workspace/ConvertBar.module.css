@@ -8,6 +8,56 @@
   background: var(--color-surface);
 }
 
+.status {
+  min-width: 0;
+}
+
 .plan {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.extras {
+  color: var(--color-warn);
+}
+
+.details {
+  position: relative;
   color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.details summary {
+  cursor: pointer;
+}
+
+/* Opens upwards, over the workspace, so the bar keeps its height. */
+.details ul {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  min-width: 20rem;
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-overlay);
+  color: var(--color-text);
+  user-select: text;
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-error);
 }

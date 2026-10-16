@@ -378,3 +378,51 @@ async fn real_tools_convert_and_preview_jpeg_xl() {
     let rendered = fs::read(&preview.path).unwrap();
     assert!(rendered.starts_with(b"\x89PNG"), "the rendering is a PNG");
 }
+
+/// A session with no tools, for tests that only configure.
+fn bare_session(data: &Path) -> Api {
+    let backend = Backend {
+        reports: Vec::new(),
+        toolbox: Toolbox::new([]),
+        invoker: Arc::new(StubInvoker {
+            program: PathBuf::from("unused"),
+        }),
+    };
+    Api::with_backend(Locations::portable(data), backend, Arc::new(|_| {}), false)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn first_launch_has_no_outputs_and_the_working_preset_is_remembered() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+
+    let api = bare_session(&data);
+    assert!(api.preset().outputs.is_empty());
+    let err = api.plan().await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Invalid);
+    assert!(err.message.contains("output"), "{}", err.message);
+
+    // Outputs can be added and removed again: an empty draft is valid.
+    api.set_preset(Preset {
+        outputs: vec![OutputTarget::new(Format::Webp)],
+        ..api.preset()
+    })
+    .unwrap();
+    // But it can't be saved as a preset.
+    let empty = Preset {
+        outputs: Vec::new(),
+        ..api.preset()
+    };
+    assert_eq!(
+        api.save_preset(None, empty).unwrap_err().code,
+        ErrorCode::Invalid
+    );
+    drop(api);
+
+    // The next launch starts where this one left off.
+    let api = bare_session(&data);
+    let outputs = api.preset().outputs;
+    assert_eq!(outputs.len(), 1);
+    assert_eq!(outputs[0].codec.format(), Format::Webp);
+    assert!(api.overview().notices.is_empty());
+}

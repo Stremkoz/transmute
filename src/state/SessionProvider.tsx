@@ -1,10 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { TransmuteApi } from "../api/client";
+import type { Platform } from "../platform/platform";
 import { createSessionStore } from "./session";
 import { SessionContext } from "./sessionContext";
 
 /** Connects the UI to one backend: loads the session and follows its events. */
-export function SessionProvider({ api, children }: { api: TransmuteApi; children: ReactNode }) {
+interface SessionProviderProps {
+  api: TransmuteApi;
+  platform: Platform;
+  children: ReactNode;
+}
+
+export function SessionProvider({ api, platform, children }: SessionProviderProps) {
   const [store] = useState(() => createSessionStore(api));
 
   useEffect(() => {
@@ -21,5 +28,5 @@ export function SessionProvider({ api, children }: { api: TransmuteApi; children
     };
   }, [api, store]);
 
-  return <SessionContext.Provider value={{ api, store }}>{children}</SessionContext.Provider>;
+  return <SessionContext.Provider value={{ api, platform, store }}>{children}</SessionContext.Provider>;
 }

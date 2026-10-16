@@ -36,9 +36,10 @@ use transmute_core::capability::Toolbox;
 use transmute_core::format::Format;
 use transmute_core::inspect::Content;
 use transmute_core::inventory::{Inventory, ScanOptions, ScanProgress, scan};
-use transmute_core::output::{CollisionPolicy, Destination, OutputTarget};
+use transmute_core::output::{CollisionPolicy, Destination};
 use transmute_core::plan::{JobStatus, PlanContext, plan};
 use transmute_core::preset::resolve;
+use transmute_core::session::LastSession;
 use transmute_core::store::{Locations, Notice, Store};
 use transmute_engine::concurrency::resolve_worker_count;
 use transmute_engine::run::{Event, JobOutcome, RunControl, RunOptions, Work, run};
@@ -178,6 +179,8 @@ fn internal(err: impl std::fmt::Display) -> ApiError {
     ApiError::new(ErrorCode::Internal, err.to_string())
 }
 
+/// A first launch's configuration: nothing picked yet (gui-plan: no output
+/// is preselected; the user chooses one).
 fn default_preset() -> Preset {
     Preset {
         name: "Untitled".into(),
@@ -187,7 +190,7 @@ fn default_preset() -> Preset {
         naming: None,
         metadata: None,
         collision: None,
-        outputs: vec![OutputTarget::new(Format::Webp)],
+        outputs: Vec::new(),
     }
 }
 
@@ -217,6 +220,11 @@ impl Api {
         discovered: bool,
     ) -> Self {
         let store = Store::new(&locations);
+        // Pick up where the last launch left off.
+        let last = store.last_session();
+        let preset = last
+            .value
+            .map_or_else(default_preset, |session| session.preset);
         let api = Self {
             inner: Arc::new(Inner {
                 locations,
@@ -228,7 +236,7 @@ impl Api {
                     recursive: true,
                     inventory: Inventory::default(),
                     exclusions: Vec::new(),
-                    preset: default_preset(),
+                    preset,
                     revision: 0,
                     plan: None,
                     run: None,
@@ -240,6 +248,7 @@ impl Api {
         };
         // Leftover renderings of trial conversions are of no use.
         let _ = std::fs::remove_dir_all(api.samples_dir());
+        api.add_notices(&last.notices);
         api
     }
 
@@ -264,14 +273,14 @@ impl Api {
     }
 
     fn add_notices(&self, notices: &[Notice]) {
-        if notices.is_empty() {
-            return;
+        for notice in notices {
+            self.add_notice(notice.to_string());
         }
-        let texts: Vec<String> = notices.iter().map(ToString::to_string).collect();
-        self.session().notices.extend(texts.iter().cloned());
-        for text in texts {
-            self.emit(ApiEvent::Notice { text });
-        }
+    }
+
+    fn add_notice(&self, text: String) {
+        self.session().notices.push(text.clone());
+        self.emit(ApiEvent::Notice { text });
     }
 
     fn previews_dir(&self) -> PathBuf {
@@ -455,14 +464,26 @@ impl Api {
         self.session().preset.clone()
     }
 
+    /// Replaces the configuration being edited. It may have no outputs
+    /// yet; planning says so. It's remembered for the next launch.
     pub fn set_preset(&self, preset: Preset) -> ApiResult<()> {
         preset
-            .validate()
+            .validate_draft()
             .map_err(|err| ApiError::new(ErrorCode::Invalid, err.to_string()))?;
-        let mut session = self.session();
-        session.ensure_idle()?;
-        session.preset = preset;
-        session.changed();
+        {
+            let mut session = self.session();
+            session.ensure_idle()?;
+            session.preset = preset.clone();
+            session.changed();
+        }
+        // Losing the remembered configuration isn't worth failing the
+        // change for: the user is told, and the session goes on.
+        match self.inner.store.save_last_session(&LastSession { preset }) {
+            Ok(notices) => self.add_notices(&notices),
+            Err(err) => self.add_notice(format!(
+                "Couldn't remember the current outputs for next time: {err}"
+            )),
+        }
         Ok(())
     }
 
@@ -589,6 +610,12 @@ impl Api {
         let (inventory, preset, revision) = {
             let session = self.session();
             session.ensure_idle()?;
+            if session.preset.outputs.is_empty() {
+                return Err(ApiError::new(
+                    ErrorCode::Invalid,
+                    "pick at least one output format to convert to",
+                ));
+            }
             (
                 session.inventory.clone(),
                 session.preset.clone(),

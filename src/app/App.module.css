@@ -47,3 +47,29 @@
   padding: var(--space-6);
   color: var(--color-text-muted);
 }
+
+.error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-error);
+  user-select: text;
+}
+
+.dropOverlay {
+  position: fixed;
+  inset: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: rgb(24 25 27 / 0.85);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  pointer-events: none;
+}

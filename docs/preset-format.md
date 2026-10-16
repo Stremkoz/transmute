@@ -207,7 +207,7 @@ What happens when a planned output path already exists. **Source files are never
 | Settings, defaults, presets | `%APPDATA%\Transmute` | `~/Library/Application Support/Transmute` | `$XDG_CONFIG_HOME/transmute` (`~/.config/transmute`) |
 | Run state (temporary-file journals) | `%LOCALAPPDATA%\Transmute\state` | `…/Transmute/state` | `$XDG_STATE_HOME/transmute` (`~/.local/state/transmute`) |
 
-Inside the settings folder: `settings.json`, `defaults.json` and `presets/<id>.json`. A preset's id is its file name, made from its name when first saved ("Web & Archive" → `web-archive`).
+Inside the settings folder: `settings.json`, `defaults.json`, `session.json` and `presets/<id>.json`. `session.json` is the desktop app's working configuration from its last launch (`{ "schemaVersion": 1, "preset": { … } }`): a preset that may have no outputs yet. It follows the same rules as every other document; deleting it just means the app starts with nothing picked. A preset's id is its file name, made from its name when first saved ("Web & Archive" → `web-archive`).
 
 **Portable mode:** if a file named `portable` sits beside the executable, everything lives in a `data` folder next to it instead, and nothing is written to the user profile.
 

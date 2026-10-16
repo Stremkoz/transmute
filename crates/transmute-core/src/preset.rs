@@ -86,7 +86,18 @@ pub struct Preset {
 }
 
 impl Preset {
+    /// Checks a preset that will be saved or run: it needs an output.
     pub fn validate(&self) -> Result<(), ValidationError> {
+        self.check(true)
+    }
+
+    /// Checks a preset that is still being edited, which may have no
+    /// outputs yet (the app starts with none picked).
+    pub fn validate_draft(&self) -> Result<(), ValidationError> {
+        self.check(false)
+    }
+
+    fn check(&self, needs_output: bool) -> Result<(), ValidationError> {
         let mut v = Validator::new();
         v.at("name", |v| validate_name(&self.name, v));
         v.at("inputFilter", |v| self.input_filter.validate(v));
@@ -97,7 +108,7 @@ impl Preset {
             v.at("naming", |v| naming.validate(v));
         }
         v.at("outputs", |v| {
-            if self.outputs.is_empty() {
+            if self.outputs.is_empty() && needs_output {
                 v.issue("must contain at least one output");
             } else if self.outputs.len() > MAX_OUTPUTS {
                 v.issue(format!(
@@ -366,6 +377,16 @@ mod tests {
         assert!(preset_with(vec![]).validate().is_err());
         let too_many = vec![OutputTarget::new(Format::Png); MAX_OUTPUTS + 1];
         assert!(preset_with(too_many).validate().is_err());
+    }
+
+    #[test]
+    fn a_draft_may_have_no_outputs_but_is_otherwise_checked() {
+        assert!(preset_with(vec![]).validate_draft().is_ok());
+        let mut nameless = preset_with(vec![]);
+        nameless.name = String::new();
+        assert!(nameless.validate_draft().is_err());
+        let too_many = vec![OutputTarget::new(Format::Png); MAX_OUTPUTS + 1];
+        assert!(preset_with(too_many).validate_draft().is_err());
     }
 
     #[test]

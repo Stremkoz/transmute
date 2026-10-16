@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 
 use crate::preset::{Preset, UserDefaults};
 use crate::schema::{Document, LoadError, load_versioned, save};
+use crate::session::LastSession;
 use crate::settings::AppSettings;
 
 /// A file of this name beside the executable switches on portable mode.
@@ -33,6 +34,7 @@ pub const PORTABLE_MARKER: &str = "portable";
 
 const SETTINGS_FILE: &str = "settings.json";
 const DEFAULTS_FILE: &str = "defaults.json";
+const SESSION_FILE: &str = "session.json";
 const PRESETS_DIR: &str = "presets";
 const MAX_ID_LEN: usize = 48;
 
@@ -242,6 +244,15 @@ impl Store {
 
     pub fn save_defaults(&self, defaults: &UserDefaults) -> Result<Vec<Notice>, StoreError> {
         save_document(&self.root.join(DEFAULTS_FILE), defaults)
+    }
+
+    /// What the app was last editing; `None` on a first launch.
+    pub fn last_session(&self) -> Loaded<Option<LastSession>> {
+        load_document(&self.root.join(SESSION_FILE))
+    }
+
+    pub fn save_last_session(&self, session: &LastSession) -> Result<Vec<Notice>, StoreError> {
+        save_document(&self.root.join(SESSION_FILE), session)
     }
 
     fn load_or_default<D: Document + Default>(&self, name: &str) -> Loaded<D> {
@@ -588,8 +599,20 @@ mod tests {
         };
         store.save_settings(&settings).unwrap();
         assert_eq!(store.settings().value, settings);
+
+        assert_eq!(store.last_session().value, None);
+        // The working preset may have no outputs yet.
+        let mut draft = preset("Untitled");
+        draft.outputs.clear();
+        let session = LastSession { preset: draft };
+        store.save_last_session(&session).unwrap();
+        assert_eq!(store.last_session().value, Some(session));
+
         // Only the documents themselves remain: no temporary files.
-        assert_eq!(files_in(dir.path()), ["defaults.json", "settings.json"]);
+        assert_eq!(
+            files_in(dir.path()),
+            ["defaults.json", "session.json", "settings.json"]
+        );
     }
 
     #[test]

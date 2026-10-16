@@ -19,6 +19,7 @@ const EVENT_CHANNEL: &str = "transmute";
 
 fn main() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let sink = Arc::new(move |event: ApiEvent| {
