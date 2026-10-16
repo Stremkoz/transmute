@@ -7,7 +7,7 @@ use crate::validation::ValidationError;
 
 /// The desktop app's working state, restored at the next launch: the
 /// configuration being edited, saved or not. Inputs aren't kept, because a
-/// dropped folder is a one-off snapshot (spec §3).
+/// dropped folder is a one-off snapshot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LastSession {

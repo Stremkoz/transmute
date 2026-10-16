@@ -1,7 +1,7 @@
 //! Opt-in output naming.
 //!
 //! The source basename is never changed: by default conversion only swaps the
-//! extension (spec §5). A naming rule can add a prefix and/or suffix around the
+//! extension. A naming rule can add a prefix and/or suffix around the
 //! basename, e.g. `archive_` + `webtest` + `_{date}` → `archive_webtest_20261015.jxl`.
 //!
 //! Prefix and suffix are templates. Supported tokens:
@@ -50,7 +50,7 @@ pub enum DateStyle {
     Iso,
 }
 
-/// Which date `{date}` refers to. Explicit so outputs are predictable (spec §5).
+/// Which date `{date}` refers to. Explicit so outputs are predictable.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

@@ -9,7 +9,7 @@ use crate::format::Format;
 use crate::naming::NamingRule;
 use crate::validation::Validator;
 
-/// Where converted files land (spec §5).
+/// Where converted files land.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "mode",

@@ -1,8 +1,8 @@
 //! Turning dropped files and folders into a snapshot of inputs.
 //!
-//! A dropped folder becomes a *snapshot*, not a watched folder (spec §3). Each
-//! entry keeps its path relative to the folder it was added from, so outputs
-//! can mirror the hierarchy. Problems with individual files or subfolders
+//! A dropped folder becomes a *snapshot*, not a watched folder: files added
+//! to it later aren't picked up. Each entry keeps its path relative to the
+//! folder it was added from, so outputs can mirror the hierarchy. Problems with individual files or subfolders
 //! (access denied, vanished, broken links) become warnings; they never abort
 //! the scan.
 

@@ -1,7 +1,8 @@
 //! Per-codec encoder settings.
 //!
 //! Each codec exposes its own real controls: there is deliberately no universal
-//! quality scale (spec §4). Every settings struct has a *patch* twin whose
+//! quality scale, since the same number means different things to different
+//! encoders. Every settings struct has a *patch* twin whose
 //! fields are all optional. Patches are what user defaults and presets store,
 //! and they layer over the factory defaults (null means "inherit").
 //!

@@ -1,4 +1,4 @@
-//! Display previews for the image viewer (spec §7).
+//! Display previews for the image viewer.
 //!
 //! The webview decodes JPEG, PNG, WebP, GIF, BMP and AVIF itself, so those
 //! files are shown as they are. JPEG XL, HEIF and TIFF are rendered to a

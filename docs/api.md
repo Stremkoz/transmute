@@ -98,7 +98,7 @@ When WebP's automatic lossless encoded an image both ways, its `converted` state
 
 The webview decodes JPEG, PNG, WebP, GIF, BMP and AVIF itself, so `preview` returns those files' own paths (`rendered: false`). JPEG XL, HEIF and TIFF are rendered to a lossless PNG of the first frame (`rendered: true`), using the same tools as conversions.
 
-The cache policy is explicit (spec §7):
+The cache policy:
 
 - Renderings live in `<state>/previews/` (see [where files are stored](preset-format.md#where-files-are-stored)), thumbnails in `<state>/thumbnails/`. Both are keyed by the file's path, size and modification time, so a replaced file is rendered afresh.
 - Every `Preview` lists the metadata blocks the image has (`metadata`: "EXIF", "ICC profile", "XMP"), for the compare viewer's table.
