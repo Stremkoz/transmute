@@ -41,11 +41,9 @@ pub async fn run_supervised(
     });
     #[cfg(windows)]
     {
-        // Must come before JobObject, which otherwise replaces the flags.
-        command.wrap(CreationFlags(
-            windows::Win32::System::Threading::CREATE_NO_WINDOW,
-        ));
         command.wrap(JobObject);
+        // After JobObject, whose flags it replaces; see `HiddenSuspended`.
+        command.wrap(HiddenSuspended);
     }
     #[cfg(unix)]
     command.wrap(ProcessGroup::leader());
@@ -73,6 +71,31 @@ pub async fn run_supervised(
         code: status.code(),
         output: output.trim().to_owned(),
     })
+}
+
+/// Starts the tool suspended (for `JobObject`) and without a console window.
+///
+/// process-wrap 8's `CreationFlags` is meant to combine with `JobObject`, but
+/// `spawn` takes the wrappers out of the command before running them, so
+/// `JobObject` never finds it and sets only `CREATE_SUSPENDED`: every tool
+/// the GUI started opened a terminal window. Setting both flags here, after
+/// `JobObject`, keeps them. `JobObject` resumes the process after adding it
+/// to the job, since it can't see a user request to stay suspended either.
+#[cfg(windows)]
+#[derive(Debug)]
+struct HiddenSuspended;
+
+#[cfg(windows)]
+impl TokioCommandWrapper for HiddenSuspended {
+    fn pre_spawn(
+        &mut self,
+        command: &mut tokio::process::Command,
+        _core: &TokioCommandWrap,
+    ) -> io::Result<()> {
+        use windows::Win32::System::Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED};
+        command.creation_flags((CREATE_SUSPENDED | CREATE_NO_WINDOW).0);
+        Ok(())
+    }
 }
 
 /// Reads a pipe to the end, keeping only the last few kilobytes.
