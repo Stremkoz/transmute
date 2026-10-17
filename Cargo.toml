@@ -20,7 +20,7 @@ brotli-decompressor = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
-process-wrap = { version = "8", features = ["tokio1", "creation-flags", "job-object", "process-group", "kill-on-drop"] }
+process-wrap = { version = "10", features = ["tokio1", "creation-flags", "job-object", "process-group", "kill-on-drop"] }
 miniz_oxide = "0.8"
 proptest = "1"
 rayon = "1"
@@ -39,7 +39,7 @@ tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "sync", "time", "io-util", "fs", "signal"] }
 tokio-util = "0.7"
 # Must match the version process-wrap uses, so CreationFlags takes our flag type.
-windows = { version = "0.61", features = ["Win32_System_Threading"] }
+windows = { version = "0.62", features = ["Win32_System_Threading"] }
 thiserror = "2"
 tracing = "0.1"
 ts-rs = { version = "12", features = ["no-serde-warnings"] }
